@@ -1,0 +1,12 @@
+# Local AI assistant/project guidance files
+.codex-local/
+.claude/
+.cursor/
+.windsurf/
+.continue/
+.aider*
+.cody/
+.github/copilot-instructions.md
+CLAUDE.md
+AGENTS.md
+GEMINI.md
