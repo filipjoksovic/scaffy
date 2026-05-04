@@ -1,0 +1,70 @@
+services:
+  traefik:
+    image: traefik:v3.6.15
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "${SCAFFY_HTTP_PORT:-80}:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - scaffy
+
+  scaffy-be:
+    build:
+      context: ../scaffy-be
+      dockerfile: ../scaffy-ops/docker/scaffy-be.Dockerfile
+    image: scaffy/scaffy-be:latest
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8080
+    expose:
+      - "8080"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.scaffy-be.rule=PathPrefix(`/api`)
+      - traefik.http.routers.scaffy-be.entrypoints=web
+      - traefik.http.routers.scaffy-be.priority=100
+      - traefik.http.services.scaffy-be.loadbalancer.server.port=8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - scaffy
+
+  scaffy-fe:
+    build:
+      context: ../scaffy-fe
+      dockerfile: ../scaffy-ops/docker/scaffy-fe.Dockerfile
+    image: scaffy/scaffy-fe:latest
+    restart: unless-stopped
+    depends_on:
+      scaffy-be:
+        condition: service_healthy
+    expose:
+      - "4173"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.scaffy-fe.rule=PathPrefix(`/`)
+      - traefik.http.routers.scaffy-fe.entrypoints=web
+      - traefik.http.routers.scaffy-fe.priority=1
+      - traefik.http.services.scaffy-fe.loadbalancer.server.port=4173
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4173 >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - scaffy
+
+networks:
+  scaffy:
+    driver: bridge
