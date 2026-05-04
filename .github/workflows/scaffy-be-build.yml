@@ -1,0 +1,44 @@
+name: Build backend
+
+on:
+  push:
+    paths:
+      - "scaffy-be/**"
+      - ".github/workflows/scaffy-be-build.yml"
+  pull_request:
+    paths:
+      - "scaffy-be/**"
+      - ".github/workflows/scaffy-be-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build scaffy-be
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scaffy-be
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Build
+        run: ./mvnw --batch-mode clean package
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scaffy-be-jar
+          path: scaffy-be/target/*.jar
+          if-no-files-found: error
+          retention-days: 7
