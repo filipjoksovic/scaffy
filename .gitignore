@@ -13,3 +13,6 @@ GEMINI.md
 
 # Local visual verification artifacts
 output/playwright/
+
+# IDE workspace folders
+.idea/
