@@ -100,6 +100,9 @@ public class ProjectGenerator {
 		List<TemplateFile> templates = new ArrayList<>();
 		templates.add(TemplateFile.rendered("templates/root/README.md.tmpl", "README.md"));
 		templates.add(TemplateFile.copy("templates/root/gitignore", ".gitignore"));
+		templates.add(TemplateFile.rendered("templates/docker/Dockerfile.backend.tmpl", "backend/Dockerfile"));
+		templates.add(TemplateFile.rendered("templates/docker/Dockerfile.frontend.tmpl", "frontend/Dockerfile"));
+		templates.add(TemplateFile.rendered("templates/docker/docker-compose.yml.tmpl", "docker-compose.yml"));
 		switch (request.pipeline()) {
 			case StackCatalog.PIPELINE_GITHUB_ACTIONS -> templates.add(TemplateFile.rendered(
 					"templates/pipeline/github-actions/ci.yml.tmpl",

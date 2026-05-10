@@ -57,7 +57,7 @@ services:
       - traefik.http.routers.scaffy-fe.priority=1
       - traefik.http.services.scaffy-fe.loadbalancer.server.port=4173
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4173 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4173 >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

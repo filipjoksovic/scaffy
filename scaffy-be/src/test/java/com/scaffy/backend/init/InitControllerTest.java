@@ -95,6 +95,28 @@ class InitControllerTest {
 		assertThat(packageJson)
 				.contains("\"name\": \"demo-app\"")
 				.doesNotContain("__SCAFFY_");
+
+		// Docker support files.
+		assertThat(entries).containsKeys(
+				"demo-app/backend/Dockerfile",
+				"demo-app/frontend/Dockerfile",
+				"demo-app/docker-compose.yml");
+
+		String backendDockerfile = new String(entries.get("demo-app/backend/Dockerfile"), StandardCharsets.UTF_8);
+		assertThat(backendDockerfile)
+				.contains("EXPOSE 8080")
+				.contains("eclipse-temurin:17");
+
+		String frontendDockerfile = new String(entries.get("demo-app/frontend/Dockerfile"), StandardCharsets.UTF_8);
+		assertThat(frontendDockerfile)
+				.contains("dist/demo-app/browser")
+				.contains("EXPOSE 80")
+				.doesNotContain("{{projectName}}");
+
+		String dockerCompose = new String(entries.get("demo-app/docker-compose.yml"), StandardCharsets.UTF_8);
+		assertThat(dockerCompose)
+				.contains("8080:8080")
+				.contains("80:80");
 	}
 
 	@Test
