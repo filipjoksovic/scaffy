@@ -12,8 +12,14 @@ type InitErrorResponse = {
   details?: Record<string, string>
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`
+}
+
 export async function initProject(request: InitRequest): Promise<Blob> {
-  const response = await fetch('/api/init', {
+  const response = await fetch(apiUrl('/api/init'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),

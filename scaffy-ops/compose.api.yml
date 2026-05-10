@@ -24,10 +24,7 @@ services:
       - scaffy
 
   scaffy-be:
-    build:
-      context: ../scaffy-be
-      dockerfile: ../scaffy-ops/docker/scaffy-be.Dockerfile
-    image: scaffy/scaffy-be:latest
+    image: ${SCAFFY_BE_IMAGE:?Set SCAFFY_BE_IMAGE}
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -48,33 +45,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    networks:
-      - scaffy
-
-  scaffy-fe:
-    build:
-      context: ../scaffy-fe
-      dockerfile: ../scaffy-ops/docker/scaffy-fe.Dockerfile
-    image: scaffy/scaffy-fe:latest
-    restart: unless-stopped
-    depends_on:
-      scaffy-be:
-        condition: service_healthy
-    expose:
-      - "4173"
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.scaffy-fe.rule=Host(`${SCAFFY_DOMAIN:?Set SCAFFY_DOMAIN}`)
-      - traefik.http.routers.scaffy-fe.entrypoints=websecure
-      - traefik.http.routers.scaffy-fe.priority=1
-      - traefik.http.routers.scaffy-fe.tls.certresolver=letsencrypt
-      - traefik.http.services.scaffy-fe.loadbalancer.server.port=4173
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
     networks:
       - scaffy
 

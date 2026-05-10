@@ -1,32 +1,113 @@
 # Scaffy Ops
 
-Docker Compose setup for deploying Scaffy frontend and backend together behind Traefik.
+Docker Compose setup for deploying Scaffy frontend and backend together behind Traefik on a VPS.
 
 ## Services
 
-- `traefik`: public edge router on port `80`.
+- `traefik`: public edge router on ports `80` and `443`, with Let's Encrypt TLS.
 - `scaffy-fe`: builds the Vite React app and serves static assets internally on port `4173`.
 - `scaffy-be`: builds the Spring Boot app and exposes it only inside the Compose network on port `8080`.
 
-Traefik routes `/api/*` to `scaffy-be:8080` and all other paths to `scaffy-fe:4173`, so browser requests can use same-origin API paths such as `/api/health`.
+Traefik routes `https://$SCAFFY_DOMAIN/api/*` to `scaffy-be:8080` and all other paths to `scaffy-fe:4173`, so browser requests can use same-origin API paths such as `/api/health`.
 
-## Deploy
+## Hetzner VPS deploy
+
+1. Point a DNS `A` record for your domain or subdomain to the Hetzner VPS public IPv4 address.
+2. Install Docker Engine and the Compose plugin on the VPS.
+3. Open inbound ports `80` and `443` in the VPS firewall.
+4. Copy or clone this repository onto the VPS.
+5. Configure the deployment environment:
 
 ```sh
 cd scaffy-ops
 cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+SCAFFY_DOMAIN=api.scaffy.fijol.io
+LETSENCRYPT_EMAIL=admin@example.com
+SCAFFY_CORS_ALLOWED_ORIGINS=https://scaffy.fijol.io
+SCAFFY_HTTP_PORT=80
+SCAFFY_HTTPS_PORT=443
+```
+
+Start the stack:
+
+```sh
 docker compose up -d --build
 ```
 
-Override the public HTTP port in `.env` when another reverse proxy owns port `80`:
-
-```sh
-SCAFFY_HTTP_PORT=8088
-```
-
-## Check
+Check it:
 
 ```sh
 docker compose ps
-curl http://localhost:${SCAFFY_HTTP_PORT:-80}/api/health
+curl -fsS https://$SCAFFY_DOMAIN/api/health
+```
+
+## GitHub Actions deploy
+
+The workflow at `.github/workflows/deploy-vps.yml` deploys the backend API stack automatically on pushes to `main` when backend or ops files change.
+
+It does not sync the repository source to the VPS. The workflow builds the backend Docker image in GitHub Actions, pushes it to GitHub Container Registry, copies only `compose.api.yml` and the generated `.env` file to the VPS, then runs `docker compose pull` and restarts `traefik` plus `scaffy-be`.
+
+Add these repository secrets in GitHub under `Settings -> Secrets and variables -> Actions -> Secrets`:
+
+```txt
+HETZNER_HOST=<your-vps-ip-or-hostname>
+HETZNER_USER=<ssh-user>
+HETZNER_SSH_KEY=<private-ssh-key>
+LETSENCRYPT_EMAIL=<your-email>
+```
+
+Add these repository variables under `Settings -> Secrets and variables -> Actions -> Variables`:
+
+```txt
+SCAFFY_DOMAIN=api.scaffy.fijol.io
+SCAFFY_CORS_ALLOWED_ORIGINS=https://scaffy.fijol.io
+```
+
+Optional variables:
+
+```txt
+DEPLOY_PATH=/opt/scaffy
+HETZNER_PORT=22
+SCAFFY_HTTP_PORT=80
+SCAFFY_HTTPS_PORT=443
+```
+
+The VPS user must be able to run Docker Compose in `DEPLOY_PATH`. If the user is not `root`, add it to the `docker` group or configure passwordless Docker access for deployments.
+
+The workflow uses GitHub's built-in `GITHUB_TOKEN` to publish and pull the GHCR image, so no extra registry token is needed unless you later move images to a separate private registry.
+
+## React on Vercel?
+
+For this project, keeping React in this Compose stack is the simplest production setup because the frontend already calls the backend with same-origin paths like `/api/init`. That avoids CORS, extra environment variables, and cross-domain cookie/header issues.
+
+Deploying React to Vercel is also valid if you want their preview deployments and CDN workflow. In that setup, keep `scaffy-be` on the VPS and publish only the Vite app to Vercel.
+
+Use separate domains:
+
+```txt
+scaffy.fijol.io -> Vercel frontend
+api.scaffy.fijol.io -> Hetzner VPS backend
+```
+
+Set this Vercel environment variable on the frontend project:
+
+```env
+VITE_API_BASE_URL=https://api.scaffy.fijol.io
+```
+
+Set this variable in `scaffy-ops/.env` on the VPS so Spring Boot allows the Vercel frontend origin:
+
+```env
+SCAFFY_CORS_ALLOWED_ORIGINS=https://scaffy.fijol.io
+```
+
+For Vercel preview deployments, add the preview URL too:
+
+```env
+SCAFFY_CORS_ALLOWED_ORIGINS=https://scaffy.fijol.io,https://scaffy-fe-git-main-your-team.vercel.app
 ```

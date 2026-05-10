@@ -7,7 +7,11 @@ RUN chmod +x ./mvnw && ./mvnw -q -DskipTests package
 FROM eclipse-temurin:17-jre
 
 WORKDIR /app
-RUN groupadd --system scaffy && useradd --system --gid scaffy scaffy
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system scaffy \
+    && useradd --system --gid scaffy scaffy
 COPY --from=build /workspace/target/scaffy-be-0.0.1-SNAPSHOT.jar /app/scaffy-be.jar
 USER scaffy
 EXPOSE 8080
