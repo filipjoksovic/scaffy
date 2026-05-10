@@ -182,10 +182,36 @@
 .config-form__hint {
   color: var(--color-muted);
   font-size: 13px;
+  font-weight: 400;
 }
 
 .config-form__hint--error {
   color: var(--color-error);
+}
+
+.config-form--toggle {
+  cursor: pointer;
+  max-width: 520px;
+}
+
+.config-form__toggle-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-md);
+  justify-content: space-between;
+}
+
+.config-form__toggle-title {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.config-form__toggle-row input[type='checkbox'] {
+  cursor: pointer;
+  flex-shrink: 0;
+  height: 18px;
+  width: 18px;
 }
 
 .review-card {
