@@ -30,7 +30,7 @@ export const BACKENDS: StackOption[] = [
   {
     id: 'spring-boot',
     name: 'Spring Boot',
-    description: 'Spring Boot 4, Java 17, Maven, web starter.',
+    description: 'Spring Boot 4, Java 25, Maven, web starter.',
     available: true,
   },
   {

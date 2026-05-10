@@ -106,7 +106,7 @@ class InitControllerTest {
 		String backendDockerfile = new String(entries.get("demo-app/backend/Dockerfile"), StandardCharsets.UTF_8);
 		assertThat(backendDockerfile)
 				.contains("EXPOSE 8080")
-				.contains("eclipse-temurin:17");
+				.contains("eclipse-temurin:25");
 
 		String frontendDockerfile = new String(entries.get("demo-app/frontend/Dockerfile"), StandardCharsets.UTF_8);
 		assertThat(frontendDockerfile)
