@@ -30,6 +30,23 @@ Then `curl http://localhost/api/health` should return `{"status":"ok",...}`. See
 
 To run just one service for development, see the README inside that subdirectory.
 
+## SonarCloud coverage
+
+Coverage is uploaded by `.github/workflows/sonarcloud.yml` as one SonarCloud project for both backend and frontend.
+
+GitHub Actions settings required:
+
+```txt
+Secret:
+SONAR_TOKEN=<token from SonarCloud>
+
+Variables:
+SONAR_PROJECT_KEY=<SonarCloud project key>
+SONAR_ORGANIZATION=<SonarCloud organization key>
+```
+
+The workflow runs Maven tests with JaCoCo and frontend Vitest coverage before invoking SonarCloud. If SonarCloud automatic analysis is enabled for the project, turn it off and use CI-based analysis so coverage reports are imported.
+
 ## Iteration status
 
 Implementation is split across five one-week iterations. Current state:

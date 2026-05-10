@@ -8,6 +8,7 @@ on:
       - "scaffy-be/**"
       - "scaffy-ops/**"
       - ".github/workflows/deploy-vps.yml"
+      - ".github/workflows/scaffy-be-build.yml"
   workflow_dispatch:
 
 permissions:

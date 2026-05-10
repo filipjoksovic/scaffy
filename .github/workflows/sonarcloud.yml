@@ -1,0 +1,61 @@
+name: SonarCloud
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scan:
+    name: Analyze with coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: scaffy-fe/package-lock.json
+
+      - name: Test backend with coverage
+        working-directory: scaffy-be
+        run: ./mvnw --batch-mode test
+
+      - name: Install frontend dependencies
+        working-directory: scaffy-fe
+        run: npm ci
+
+      - name: Test frontend with coverage
+        working-directory: scaffy-fe
+        run: npm run test:coverage
+
+      - name: Build frontend
+        working-directory: scaffy-fe
+        run: npm run build
+
+      - name: Run SonarCloud analysis
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
