@@ -11,7 +11,7 @@ This repository hosts the monorepo: backend, frontend, ops, and docs.
 
 | Directory                  | Contents                                                        |
 | -------------------------- | --------------------------------------------------------------- |
-| [scaffy-be/](scaffy-be/)   | Spring Boot REST API (Java 17) — generator + analyzer endpoints |
+| [scaffy-be/](scaffy-be/)   | Spring Boot REST API (Java 25) — generator + analyzer endpoints |
 | [scaffy-fe/](scaffy-fe/)   | React + Vite frontend — initializer wizard and analyzer UI      |
 | [scaffy-ops/](scaffy-ops/) | Docker Compose stack with Traefik routing the two services      |
 | [docs/](docs/)             | Architecture diagrams (drawio + PNG)                            |

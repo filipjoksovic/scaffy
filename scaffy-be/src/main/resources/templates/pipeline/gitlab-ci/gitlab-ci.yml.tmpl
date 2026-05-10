@@ -12,14 +12,14 @@ cache:
 
 backend:
   stage: build
-  image: maven:3.9-eclipse-temurin-17
+  image: maven:3.9-eclipse-temurin-25
   script:
     - cd backend
     - mvn --batch-mode clean verify
 
 frontend:
   stage: build
-  image: node:20
+  image: node:24
   script:
     - cd frontend
     - npm ci

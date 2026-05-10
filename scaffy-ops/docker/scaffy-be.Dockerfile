@@ -1,10 +1,10 @@
-FROM eclipse-temurin:17-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 
 WORKDIR /workspace
 COPY . .
 RUN chmod +x ./mvnw && ./mvnw -q -DskipTests package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 
 WORKDIR /app
 RUN apt-get update \

@@ -141,7 +141,7 @@ generate_spring_boot() {
 		-d name="$PROJECT_KEBAB" \
 		-d packageName="$PACKAGE_NAME" \
 		-d packaging=jar \
-		-d javaVersion=17 \
+		-d javaVersion=25 \
 		-d dependencies=web \
 		-o spring-boot.zip
 
