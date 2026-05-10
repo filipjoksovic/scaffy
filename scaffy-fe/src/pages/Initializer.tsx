@@ -15,6 +15,7 @@ type WizardState = {
   frontend: string
   pipeline: string
   projectName: string
+  includeDocker: boolean
 }
 
 type GenerationStatus =
@@ -28,6 +29,7 @@ const initialState: WizardState = {
   frontend: 'angular',
   pipeline: '',
   projectName: '',
+  includeDocker: false,
 }
 
 export function Initializer() {
@@ -75,6 +77,7 @@ export function Initializer() {
         frontend: state.frontend,
         backend: state.backend,
         pipeline: state.pipeline,
+        includeDocker: state.includeDocker,
       })
       downloadBlob(blob, `${state.projectName}.zip`)
       setStatus({ kind: 'success' })
@@ -280,6 +283,24 @@ function ConfigStep({ error, state, update }: ConfigStepProps) {
           </p>
         </Card>
       </div>
+
+      <div className="wizard-step__group">
+        <Eyebrow>Docker</Eyebrow>
+        <Card as="div" className="config-form config-form--toggle">
+          <div className="config-form__toggle-row">
+            <div>
+              <label htmlFor="include-docker">Include Docker support</label>
+              <p className="config-form__hint">Adds a Dockerfile for each service and a docker-compose.yml to your project.</p>
+            </div>
+            <input
+              checked={state.includeDocker}
+              id="include-docker"
+              onChange={(event) => update('includeDocker', event.target.checked)}
+              type="checkbox"
+            />
+          </div>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -318,6 +339,10 @@ function ReviewStep({ state, status }: ReviewStepProps) {
             <div>
               <dt>Pipeline</dt>
               <dd>{pipeline?.name ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Docker</dt>
+              <dd>{state.includeDocker ? 'Yes' : 'No'}</dd>
             </div>
           </dl>
         </Card>
