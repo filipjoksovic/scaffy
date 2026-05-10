@@ -21,6 +21,8 @@ public record InitRequest(
 		String backend,
 
 		@NotBlank(message = "pipeline must not be blank")
-		String pipeline
+		String pipeline,
+
+		Boolean includeDocker
 ) {
 }
