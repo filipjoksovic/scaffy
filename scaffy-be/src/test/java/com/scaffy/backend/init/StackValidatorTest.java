@@ -12,14 +12,14 @@ class StackValidatorTest {
 	@Test
 	void acceptsAngularSpringBootGitHubActions() {
 		assertThatCode(() -> validator.validate(
-				new InitRequest("demo", "angular", "spring-boot", "github-actions")))
+				new InitRequest("demo", "angular", "spring-boot", "github-actions", null)))
 				.doesNotThrowAnyException();
 	}
 
 	@Test
 	void rejectsUnsupportedBackend() {
 		assertThatThrownBy(() -> validator.validate(
-				new InitRequest("demo", "angular", "dotnet", "github-actions")))
+				new InitRequest("demo", "angular", "dotnet", "github-actions", null)))
 				.isInstanceOf(UnsupportedStackException.class)
 				.hasMessageContaining("Backend 'dotnet'");
 	}
@@ -27,7 +27,7 @@ class StackValidatorTest {
 	@Test
 	void rejectsUnsupportedPipeline() {
 		assertThatThrownBy(() -> validator.validate(
-				new InitRequest("demo", "angular", "spring-boot", "jenkins")))
+				new InitRequest("demo", "angular", "spring-boot", "jenkins", null)))
 				.isInstanceOf(UnsupportedStackException.class)
 				.hasMessageContaining("Pipeline 'jenkins'");
 	}

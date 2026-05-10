@@ -3,6 +3,7 @@ export type InitRequest = {
   frontend: string
   backend: string
   pipeline: string
+  includeDocker?: boolean
 }
 
 type InitErrorResponse = {

@@ -40,7 +40,8 @@ class InitControllerTest {
 					"projectName": "demo-app",
 					"frontend": "angular",
 					"backend": "spring-boot",
-					"pipeline": "github-actions"
+					"pipeline": "github-actions",
+					"includeDocker": true
 				}
 				""";
 
@@ -117,6 +118,30 @@ class InitControllerTest {
 		assertThat(dockerCompose)
 				.contains("8080:8080")
 				.contains("80:80");
+	}
+
+	@Test
+	void omitsDockerArtifactsWhenNotRequested() throws Exception {
+		String body = """
+				{
+					"projectName": "lean-app",
+					"frontend": "angular",
+					"backend": "spring-boot",
+					"pipeline": "github-actions"
+				}
+				""";
+
+		MvcResult result = mockMvc().perform(post("/api/init")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isOk())
+				.andReturn();
+
+		Map<String, byte[]> entries = readZip(result.getResponse().getContentAsByteArray());
+		assertThat(entries).doesNotContainKeys(
+				"lean-app/backend/Dockerfile",
+				"lean-app/frontend/Dockerfile",
+				"lean-app/docker-compose.yml");
 	}
 
 	@Test
