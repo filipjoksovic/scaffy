@@ -45,7 +45,7 @@ SONAR_PROJECT_KEY=<SonarCloud project key>
 SONAR_ORGANIZATION=<SonarCloud organization key>
 ```
 
-The workflow runs Maven tests with JaCoCo and frontend Vitest coverage before invoking SonarCloud. If SonarCloud automatic analysis is enabled for the project, turn it off and use CI-based analysis so coverage reports are imported.
+The workflow runs Maven tests with JaCoCo and frontend Vitest coverage before invoking SonarCloud. It analyzes both app directories as one SonarCloud project. If SonarCloud automatic analysis is enabled for the project, turn it off and use CI-based analysis so coverage reports are imported.
 
 ## Iteration status
 

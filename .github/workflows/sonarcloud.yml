@@ -51,6 +51,20 @@ jobs:
         working-directory: scaffy-fe
         run: npm run build
 
+      - name: Validate SonarCloud config
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+        run: |
+          set -euo pipefail
+          for name in SONAR_TOKEN SONAR_PROJECT_KEY SONAR_ORGANIZATION; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required SonarCloud setting: ${name}"
+              exit 1
+            fi
+          done
+
       - name: Run SonarCloud analysis
         uses: SonarSource/sonarqube-scan-action@v6
         env:
