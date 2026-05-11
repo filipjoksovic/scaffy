@@ -1,0 +1,13 @@
+stages:
+  - build
+
+variables:
+  IMAGE: registry.example.com/example/app
+
+build-staging:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -f docker/Dockerfile.staging -t $IMAGE:staging-latest -t $IMAGE:sha-${CI_COMMIT_SHORT_SHA} .
