@@ -11,7 +11,7 @@ import org.yaml.snakeyaml.error.YAMLException;
 @Component
 public class YamlPipelineParser {
 
-	public Map<?, ?> parse(String content) {
+	public Map<Object, Object> parse(String content) {
 		try {
 			LoaderOptions loaderOptions = new LoaderOptions();
 			loaderOptions.setCodePointLimit(1_000_000);
@@ -20,10 +20,10 @@ public class YamlPipelineParser {
 			if (loaded == null) {
 				throw PipelineAnalysisException.invalidUpload("Uploaded pipeline file must not be empty.");
 			}
-			if (!(loaded instanceof Map<?, ?> root)) {
+			if (!Map.class.isInstance(loaded)) {
 				throw unsupportedProvider();
 			}
-			return root;
+			return rootMap(loaded);
 		}
 		catch (PipelineAnalysisException ex) {
 			throw ex;
@@ -37,5 +37,10 @@ public class YamlPipelineParser {
 		return new PipelineAnalysisException(
 				"Unsupported pipeline provider",
 				"Only unambiguous GitHub Actions and GitLab CI YAML files are supported.");
+	}
+
+	@SuppressWarnings("unchecked")
+	private Map<Object, Object> rootMap(Object loaded) {
+		return (Map<Object, Object>) loaded;
 	}
 }

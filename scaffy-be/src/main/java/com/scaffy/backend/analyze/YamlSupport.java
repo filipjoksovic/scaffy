@@ -1,5 +1,6 @@
 package com.scaffy.backend.analyze;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -8,15 +9,15 @@ final class YamlSupport {
 	private YamlSupport() {
 	}
 
-	static boolean hasKey(Map<?, ?> map, String key) {
+	static boolean hasKey(Map<Object, Object> map, String key) {
 		return map != null && map.keySet().stream().anyMatch(candidate -> keyMatches(candidate, key));
 	}
 
-	static Optional<Object> value(Map<?, ?> map, String key) {
+	static Optional<Object> value(Map<Object, Object> map, String key) {
 		if (map == null) {
 			return Optional.empty();
 		}
-		for (Map.Entry<?, ?> entry : map.entrySet()) {
+		for (Map.Entry<Object, Object> entry : map.entrySet()) {
 			if (keyMatches(entry.getKey(), key)) {
 				return Optional.ofNullable(entry.getValue());
 			}
@@ -24,14 +25,27 @@ final class YamlSupport {
 		return Optional.empty();
 	}
 
-	static Optional<Map<?, ?>> mapValue(Map<?, ?> map, String key) {
+	static Optional<Map<Object, Object>> mapValue(Map<Object, Object> map, String key) {
 		return value(map, key)
-				.filter(Map.class::isInstance)
-				.map(Map.class::cast);
+				.flatMap(YamlSupport::asMap);
 	}
 
-	static Optional<String> stringValue(Map<?, ?> map, String key) {
+	static Optional<String> stringValue(Map<Object, Object> map, String key) {
 		return value(map, key).map(YamlSupport::asString);
+	}
+
+	static Optional<Map<Object, Object>> asMap(Object value) {
+		if (!Map.class.isInstance(value)) {
+			return Optional.empty();
+		}
+		return Optional.of(castMap(value));
+	}
+
+	static Optional<List<Object>> asList(Object value) {
+		if (!List.class.isInstance(value)) {
+			return Optional.empty();
+		}
+		return Optional.of(castList(value));
 	}
 
 	static String asString(Object value) {
@@ -46,5 +60,15 @@ final class YamlSupport {
 			return stringKey.equals(key);
 		}
 		return "on".equals(key) && candidate instanceof Boolean booleanKey && booleanKey;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Map<Object, Object> castMap(Object value) {
+		return (Map<Object, Object>) value;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static List<Object> castList(Object value) {
+		return (List<Object>) value;
 	}
 }

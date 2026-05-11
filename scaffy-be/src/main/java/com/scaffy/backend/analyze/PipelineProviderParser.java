@@ -6,5 +6,5 @@ public interface PipelineProviderParser {
 
 	PipelineProvider provider();
 
-	PipelineDocument parse(Map<?, ?> root);
+	PipelineDocument parse(Map<Object, Object> root);
 }

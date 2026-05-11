@@ -11,7 +11,7 @@ public class ProviderDetector {
 
 	private static final Pattern TOP_LEVEL_ON = Pattern.compile("(?m)^\\s*(?:on|'on'|\"on\")\\s*:");
 
-	public PipelineProvider detect(String filename, String content, Map<?, ?> root) {
+	public PipelineProvider detect(String filename, String content, Map<Object, Object> root) {
 		boolean githubActions = githubFilename(filename) || githubStructure(content, root);
 		boolean gitlabCi = gitlabFilename(filename) || gitlabStructure(root);
 
@@ -41,21 +41,21 @@ public class ProviderDetector {
 		return normalized.endsWith(".gitlab-ci.yml") || normalized.endsWith(".gitlab-ci.yaml");
 	}
 
-	private boolean githubStructure(String content, Map<?, ?> root) {
+	private boolean githubStructure(String content, Map<Object, Object> root) {
 		return YamlSupport.hasKey(root, "jobs")
 				&& (TOP_LEVEL_ON.matcher(content).find() || YamlSupport.hasKey(root, "on"));
 	}
 
-	private boolean gitlabStructure(Map<?, ?> root) {
+	private boolean gitlabStructure(Map<Object, Object> root) {
 		if (YamlSupport.hasKey(root, "stages")) {
 			return true;
 		}
-		for (Map.Entry<?, ?> entry : root.entrySet()) {
+		for (Map.Entry<Object, Object> entry : root.entrySet()) {
 			String key = YamlSupport.asString(entry.getKey());
 			if (key == null || key.startsWith(".")) {
 				continue;
 			}
-			if (entry.getValue() instanceof Map<?, ?> candidate && YamlSupport.hasKey(candidate, "script")) {
+			if (YamlSupport.asMap(entry.getValue()).filter(candidate -> YamlSupport.hasKey(candidate, "script")).isPresent()) {
 				return true;
 			}
 		}

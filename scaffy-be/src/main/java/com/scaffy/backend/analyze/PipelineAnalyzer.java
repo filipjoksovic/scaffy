@@ -25,7 +25,7 @@ public class PipelineAnalyzer {
 	}
 
 	public AnalysisResponse analyze(String filename, String content) {
-		Map<?, ?> root = yamlPipelineParser.parse(content);
+		Map<Object, Object> root = yamlPipelineParser.parse(content);
 		PipelineProvider provider = providerDetector.detect(filename, content, root);
 		PipelineProviderParser parser = parserFor(provider);
 		PipelineDocument document = parser.parse(root);
