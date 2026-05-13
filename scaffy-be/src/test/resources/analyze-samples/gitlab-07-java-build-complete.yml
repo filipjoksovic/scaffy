@@ -1,0 +1,17 @@
+stages:
+  - build
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+build-backend:
+  stage: build
+  image: maven:3.9-eclipse-temurin-25
+  script:
+    - mvn dependency:go-offline
+    - mvn --batch-mode clean package
+  artifacts:
+    paths:
+      - target/*.jar

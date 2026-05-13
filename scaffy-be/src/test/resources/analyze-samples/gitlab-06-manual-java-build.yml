@@ -1,0 +1,10 @@
+stages:
+  - build
+
+build-backend:
+  stage: build
+  image: maven:3.9-eclipse-temurin-25
+  when: manual
+  script:
+    - mvn dependency:go-offline
+    - mvn --batch-mode clean package
