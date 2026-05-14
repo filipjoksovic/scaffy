@@ -1,5 +1,6 @@
 package com.scaffy.backend.analyze;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +31,7 @@ public class PipelineAnalyzer {
 		PipelineProviderParser parser = parserFor(provider);
 		PipelineDocument document = parser.parse(root);
 		List<DimensionAnalysis> dimensions = ruleSets.stream()
+				.sorted(Comparator.comparingInt(ruleSet -> dimensionOrder(ruleSet.dimension())))
 				.map(ruleSet -> ruleSet.analyze(document))
 				.toList();
 		return new AnalysisResponse(provider, dimensions);
@@ -40,5 +42,13 @@ public class PipelineAnalyzer {
 				.filter(parser -> parser.provider() == provider)
 				.findFirst()
 				.orElseThrow(() -> new IllegalStateException("No parser registered for provider " + provider));
+	}
+
+	private int dimensionOrder(String dimension) {
+		return switch (dimension) {
+			case "build" -> 10;
+			case "test" -> 20;
+			default -> 100;
+		};
 	}
 }

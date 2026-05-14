@@ -1,0 +1,8 @@
+stages:
+  - test
+
+test-python:
+  stage: test
+  image: python:3.13
+  script:
+    - pytest
