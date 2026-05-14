@@ -1,0 +1,27 @@
+stages:
+  - test
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+unit-tests:
+  stage: test
+  image: python:3.13
+  script:
+    - pytest tests/unit --junitxml=unit-report.xml --coverage
+  artifacts:
+    reports:
+      junit: unit-report.xml
+    paths:
+      - htmlcov/
+
+e2e-tests:
+  stage: test
+  image: node:24
+  script:
+    - npx playwright test
+  artifacts:
+    paths:
+      - playwright-report/

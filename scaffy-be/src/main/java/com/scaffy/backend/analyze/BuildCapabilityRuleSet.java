@@ -7,12 +7,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
+@Order(10)
 public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 
 	private static final double BUILD_COMMAND_WEIGHT = 0.35;
@@ -32,32 +32,32 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String PRACTICE_BUILD_OUTPUT_DETECTED = "Build output detected";
 
 	private static final List<CommandRule> BUILD_RULES = List.of(
-			CommandRule.build("Generic", "(?:^|[;&|\\n]\\s*)(?<cmd>build)(?=\\s*$|\\s*[;&|])"),
-			CommandRule.build(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+run\\s+build)(?=$|\\s|[;&|])"),
-			CommandRule.build(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+(?:run\\s+)?build)(?=$|\\s|[;&|])"),
-			CommandRule.build(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:run\\s+)?build)(?=$|\\s|[;&|])"),
-			CommandRule.build(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*(?:\\bpackage\\b|\\binstall\\b|\\bverify\\b))"),
-			CommandRule.build(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bbuild\\b)"),
-			CommandRule.build(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+(?:build|publish)\\b[^\\n;&|]*)"),
-			CommandRule.build(ECOSYSTEM_GO, "(?:^|[;&|\\n]\\s*)(?<cmd>go\\s+build\\b[^\\n;&|]*)"),
-			CommandRule.build(ECOSYSTEM_DOCKER, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:buildx\\s+build|build)\\b[^\\n;&|]*)"),
-			CommandRule.build(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+build\\b[^\\n;&|]*)"));
+			CommandRule.of("Generic", "(?:^|[;&|\\n]\\s*)(?<cmd>build)(?=\\s*$|\\s*[;&|])"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+run\\s+build)(?=$|\\s|[;&|])"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+(?:run\\s+)?build)(?=$|\\s|[;&|])"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:run\\s+)?build)(?=$|\\s|[;&|])"),
+			CommandRule.of(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*(?:\\bpackage\\b|\\binstall\\b|\\bverify\\b))"),
+			CommandRule.of(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bbuild\\b)"),
+			CommandRule.of(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+(?:build|publish)\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_GO, "(?:^|[;&|\\n]\\s*)(?<cmd>go\\s+build\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_DOCKER, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:buildx\\s+build|build)\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+build\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> DEPENDENCY_RULES = List.of(
-			CommandRule.dependency(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+ci\\b[^\\n;&|]*)"),
-			CommandRule.dependency(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+install\\b[^\\n;&|]*)"),
-			CommandRule.dependency(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+install\\b[^\\n;&|]*)"),
-			CommandRule.dependency(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+install\\b[^\\n;&|]*)"),
-			CommandRule.dependency(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+restore\\b[^\\n;&|]*)"),
-			CommandRule.dependency(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdependency:go-offline\\b[^\\n;&|]*)"));
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+ci\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+install\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+install\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+install\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+restore\\b[^\\n;&|]*)"),
+			CommandRule.of(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdependency:go-offline\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> PUBLISH_RULES = List.of(
-			CommandRule.output("npm", "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+publish\\b[^\\n;&|]*)"),
-			CommandRule.output(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdeploy\\b[^\\n;&|]*)"),
-			CommandRule.output(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bpublish\\b[^\\n;&|]*)"),
-			CommandRule.output(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+nuget\\s+push\\b[^\\n;&|]*)"),
-			CommandRule.output(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>twine\\s+upload\\b[^\\n;&|]*)"),
-			CommandRule.output(ECOSYSTEM_DOCKER, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+push\\b[^\\n;&|]*)"));
+			CommandRule.of("npm", "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+publish\\b[^\\n;&|]*)"),
+			CommandRule.of(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdeploy\\b[^\\n;&|]*)"),
+			CommandRule.of(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bpublish\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+nuget\\s+push\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>twine\\s+upload\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_DOCKER, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+push\\b[^\\n;&|]*)"));
 
 	@Override
 	public String dimension() {
@@ -66,7 +66,7 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 
 	@Override
 	public DimensionAnalysis analyze(PipelineDocument document) {
-		List<CommandMatch> buildMatches = findMatches(document, BUILD_RULES);
+		List<CommandMatch> buildMatches = CommandMatcher.findMatches(document, BUILD_RULES);
 		if (buildMatches.isEmpty()) {
 			return new DimensionAnalysis(
 					dimension(),
@@ -90,7 +90,7 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 		CommandMatch primaryBuild = buildMatches.getFirst();
 		detected.add(new DetectedPractice("Build command detected", primaryBuild.evidence(), primaryBuild.location()));
 
-		List<CommandMatch> dependencyMatches = findMatches(document, DEPENDENCY_RULES);
+		List<CommandMatch> dependencyMatches = CommandMatcher.findMatches(document, DEPENDENCY_RULES);
 		Optional<CommandMatch> dependencyBeforeBuild = dependencyBeforeBuild(dependencyMatches, buildMatches);
 		if (dependencyBeforeBuild.isPresent()) {
 			CommandMatch dependency = dependencyBeforeBuild.get();
@@ -143,25 +143,6 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 				confidence(automaticTrigger.isPresent()),
 				detected,
 				missing);
-	}
-
-	private List<CommandMatch> findMatches(PipelineDocument document, List<CommandRule> rules) {
-		List<CommandMatch> matches = new ArrayList<>();
-		for (PipelineJob job : document.jobs()) {
-			for (PipelineStep step : job.steps()) {
-				if (step.command() == null || step.command().isBlank()) {
-					continue;
-				}
-				for (CommandRule rule : rules) {
-					Matcher matcher = rule.pattern().matcher(step.command());
-					while (matcher.find()) {
-						String evidence = matcher.group("cmd").trim();
-						matches.add(new CommandMatch(job, step, evidence, step.location(), matcher.start("cmd"), rule));
-					}
-				}
-			}
-		}
-		return matches;
 	}
 
 	private Optional<CommandMatch> dependencyBeforeBuild(List<CommandMatch> dependencies, List<CommandMatch> builds) {
@@ -239,7 +220,7 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 			}
 		}
 
-		List<CommandMatch> publishMatches = findMatches(document, PUBLISH_RULES);
+		List<CommandMatch> publishMatches = CommandMatcher.findMatches(document, PUBLISH_RULES);
 		for (CommandMatch publishMatch : publishMatches) {
 			boolean sameBuildJob = buildMatches.stream().anyMatch(buildMatch -> buildMatch.job().equals(publishMatch.job()));
 			if (sameBuildJob) {
@@ -304,29 +285,5 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 
 	private double round(double score) {
 		return Math.round(score * 100.0) / 100.0;
-	}
-
-	private record CommandRule(Pattern pattern, String ecosystem) {
-
-		private static CommandRule build(String ecosystem, String regex) {
-			return new CommandRule(Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE), ecosystem);
-		}
-
-		private static CommandRule dependency(String ecosystem, String regex) {
-			return new CommandRule(Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE), ecosystem);
-		}
-
-		private static CommandRule output(String ecosystem, String regex) {
-			return new CommandRule(Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.MULTILINE), ecosystem);
-		}
-	}
-
-	private record CommandMatch(
-			PipelineJob job,
-			PipelineStep step,
-			String evidence,
-			String location,
-			int position,
-			CommandRule rule) {
 	}
 }

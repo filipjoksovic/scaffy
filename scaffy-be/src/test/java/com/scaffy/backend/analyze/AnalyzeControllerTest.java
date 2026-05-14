@@ -46,7 +46,10 @@ class AnalyzeControllerTest {
 				.andExpect(jsonPath("$.dimensions[0].level").value(5))
 				.andExpect(jsonPath("$.dimensions[0].status").value("complete"))
 				.andExpect(jsonPath("$.dimensions[0].confidence").value("high"))
-				.andExpect(jsonPath("$.dimensions[0].detectedPractices[0].evidence").value("npm run build"));
+				.andExpect(jsonPath("$.dimensions[0].detectedPractices[0].evidence").value("npm run build"))
+				.andExpect(jsonPath("$.dimensions[1].dimension").value("test"))
+				.andExpect(jsonPath("$.dimensions[1].score").value(0.0))
+				.andExpect(jsonPath("$.dimensions[1].status").value("missing"));
 	}
 
 	@Test
