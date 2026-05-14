@@ -1,0 +1,9 @@
+stages:
+  - deploy
+
+deploy-prod:
+  stage: deploy
+  environment: production
+  script:
+    - gcloud run deploy app --image gcr.io/acme/app:$CI_COMMIT_SHA
+    - curl https://app.example.com/health

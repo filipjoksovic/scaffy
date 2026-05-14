@@ -88,10 +88,22 @@ public class GitLabCiParser implements PipelineProviderParser {
 
 	private PipelineJob job(String id, Map<Object, Object> jobMap, Object script) {
 		String stage = YamlSupport.stringValue(jobMap, "stage").orElse("test");
+		String environment = environment(jobMap);
 		boolean manualOnly = manualOnly(jobMap);
 		List<PipelineStep> steps = scriptSteps(id, script);
 		List<PipelineOutput> outputs = outputs(id, jobMap);
-		return new PipelineJob(id, id, stage, manualOnly, JOBS_LOCATION_PREFIX + id, steps, outputs);
+		return new PipelineJob(id, id, stage, environment, manualOnly, JOBS_LOCATION_PREFIX + id, steps, outputs);
+	}
+
+	private String environment(Map<Object, Object> jobMap) {
+		Object environment = YamlSupport.value(jobMap, "environment").orElse(null);
+		Optional<Map<Object, Object>> environmentMap = YamlSupport.asMap(environment);
+		if (environmentMap.isPresent()) {
+			return environmentMap
+					.flatMap(map -> YamlSupport.stringValue(map, "name"))
+					.orElse(null);
+		}
+		return YamlSupport.asString(environment);
 	}
 
 	private List<PipelineStep> scriptSteps(String jobId, Object script) {

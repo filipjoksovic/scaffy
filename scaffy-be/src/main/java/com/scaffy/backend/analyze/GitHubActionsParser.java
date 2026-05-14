@@ -3,6 +3,7 @@ package com.scaffy.backend.analyze;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
@@ -58,7 +59,7 @@ public class GitHubActionsParser implements PipelineProviderParser {
 		if (name == null || name.isBlank()) {
 			return;
 		}
-		boolean automatic = "push".equals(name) || "pull_request".equals(name);
+		boolean automatic = "push".equals(name) || "pull_request".equals(name) || "workflow_run".equals(name);
 		triggers.add(new PipelineTrigger(name, automatic, location));
 	}
 
@@ -74,7 +75,18 @@ public class GitHubActionsParser implements PipelineProviderParser {
 
 	private PipelineJob job(String id, Map<Object, Object> jobMap) {
 		String name = YamlSupport.stringValue(jobMap, "name").orElse(id);
-		return new PipelineJob(id, name, null, false, "jobs." + id, steps(id, jobMap), List.of());
+		return new PipelineJob(id, name, null, environment(jobMap), false, "jobs." + id, steps(id, jobMap), List.of());
+	}
+
+	private String environment(Map<Object, Object> jobMap) {
+		Object environment = YamlSupport.value(jobMap, "environment").orElse(null);
+		Optional<Map<Object, Object>> environmentMap = YamlSupport.asMap(environment);
+		if (environmentMap.isPresent()) {
+			return environmentMap
+					.flatMap(map -> YamlSupport.stringValue(map, "name"))
+					.orElse(null);
+		}
+		return YamlSupport.asString(environment);
 	}
 
 	private List<PipelineStep> steps(String jobId, Map<Object, Object> jobMap) {

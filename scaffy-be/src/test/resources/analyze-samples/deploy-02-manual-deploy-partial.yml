@@ -1,0 +1,9 @@
+name: Manual Deploy
+on:
+  workflow_dispatch:
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: kubectl set image deployment/app app=ghcr.io/acme/app:$GITHUB_SHA

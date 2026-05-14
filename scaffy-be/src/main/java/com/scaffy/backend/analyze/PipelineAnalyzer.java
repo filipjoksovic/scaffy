@@ -48,6 +48,7 @@ public class PipelineAnalyzer {
 		return switch (dimension) {
 			case "build" -> 10;
 			case "test" -> 20;
+			case "deployment" -> 30;
 			default -> 100;
 		};
 	}
