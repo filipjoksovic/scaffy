@@ -75,6 +75,17 @@ public class ProjectGenerator {
 	private Map<String, String> buildTemplateVariables(InitRequest request) {
 		Map<String, String> vars = new HashMap<>();
 		vars.put("projectName", request.projectName());
+		if (StackCatalog.FRONTEND_VUE.equals(request.frontend())) {
+			vars.put("frontendLabel", "Vue application");
+			vars.put("frontendDevCmd", "npm run dev");
+			vars.put("frontendPort", "5173");
+			vars.put("frontendDistPath", "dist");
+		} else {
+			vars.put("frontendLabel", "Angular application");
+			vars.put("frontendDevCmd", "npm start");
+			vars.put("frontendPort", "4200");
+			vars.put("frontendDistPath", "dist/" + request.projectName() + "/browser");
+		}
 		return vars;
 	}
 
@@ -92,6 +103,9 @@ public class ProjectGenerator {
 	private List<EmittedFile> composeFrontend(InitRequest request, Map<String, String> tokens) throws IOException {
 		if (StackCatalog.FRONTEND_ANGULAR.equals(request.frontend())) {
 			return artifactComposer.compose("artifacts/angular.zip", "frontend", tokens);
+		}
+		if (StackCatalog.FRONTEND_VUE.equals(request.frontend())) {
+			return artifactComposer.compose("artifacts/vue.zip", "frontend", tokens);
 		}
 		return List.of();
 	}

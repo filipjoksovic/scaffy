@@ -25,6 +25,7 @@ STACK="${STACK:-all}"
 
 ANGULAR_VERSION="${ANGULAR_VERSION:-18}"
 SPRING_BOOT_VERSION="${SPRING_BOOT_VERSION:-4.0.6}"
+CREATE_VUE_VERSION="${CREATE_VUE_VERSION:-latest}"
 
 # ---- Placeholder identity -------------------------------------------------
 # These names are what the CLIs see. After validation they are swept out and
@@ -124,6 +125,39 @@ generate_angular() {
 }
 
 # ---------------------------------------------------------------------------
+# Vue
+# ---------------------------------------------------------------------------
+generate_vue() {
+	echo
+	echo "==> generating vue (create-vue @ $CREATE_VUE_VERSION)"
+	cd "$WORKSPACE"
+
+	# create-vue writes to a subdirectory named after the project.
+	# --ts enables TypeScript; all other optional features are disabled for a
+	# minimal scaffold that matches the iteration-2 acceptance criteria.
+	npx -y "create-vue@$CREATE_VUE_VERSION" "$PROJECT_KEBAB" --ts
+
+	cd "$PROJECT_KEBAB"
+
+	if [[ "$SKIP_VALIDATE" != "1" ]]; then
+		echo "==> validating vue (npm install + npm run build)"
+		npm install --silent --no-audit --no-fund
+		npm run build --silent
+		rm -rf node_modules dist
+	fi
+
+	echo "==> tokenizing vue sources"
+	tokenize_text_files \
+		-not -path "./node_modules/*" \
+		-not -path "./dist/*"
+
+	cd "$WORKSPACE"
+	echo "==> writing $ARTIFACTS_DIR/vue.zip"
+	rm -f "$ARTIFACTS_DIR/vue.zip"
+	zip_dir "$PROJECT_KEBAB" "$ARTIFACTS_DIR/vue.zip"
+}
+
+# ---------------------------------------------------------------------------
 # Spring Boot
 # ---------------------------------------------------------------------------
 generate_spring_boot() {
@@ -186,8 +220,9 @@ generate_spring_boot() {
 # Dispatch
 # ---------------------------------------------------------------------------
 case "$STACK" in
-	all)         generate_angular; generate_spring_boot ;;
+	all)         generate_angular; generate_vue; generate_spring_boot ;;
 	angular)     generate_angular ;;
+	vue)         generate_vue ;;
 	spring-boot) generate_spring_boot ;;
 	*)           echo "Unknown STACK: $STACK" >&2; exit 2 ;;
 esac

@@ -14,7 +14,7 @@ public class StackValidator {
 	public void validate(InitRequest request) {
 		if (!catalog.supportsFrontend(request.frontend())) {
 			throw new UnsupportedStackException(
-					"Frontend '" + request.frontend() + "' is not supported in iteration 1.");
+					"Frontend '" + request.frontend() + "' is not supported.");
 		}
 		if (!catalog.supportsBackend(request.backend())) {
 			throw new UnsupportedStackException(

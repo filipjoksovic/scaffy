@@ -167,11 +167,70 @@ class InitControllerTest {
 	}
 
 	@Test
+	void returnsZipForValidVueSpringBootRequest() throws Exception {
+		String body = """
+				{
+					"projectName": "vue-app",
+					"frontend": "vue",
+					"backend": "spring-boot",
+					"pipeline": "github-actions",
+					"includeDocker": true
+				}
+				""";
+
+		MvcResult result = mockMvc().perform(post("/api/init")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType(MediaType.parseMediaType("application/zip")))
+				.andExpect(header().string("Content-Disposition", "attachment; filename=\"vue-app.zip\""))
+				.andReturn();
+
+		Map<String, byte[]> entries = readZip(result.getResponse().getContentAsByteArray());
+
+		// Overlay files present.
+		assertThat(entries).containsKeys(
+				"vue-app/README.md",
+				"vue-app/.gitignore",
+				"vue-app/.github/workflows/ci.yml");
+
+		// Vue artifact files present under frontend/.
+		assertThat(entries).containsKeys(
+				"vue-app/frontend/package.json",
+				"vue-app/frontend/vite.config.ts",
+				"vue-app/frontend/src/main.ts",
+				"vue-app/frontend/src/App.vue");
+
+		// Token expansion: package.json must carry the correct project name.
+		String packageJson = new String(
+				entries.get("vue-app/frontend/package.json"),
+				StandardCharsets.UTF_8);
+		assertThat(packageJson)
+				.contains("\"name\": \"vue-app\"")
+				.doesNotContain("__SCAFFY_");
+
+		// Docker: Dockerfile uses Vite dist path (flat dist/, not Angular's nested path).
+		String frontendDockerfile = new String(entries.get("vue-app/frontend/Dockerfile"), StandardCharsets.UTF_8);
+		assertThat(frontendDockerfile)
+				.contains("/workspace/dist ")
+				.contains("EXPOSE 80")
+				.doesNotContain("{{")
+				.doesNotContain("browser");
+
+		// README references Vue-specific port and command.
+		String readme = new String(entries.get("vue-app/README.md"), StandardCharsets.UTF_8);
+		assertThat(readme)
+				.contains("5173")
+				.contains("npm run dev")
+				.doesNotContain("{{");
+	}
+
+	@Test
 	void rejectsUnsupportedFrontend() throws Exception {
 		String body = """
 				{
 					"projectName": "demo-app",
-					"frontend": "vue",
+					"frontend": "react",
 					"backend": "spring-boot",
 					"pipeline": "github-actions"
 				}
@@ -183,7 +242,7 @@ class InitControllerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error").value("Unsupported stack combination"))
 				.andExpect(jsonPath("$.message").value(
-						"Frontend 'vue' is not supported in iteration 1."));
+						"Frontend 'react' is not supported."));
 	}
 
 	@Test
