@@ -226,11 +226,71 @@ class InitControllerTest {
 	}
 
 	@Test
+	void returnsZipForValidReactSpringBootRequest() throws Exception {
+		String body = """
+				{
+					"projectName": "react-app",
+					"frontend": "react",
+					"backend": "spring-boot",
+					"pipeline": "gitlab-ci",
+					"includeDocker": true
+				}
+				""";
+
+		MvcResult result = mockMvc().perform(post("/api/init")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType(MediaType.parseMediaType("application/zip")))
+				.andExpect(header().string("Content-Disposition", "attachment; filename=\"react-app.zip\""))
+				.andReturn();
+
+		Map<String, byte[]> entries = readZip(result.getResponse().getContentAsByteArray());
+
+		// Overlay files.
+		assertThat(entries).containsKeys(
+				"react-app/README.md",
+				"react-app/.gitignore",
+				"react-app/.gitlab-ci.yml");
+		assertThat(entries).doesNotContainKey("react-app/.github/workflows/ci.yml");
+
+		// React artifact files under frontend/.
+		assertThat(entries).containsKeys(
+				"react-app/frontend/package.json",
+				"react-app/frontend/vite.config.ts",
+				"react-app/frontend/src/main.tsx",
+				"react-app/frontend/src/App.tsx");
+
+		// Token expansion: correct project name in package.json.
+		String packageJson = new String(
+				entries.get("react-app/frontend/package.json"),
+				StandardCharsets.UTF_8);
+		assertThat(packageJson)
+				.contains("\"name\": \"react-app\"")
+				.doesNotContain("__SCAFFY_");
+
+		// Dockerfile uses flat Vite dist path (not Angular's nested path).
+		String frontendDockerfile = new String(entries.get("react-app/frontend/Dockerfile"), StandardCharsets.UTF_8);
+		assertThat(frontendDockerfile)
+				.contains("/workspace/dist ")
+				.contains("EXPOSE 80")
+				.doesNotContain("{{")
+				.doesNotContain("browser");
+
+		// README references Vite port and npm run dev.
+		String readme = new String(entries.get("react-app/README.md"), StandardCharsets.UTF_8);
+		assertThat(readme)
+				.contains("5173")
+				.contains("npm run dev")
+				.doesNotContain("{{");
+	}
+
+	@Test
 	void rejectsUnsupportedFrontend() throws Exception {
 		String body = """
 				{
 					"projectName": "demo-app",
-					"frontend": "react",
+					"frontend": "svelte",
 					"backend": "spring-boot",
 					"pipeline": "github-actions"
 				}
@@ -242,7 +302,7 @@ class InitControllerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error").value("Unsupported stack combination"))
 				.andExpect(jsonPath("$.message").value(
-						"Frontend 'react' is not supported."));
+						"Frontend 'svelte' is not supported."));
 	}
 
 	@Test
