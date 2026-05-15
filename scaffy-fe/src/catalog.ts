@@ -16,7 +16,7 @@ export const FRONTENDS: StackOption[] = [
     id: 'react',
     name: 'React',
     description: 'React + Vite + TypeScript.',
-    available: false,
+    available: true,
   },
   {
     id: 'vue',

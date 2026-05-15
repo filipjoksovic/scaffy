@@ -26,6 +26,11 @@ import com.scaffy.backend.init.StackCatalog;
 public class ProjectGenerator {
 
 	private static final String GROUP_ID = "com.example";
+	private static final String TEMPLATE_VAR_FRONTEND_LABEL = "frontendLabel";
+	private static final String TEMPLATE_VAR_FRONTEND_DEV_CMD = "frontendDevCmd";
+	private static final String TEMPLATE_VAR_FRONTEND_PORT = "frontendPort";
+	private static final String TEMPLATE_VAR_FRONTEND_DIST_PATH = "frontendDistPath";
+	private static final String TEMPLATE_ROOT_FRONTEND = "frontend";
 
 	private final ArtifactComposer artifactComposer;
 	private final TemplateOverlay templateOverlay;
@@ -75,16 +80,25 @@ public class ProjectGenerator {
 	private Map<String, String> buildTemplateVariables(InitRequest request) {
 		Map<String, String> vars = new HashMap<>();
 		vars.put("projectName", request.projectName());
-		if (StackCatalog.FRONTEND_VUE.equals(request.frontend())) {
-			vars.put("frontendLabel", "Vue application");
-			vars.put("frontendDevCmd", "npm run dev");
-			vars.put("frontendPort", "5173");
-			vars.put("frontendDistPath", "dist");
-		} else {
-			vars.put("frontendLabel", "Angular application");
-			vars.put("frontendDevCmd", "npm start");
-			vars.put("frontendPort", "4200");
-			vars.put("frontendDistPath", "dist/" + request.projectName() + "/browser");
+		switch (request.frontend()) {
+			case StackCatalog.FRONTEND_VUE -> {
+				vars.put(TEMPLATE_VAR_FRONTEND_LABEL, "Vue application");
+				vars.put(TEMPLATE_VAR_FRONTEND_DEV_CMD, "npm run dev");
+				vars.put(TEMPLATE_VAR_FRONTEND_PORT, "5173");
+				vars.put(TEMPLATE_VAR_FRONTEND_DIST_PATH, "dist");
+			}
+			case StackCatalog.FRONTEND_REACT -> {
+				vars.put(TEMPLATE_VAR_FRONTEND_LABEL, "React application");
+				vars.put(TEMPLATE_VAR_FRONTEND_DEV_CMD, "npm run dev");
+				vars.put(TEMPLATE_VAR_FRONTEND_PORT, "5173");
+				vars.put(TEMPLATE_VAR_FRONTEND_DIST_PATH, "dist");
+			}
+			default -> {
+				vars.put(TEMPLATE_VAR_FRONTEND_LABEL, "Angular application");
+				vars.put(TEMPLATE_VAR_FRONTEND_DEV_CMD, "npm start");
+				vars.put(TEMPLATE_VAR_FRONTEND_PORT, "4200");
+				vars.put(TEMPLATE_VAR_FRONTEND_DIST_PATH, "dist/" + request.projectName() + "/browser");
+			}
 		}
 		return vars;
 	}
@@ -102,10 +116,13 @@ public class ProjectGenerator {
 
 	private List<EmittedFile> composeFrontend(InitRequest request, Map<String, String> tokens) throws IOException {
 		if (StackCatalog.FRONTEND_ANGULAR.equals(request.frontend())) {
-			return artifactComposer.compose("artifacts/angular.zip", "frontend", tokens);
+			return artifactComposer.compose("artifacts/angular.zip", TEMPLATE_ROOT_FRONTEND, tokens);
 		}
 		if (StackCatalog.FRONTEND_VUE.equals(request.frontend())) {
-			return artifactComposer.compose("artifacts/vue.zip", "frontend", tokens);
+			return artifactComposer.compose("artifacts/vue.zip", TEMPLATE_ROOT_FRONTEND, tokens);
+		}
+		if (StackCatalog.FRONTEND_REACT.equals(request.frontend())) {
+			return artifactComposer.compose("artifacts/react.zip", TEMPLATE_ROOT_FRONTEND, tokens);
 		}
 		return List.of();
 	}
