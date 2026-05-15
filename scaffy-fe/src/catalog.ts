@@ -22,7 +22,7 @@ export const FRONTENDS: StackOption[] = [
     id: 'vue',
     name: 'Vue',
     description: 'Vue 3 + Vite + TypeScript.',
-    available: false,
+    available: true,
   },
 ]
 
