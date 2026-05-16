@@ -80,6 +80,7 @@ public class ProjectGenerator {
 	private Map<String, String> buildTemplateVariables(InitRequest request) {
 		Map<String, String> vars = new HashMap<>();
 		vars.put("projectName", request.projectName());
+		vars.put("projectPascal", pascalize(request.projectName()));
 		switch (request.frontend()) {
 			case StackCatalog.FRONTEND_VUE -> {
 				vars.put(TEMPLATE_VAR_FRONTEND_LABEL, "Vue application");
@@ -100,6 +101,15 @@ public class ProjectGenerator {
 				vars.put(TEMPLATE_VAR_FRONTEND_DIST_PATH, "dist/" + request.projectName() + "/browser");
 			}
 		}
+		if (StackCatalog.BACKEND_DOTNET.equals(request.backend())) {
+			vars.put("backendLabel", ".NET Web API");
+			vars.put("backendRunCmd", "dotnet run");
+			vars.put("backendPort", "8080");
+		} else {
+			vars.put("backendLabel", "Spring Boot service (Java 25)");
+			vars.put("backendRunCmd", "mvn spring-boot:run");
+			vars.put("backendPort", "8080");
+		}
 		return vars;
 	}
 
@@ -110,6 +120,9 @@ public class ProjectGenerator {
 	private List<EmittedFile> composeBackend(InitRequest request, Map<String, String> tokens) throws IOException {
 		if (StackCatalog.BACKEND_SPRING_BOOT.equals(request.backend())) {
 			return artifactComposer.compose("artifacts/spring-boot.zip", "backend", tokens);
+		}
+		if (StackCatalog.BACKEND_DOTNET.equals(request.backend())) {
+			return artifactComposer.compose("artifacts/dotnet.zip", "backend", tokens);
 		}
 		return List.of();
 	}
@@ -128,20 +141,28 @@ public class ProjectGenerator {
 	}
 
 	private List<EmittedFile> emitOverlay(InitRequest request, Map<String, String> vars) throws IOException {
+		boolean isDotnet = StackCatalog.BACKEND_DOTNET.equals(request.backend());
 		List<TemplateFile> templates = new ArrayList<>();
 		templates.add(TemplateFile.rendered("templates/root/README.md.tmpl", "README.md"));
 		templates.add(TemplateFile.copy("templates/root/gitignore", ".gitignore"));
 		if (Boolean.TRUE.equals(request.includeDocker())) {
-			templates.add(TemplateFile.rendered("templates/docker/Dockerfile.backend.tmpl", "backend/Dockerfile"));
+			String backendDockerTmpl = isDotnet
+					? "templates/docker/Dockerfile.backend.dotnet.tmpl"
+					: "templates/docker/Dockerfile.backend.tmpl";
+			templates.add(TemplateFile.rendered(backendDockerTmpl, "backend/Dockerfile"));
 			templates.add(TemplateFile.rendered("templates/docker/Dockerfile.frontend.tmpl", "frontend/Dockerfile"));
 			templates.add(TemplateFile.rendered("templates/docker/docker-compose.yml.tmpl", "docker-compose.yml"));
 		}
 		switch (request.pipeline()) {
 			case StackCatalog.PIPELINE_GITHUB_ACTIONS -> templates.add(TemplateFile.rendered(
-					"templates/pipeline/github-actions/ci.yml.tmpl",
+					isDotnet
+						? "templates/pipeline/github-actions/ci.dotnet.yml.tmpl"
+						: "templates/pipeline/github-actions/ci.yml.tmpl",
 					".github/workflows/ci.yml"));
 			case StackCatalog.PIPELINE_GITLAB_CI -> templates.add(TemplateFile.rendered(
-					"templates/pipeline/gitlab-ci/gitlab-ci.yml.tmpl",
+					isDotnet
+						? "templates/pipeline/gitlab-ci/gitlab-ci.dotnet.yml.tmpl"
+						: "templates/pipeline/gitlab-ci/gitlab-ci.yml.tmpl",
 					".gitlab-ci.yml"));
 			default -> { /* validated upstream */ }
 		}

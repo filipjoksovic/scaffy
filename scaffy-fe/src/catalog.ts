@@ -42,8 +42,8 @@ export const BACKENDS: StackOption[] = [
   {
     id: 'dotnet',
     name: '.NET',
-    description: '.NET 8 minimal API.',
-    available: false,
+    description: '.NET Web API.',
+    available: true,
   },
 ]
 

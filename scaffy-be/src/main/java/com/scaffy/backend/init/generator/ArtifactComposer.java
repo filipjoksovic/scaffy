@@ -32,6 +32,7 @@ public class ArtifactComposer {
 	 */
 	private static final Set<String> TEXT_EXTENSIONS = Set.of(
 			"java", "kt", "kts", "groovy",
+			"cs", "csproj", "sln", "http",
 			"ts", "tsx", "js", "jsx", "mjs", "cjs",
 			"json", "yml", "yaml", "xml", "properties",
 			"html", "htm", "css", "scss", "sass", "less",
