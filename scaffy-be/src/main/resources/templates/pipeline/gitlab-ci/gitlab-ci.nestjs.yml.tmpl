@@ -1,0 +1,25 @@
+stages:
+  - build
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - backend/node_modules
+    - frontend/node_modules
+
+backend:
+  stage: build
+  image: node:24
+  script:
+    - cd backend
+    - npm ci
+    - npm run build
+    - npm test
+
+frontend:
+  stage: build
+  image: node:24
+  script:
+    - cd frontend
+    - npm ci
+    - npm run build

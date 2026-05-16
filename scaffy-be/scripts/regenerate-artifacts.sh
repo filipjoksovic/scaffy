@@ -28,6 +28,7 @@ SPRING_BOOT_VERSION="${SPRING_BOOT_VERSION:-4.0.6}"
 CREATE_VUE_VERSION="${CREATE_VUE_VERSION:-latest}"
 CREATE_VITE_VERSION="${CREATE_VITE_VERSION:-latest}"
 DOTNET_FRAMEWORK="${DOTNET_FRAMEWORK:-net10.0}"
+NESTJS_CLI_VERSION="${NESTJS_CLI_VERSION:-latest}"
 
 # ---- Placeholder identity -------------------------------------------------
 # These names are what the CLIs see. After validation they are swept out and
@@ -304,14 +305,47 @@ generate_spring_boot() {
 }
 
 # ---------------------------------------------------------------------------
+# NestJS (via @nestjs/cli new)
+# ---------------------------------------------------------------------------
+generate_nestjs() {
+	echo
+	echo "==> generating nestjs (nest new @ $NESTJS_CLI_VERSION)"
+	cd "$WORKSPACE"
+
+	# nest new is interactive unless --package-manager is provided.
+	npx -y "@nestjs/cli@$NESTJS_CLI_VERSION" new "$PROJECT_KEBAB" \
+		--package-manager npm \
+		--skip-git
+
+	cd "$PROJECT_KEBAB"
+
+	if [[ "$SKIP_VALIDATE" != "1" ]]; then
+		echo "==> validating nestjs (npm run build)"
+		npm run build --silent
+		rm -rf node_modules dist
+	fi
+
+	echo "==> tokenizing nestjs sources"
+	tokenize_text_files \
+		-not -path "./node_modules/*" \
+		-not -path "./dist/*"
+
+	cd "$WORKSPACE"
+	echo "==> writing $ARTIFACTS_DIR/nestjs.zip"
+	rm -f "$ARTIFACTS_DIR/nestjs.zip"
+	zip_dir "$PROJECT_KEBAB" "$ARTIFACTS_DIR/nestjs.zip"
+}
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 case "$STACK" in
-	all)         generate_angular; generate_vue; generate_react; generate_dotnet; generate_spring_boot ;;
+	all)         generate_angular; generate_vue; generate_react; generate_dotnet; generate_nestjs; generate_spring_boot ;;
 	angular)     generate_angular ;;
 	vue)         generate_vue ;;
 	react)       generate_react ;;
 	dotnet)      generate_dotnet ;;
+	nestjs)      generate_nestjs ;;
 	spring-boot) generate_spring_boot ;;
 	*)           echo "Unknown STACK: $STACK" >&2; exit 2 ;;
 esac

@@ -1,0 +1,15 @@
+FROM node:24-alpine AS build
+WORKDIR /workspace
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /workspace/package*.json ./
+RUN npm ci --omit=dev
+COPY --from=build /workspace/dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/main"]
