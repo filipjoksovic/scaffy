@@ -368,6 +368,79 @@ class InitControllerTest {
 	}
 
 	@Test
+	void returnsZipForValidVueNestJsRequest() throws Exception {
+		String body = """
+				{
+					"projectName": "nest-app",
+					"frontend": "vue",
+					"backend": "nestjs",
+					"pipeline": "github-actions",
+					"includeDocker": true
+				}
+				""";
+
+		MvcResult result = mockMvc().perform(post("/api/init")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType(MediaType.parseMediaType("application/zip")))
+				.andExpect(header().string("Content-Disposition", "attachment; filename=\"nest-app.zip\""))
+				.andReturn();
+
+		Map<String, byte[]> entries = readZip(result.getResponse().getContentAsByteArray());
+
+		// Overlay files present.
+		assertThat(entries).containsKeys(
+				"nest-app/README.md",
+				"nest-app/.gitignore",
+				"nest-app/.github/workflows/ci.yml");
+
+		// NestJS artifact: module, controller, service, main entrypoint.
+		assertThat(entries).containsKeys(
+				"nest-app/backend/package.json",
+				"nest-app/backend/src/main.ts",
+				"nest-app/backend/src/app.module.ts",
+				"nest-app/backend/src/app.controller.ts",
+				"nest-app/backend/src/app.service.ts");
+
+		// Token expansion: package.json carries the correct project name.
+		String packageJson = new String(
+				entries.get("nest-app/backend/package.json"),
+				StandardCharsets.UTF_8);
+		assertThat(packageJson)
+				.contains("\"name\": \"nest-app\"")
+				.doesNotContain("__SCAFFY_");
+
+		// NestJS Dockerfile uses node image, not JDK or dotnet.
+		String backendDockerfile = new String(entries.get("nest-app/backend/Dockerfile"), StandardCharsets.UTF_8);
+		assertThat(backendDockerfile)
+				.contains("node:")
+				.contains("EXPOSE 3000")
+				.doesNotContain("{{");
+
+		// docker-compose exposes port 3000 (NestJS default, not 8080).
+		String dockerCompose = new String(entries.get("nest-app/docker-compose.yml"), StandardCharsets.UTF_8);
+		assertThat(dockerCompose)
+				.contains("3000:3000")
+				.doesNotContain("{{");
+
+		// CI workflow uses npm (not setup-java or setup-dotnet) for backend.
+		String ciYml = new String(entries.get("nest-app/.github/workflows/ci.yml"), StandardCharsets.UTF_8);
+		assertThat(ciYml)
+				.contains("npm ci")
+				.contains("npm run build")
+				.doesNotContain("setup-java")
+				.doesNotContain("setup-dotnet");
+
+		// README mentions NestJS commands and port 3000.
+		String readme = new String(entries.get("nest-app/README.md"), StandardCharsets.UTF_8);
+		assertThat(readme)
+				.contains("npm run start:dev")
+				.contains("3000")
+				.doesNotContain("{{");
+	}
+
+	@Test
 	void rejectsMissingProjectName() throws Exception {
 		String body = """
 				{

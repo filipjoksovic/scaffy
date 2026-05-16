@@ -37,7 +37,7 @@ export const BACKENDS: StackOption[] = [
     id: 'nestjs',
     name: 'NestJS',
     description: 'NestJS + TypeScript REST starter.',
-    available: false,
+    available: true,
   },
   {
     id: 'dotnet',
