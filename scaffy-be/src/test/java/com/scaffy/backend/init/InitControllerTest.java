@@ -306,6 +306,68 @@ class InitControllerTest {
 	}
 
 	@Test
+	void returnsZipForValidAngularDotnetRequest() throws Exception {
+		String body = """
+				{
+					"projectName": "dotnet-app",
+					"frontend": "angular",
+					"backend": "dotnet",
+					"pipeline": "github-actions",
+					"includeDocker": true
+				}
+				""";
+
+		MvcResult result = mockMvc().perform(post("/api/init")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType(MediaType.parseMediaType("application/zip")))
+				.andExpect(header().string("Content-Disposition", "attachment; filename=\"dotnet-app.zip\""))
+				.andReturn();
+
+		Map<String, byte[]> entries = readZip(result.getResponse().getContentAsByteArray());
+
+		// Overlay files.
+		assertThat(entries).containsKeys(
+				"dotnet-app/README.md",
+				"dotnet-app/.gitignore",
+				"dotnet-app/.github/workflows/ci.yml");
+
+		// .NET artifact: .csproj file name uses PascalCase of project name.
+		assertThat(entries).containsKey("dotnet-app/backend/DotnetApp.csproj");
+
+		// Token expansion: no raw placeholder names remain in the csproj.
+		String csproj = new String(
+				entries.get("dotnet-app/backend/DotnetApp.csproj"),
+				StandardCharsets.UTF_8);
+		assertThat(csproj)
+				.doesNotContain("ScaffyTemplateApp")
+				.doesNotContain("__SCAFFY_");
+
+		// .NET Dockerfile uses ASP.NET runtime image and correct ENTRYPOINT dll name.
+		String backendDockerfile = new String(entries.get("dotnet-app/backend/Dockerfile"), StandardCharsets.UTF_8);
+		assertThat(backendDockerfile)
+				.contains("dotnet/aspnet")
+				.contains("DotnetApp.dll")
+				.contains("EXPOSE 8080")
+				.doesNotContain("{{");
+
+		// CI workflow uses setup-dotnet, not setup-java.
+		String ciYml = new String(entries.get("dotnet-app/.github/workflows/ci.yml"), StandardCharsets.UTF_8);
+		assertThat(ciYml)
+				.contains("setup-dotnet")
+				.contains("dotnet restore")
+				.doesNotContain("setup-java");
+
+		// README describes dotnet run at port 8080.
+		String readme = new String(entries.get("dotnet-app/README.md"), StandardCharsets.UTF_8);
+		assertThat(readme)
+				.contains("dotnet run")
+				.contains("8080")
+				.doesNotContain("{{");
+	}
+
+	@Test
 	void rejectsMissingProjectName() throws Exception {
 		String body = """
 				{

@@ -19,9 +19,9 @@ class StackValidatorTest {
 	@Test
 	void rejectsUnsupportedBackend() {
 		assertThatThrownBy(() -> validator.validate(
-				new InitRequest("demo", "angular", "dotnet", "github-actions", null)))
+				new InitRequest("demo", "angular", "nestjs", "github-actions", null)))
 				.isInstanceOf(UnsupportedStackException.class)
-				.hasMessageContaining("Backend 'dotnet'");
+				.hasMessageContaining("Backend 'nestjs'");
 	}
 
 	@Test

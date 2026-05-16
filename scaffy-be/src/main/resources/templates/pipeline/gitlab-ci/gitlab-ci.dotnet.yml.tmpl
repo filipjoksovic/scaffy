@@ -1,0 +1,24 @@
+stages:
+  - build
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - frontend/node_modules
+
+backend:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  script:
+    - cd backend
+    - dotnet restore
+    - dotnet build --no-restore
+    - dotnet test --no-build --verbosity normal
+
+frontend:
+  stage: build
+  image: node:24
+  script:
+    - cd frontend
+    - npm ci
+    - npm run build

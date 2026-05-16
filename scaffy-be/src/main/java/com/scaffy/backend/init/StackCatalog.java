@@ -15,11 +15,12 @@ public class StackCatalog {
 	public static final String FRONTEND_VUE = "vue";
 	public static final String FRONTEND_REACT = "react";
 	public static final String BACKEND_SPRING_BOOT = "spring-boot";
+	public static final String BACKEND_DOTNET = "dotnet";
 	public static final String PIPELINE_GITHUB_ACTIONS = "github-actions";
 	public static final String PIPELINE_GITLAB_CI = "gitlab-ci";
 
 	private static final Set<String> FRONTENDS = Set.of(FRONTEND_ANGULAR, FRONTEND_VUE, FRONTEND_REACT);
-	private static final Set<String> BACKENDS = Set.of(BACKEND_SPRING_BOOT);
+	private static final Set<String> BACKENDS = Set.of(BACKEND_SPRING_BOOT, BACKEND_DOTNET);
 	private static final Set<String> PIPELINES = Set.of(PIPELINE_GITHUB_ACTIONS, PIPELINE_GITLAB_CI);
 
 	public Set<String> frontends() { return FRONTENDS; }

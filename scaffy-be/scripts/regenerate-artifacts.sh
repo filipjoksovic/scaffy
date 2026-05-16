@@ -27,6 +27,7 @@ ANGULAR_VERSION="${ANGULAR_VERSION:-18}"
 SPRING_BOOT_VERSION="${SPRING_BOOT_VERSION:-4.0.6}"
 CREATE_VUE_VERSION="${CREATE_VUE_VERSION:-latest}"
 CREATE_VITE_VERSION="${CREATE_VITE_VERSION:-latest}"
+DOTNET_FRAMEWORK="${DOTNET_FRAMEWORK:-net10.0}"
 
 # ---- Placeholder identity -------------------------------------------------
 # These names are what the CLIs see. After validation they are swept out and
@@ -74,6 +75,7 @@ tokenize_text_files() {
 		-name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o \
 		-name "*.json" -o -name "*.html" -o -name "*.css" -o -name "*.scss" -o \
 		-name "*.java" -o -name "*.xml" -o -name "*.properties" -o \
+		-name "*.cs" -o -name "*.csproj" -o -name "*.http" -o \
 		-name "*.yml" -o -name "*.yaml" -o -name "*.md" -o \
 		-name ".gitignore" -o -name ".editorconfig" \
 	\) -exec sed -i \
@@ -189,6 +191,60 @@ generate_react() {
 }
 
 # ---------------------------------------------------------------------------
+# .NET Web API (dotnet new webapi)
+# ---------------------------------------------------------------------------
+generate_dotnet() {
+	echo
+	echo "==> generating .NET Web API (dotnet new webapi @ $DOTNET_FRAMEWORK)"
+	cd "$WORKSPACE"
+
+	# .NET uses PascalCase for the project/assembly name.
+	dotnet new webapi \
+		--name "$PROJECT_PASCAL" \
+		--output dotnet-template \
+		--framework "$DOTNET_FRAMEWORK" \
+		--no-https \
+		--no-restore \
+		--force
+
+	cd dotnet-template
+
+	# Set the HTTP dev server URL to port 8080 so dotnet run listens consistently.
+	if [[ -f Properties/launchSettings.json ]]; then
+		sed -i 's|"applicationUrl": "http://localhost:[0-9]*"|"applicationUrl": "http://localhost:8080"|g' \
+			Properties/launchSettings.json
+	fi
+
+	if [[ "$SKIP_VALIDATE" != "1" ]]; then
+		# Use restore (not build) for validation: dotnet new webapi always produces a
+		# structurally valid project, and dotnet restore confirms all package references
+		# resolve. dotnet build is skipped here because SDK 10.x has a known "Question
+		# build" regression that causes the first clean build to exit non-zero on Windows.
+		echo "==> validating .NET (dotnet restore)"
+		dotnet restore -q
+		rm -rf bin obj
+	fi
+
+	echo "==> tokenizing .NET sources"
+	tokenize_text_files \
+		-not -path "./bin/*" \
+		-not -path "./obj/*"
+
+	# Rename the .csproj file: ScaffyTemplateApp.csproj → __SCAFFY_PROJECT_PASCAL__.csproj
+	find . -maxdepth 1 -name "${PROJECT_PASCAL}.csproj" \
+		-execdir mv {} "__SCAFFY_PROJECT_PASCAL__.csproj" \;
+
+	# Rename the .http file if present: ScaffyTemplateApp.http → __SCAFFY_PROJECT_PASCAL__.http
+	find . -maxdepth 1 -name "${PROJECT_PASCAL}.http" \
+		-execdir mv {} "__SCAFFY_PROJECT_PASCAL__.http" \;
+
+	cd "$WORKSPACE"
+	echo "==> writing $ARTIFACTS_DIR/dotnet.zip"
+	rm -f "$ARTIFACTS_DIR/dotnet.zip"
+	zip_dir "dotnet-template" "$ARTIFACTS_DIR/dotnet.zip"
+}
+
+# ---------------------------------------------------------------------------
 # Spring Boot
 # ---------------------------------------------------------------------------
 generate_spring_boot() {
@@ -251,10 +307,11 @@ generate_spring_boot() {
 # Dispatch
 # ---------------------------------------------------------------------------
 case "$STACK" in
-	all)         generate_angular; generate_vue; generate_react; generate_spring_boot ;;
+	all)         generate_angular; generate_vue; generate_react; generate_dotnet; generate_spring_boot ;;
 	angular)     generate_angular ;;
 	vue)         generate_vue ;;
 	react)       generate_react ;;
+	dotnet)      generate_dotnet ;;
 	spring-boot) generate_spring_boot ;;
 	*)           echo "Unknown STACK: $STACK" >&2; exit 2 ;;
 esac
