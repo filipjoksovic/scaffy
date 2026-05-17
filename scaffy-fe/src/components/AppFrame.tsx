@@ -15,6 +15,9 @@ export function AppFrame({ children }: AppFrameProps) {
         </Link>
         <div className="nav-links">
           <NavLink end to="/">
+            Home
+          </NavLink>
+          <NavLink to="/init">
             Initializer
           </NavLink>
           <NavLink to="/analyze">Pipeline Analyzer</NavLink>
@@ -35,7 +38,8 @@ export function AppFrame({ children }: AppFrameProps) {
 
       <footer className="footer">
         <strong>Scaffy</strong>
-        <Link to="/">Initializer</Link>
+        <Link to="/">Home</Link>
+        <Link to="/init">Initializer</Link>
         <Link to="/analyze">Analyzer</Link>
         <Link to="/design">Design</Link>
         <span>CI/CD project tooling</span>

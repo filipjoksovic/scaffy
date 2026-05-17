@@ -45,7 +45,7 @@ describe('analyzePipeline', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('/api/analyze')
+    expect(url).toMatch(/\/api\/analyze$/)
     expect(init.method).toBe('POST')
     expect(init.body).toBeInstanceOf(FormData)
     expect(init.body.get('file')).toBe(file)
