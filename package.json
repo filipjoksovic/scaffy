@@ -1,0 +1,11 @@
+{
+  "name": "scaffy",
+  "private": true,
+  "description": "Scaffy monorepo: project initializer and CI/CD maturity analyzer.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
