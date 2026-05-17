@@ -41,6 +41,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	private static final List<CommandRule> CODE_ANALYSIS_RULES = List.of(
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+run\\s+lint(?::[\\w-]+)?\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+(?:run\\s+)?lint(?::[\\w-]+)?\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:(?:--dir|-C|--filter)\\s+(?:\\$\\{\\{[^}]+}}|\\S+)\\s+)*(?:run\\s+)?lint(?::[\\w-]+)?\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:run\\s+)?lint(?::[\\w-]+)?\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:npx\\s+)?eslint\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+run\\s+typecheck\\b[^\\n;&|]*)"),

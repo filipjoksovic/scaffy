@@ -41,7 +41,7 @@ class AnalyzeControllerTest {
 		mockMvc().perform(multipart("/api/analyze").file(file))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.provider").value("github-actions"))
-				.andExpect(jsonPath("$.overallScore").value(0.12))
+				.andExpect(jsonPath("$.overallScore").value(0.17))
 				.andExpect(jsonPath("$.overallLevel").value(2))
 				.andExpect(jsonPath("$.overallStatus").value("partial"))
 				.andExpect(jsonPath("$.overallConfidence").value("high"))

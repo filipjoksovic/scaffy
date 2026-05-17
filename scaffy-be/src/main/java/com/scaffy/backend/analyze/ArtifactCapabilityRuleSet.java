@@ -66,11 +66,13 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 		List<CommandMatch> registryPublishMatches = CommandMatcher.findMatches(document, REGISTRY_PUBLISH_RULES);
 		Optional<DetectedPractice> registryPublish = firstPractice(
 				registryPublishMatches,
-				PRACTICE_REGISTRY_PUBLISH_DETECTED);
+				PRACTICE_REGISTRY_PUBLISH_DETECTED)
+				.or(() -> registryPublishAction(document));
 		Optional<DetectedPractice> artifactReuse = artifactReuse(document);
 		Optional<DetectedPractice> versioning = firstPractice(
 				CommandMatcher.findMatches(document, VERSIONING_RULES),
-				PRACTICE_VERSIONING_DETECTED);
+				PRACTICE_VERSIONING_DETECTED)
+				.or(() -> versioningAction(document));
 
 		if (artifactOutput.isEmpty() && registryPublish.isEmpty() && artifactReuse.isEmpty()) {
 			return missingAnalysis();
@@ -155,7 +157,7 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 				return Optional.of(new DetectedPractice(PRACTICE_ARTIFACT_OUTPUT_DETECTED, output.evidence(), output.location()));
 			}
 			for (PipelineStep step : job.steps()) {
-				if (uploadArtifactAction(step)) {
+				if (uploadArtifactAction(step) || dockerBuildAction(step)) {
 					return Optional.of(new DetectedPractice(PRACTICE_ARTIFACT_OUTPUT_DETECTED, step.uses(), step.location()));
 				}
 			}
@@ -172,6 +174,28 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 			}
 		}
 		return firstPractice(CommandMatcher.findMatches(document, ARTIFACT_REUSE_RULES), PRACTICE_ARTIFACT_REUSE_DETECTED);
+	}
+
+	private Optional<DetectedPractice> registryPublishAction(PipelineDocument document) {
+		for (PipelineJob job : document.jobs()) {
+			for (PipelineStep step : job.steps()) {
+				if (dockerBuildPushAction(step)) {
+					return Optional.of(new DetectedPractice(PRACTICE_REGISTRY_PUBLISH_DETECTED, step.uses(), step.location()));
+				}
+			}
+		}
+		return Optional.empty();
+	}
+
+	private Optional<DetectedPractice> versioningAction(PipelineDocument document) {
+		for (PipelineJob job : document.jobs()) {
+			for (PipelineStep step : job.steps()) {
+				if (dockerBuildAction(step) && containsAny(lower(step.details()), "tags=", "github.sha", "github_sha", "ci_commit_sha")) {
+					return Optional.of(new DetectedPractice(PRACTICE_VERSIONING_DETECTED, step.details(), step.location()));
+				}
+			}
+		}
+		return Optional.empty();
 	}
 
 	private Optional<DetectedPractice> firstPractice(List<CommandMatch> matches, String practice) {
@@ -234,6 +258,23 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 
 	private boolean downloadArtifactAction(PipelineStep step) {
 		return step.uses() != null && lower(step.uses()).startsWith("actions/download-artifact");
+	}
+
+	private boolean dockerBuildAction(PipelineStep step) {
+		return step.uses() != null && lower(step.uses()).startsWith("docker/build-push-action");
+	}
+
+	private boolean dockerBuildPushAction(PipelineStep step) {
+		return dockerBuildAction(step) && containsAny(lower(step.details()), "push=true", "push: true");
+	}
+
+	private boolean containsAny(String text, String... needles) {
+		for (String needle : needles) {
+			if (text.contains(needle)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private Confidence confidence(boolean artifactOutputDetected, boolean publishOrReuseDetected) {

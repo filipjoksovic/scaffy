@@ -68,10 +68,26 @@ public class PipelineAnalyzer {
 		if (dimensions.isEmpty()) {
 			return 0.0;
 		}
-		double total = dimensions.stream()
-				.mapToDouble(DimensionAnalysis::score)
+		double weightedTotal = dimensions.stream()
+				.mapToDouble(dimension -> dimension.score() * dimensionWeight(dimension.dimension()))
 				.sum();
-		return round(total / dimensions.size());
+		double weightTotal = dimensions.stream()
+				.mapToDouble(dimension -> dimensionWeight(dimension.dimension()))
+				.sum();
+		return round(weightedTotal / weightTotal);
+	}
+
+	private double dimensionWeight(String dimension) {
+		return switch (dimension) {
+			case "build" -> 0.20;
+			case "test" -> 0.25;
+			case "code_analysis" -> 0.10;
+			case "security_scanning" -> 0.20;
+			case "artifacts" -> 0.07;
+			case "deployment" -> 0.15;
+			case "notifications" -> 0.03;
+			default -> 0.10;
+		};
 	}
 
 	private AnalysisStatus status(double score) {

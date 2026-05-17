@@ -47,7 +47,7 @@ public class ProviderDetector {
 	}
 
 	private boolean gitlabStructure(Map<Object, Object> root) {
-		if (YamlSupport.hasKey(root, "stages")) {
+		if (gitlabStages(root)) {
 			return true;
 		}
 		for (Map.Entry<Object, Object> entry : root.entrySet()) {
@@ -55,10 +55,31 @@ public class ProviderDetector {
 			if (key == null || key.startsWith(".")) {
 				continue;
 			}
-			if (YamlSupport.asMap(entry.getValue()).filter(candidate -> YamlSupport.hasKey(candidate, "script")).isPresent()) {
+			if (YamlSupport.asMap(entry.getValue()).filter(this::gitlabJob).isPresent()) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	private boolean gitlabStages(Map<Object, Object> root) {
+		return YamlSupport.value(root, "stages")
+				.flatMap(YamlSupport::asList)
+				.map(stages -> !stages.isEmpty() && stages.stream().allMatch(String.class::isInstance))
+				.orElse(false);
+	}
+
+	private boolean gitlabJob(Map<Object, Object> candidate) {
+		return YamlSupport.hasKey(candidate, "script")
+				&& (YamlSupport.hasKey(candidate, "stage")
+						|| YamlSupport.hasKey(candidate, "rules")
+						|| YamlSupport.hasKey(candidate, "only")
+						|| YamlSupport.hasKey(candidate, "except")
+						|| YamlSupport.hasKey(candidate, "artifacts")
+						|| YamlSupport.hasKey(candidate, "image")
+						|| YamlSupport.hasKey(candidate, "services")
+						|| YamlSupport.hasKey(candidate, "needs")
+						|| YamlSupport.hasKey(candidate, "when")
+						|| YamlSupport.hasKey(candidate, "variables"));
 	}
 }

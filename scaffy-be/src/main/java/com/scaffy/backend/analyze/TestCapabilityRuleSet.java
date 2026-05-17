@@ -25,6 +25,7 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String ECOSYSTEM_DOTNET = ".NET";
 	private static final String ECOSYSTEM_GO = "Go";
 	private static final String ECOSYSTEM_PYTHON = "Python";
+	private static final String ECOSYSTEM_RUBY = "Ruby";
 	private static final String TOOL_MAVEN = "Maven";
 	private static final String TOOL_GRADLE = "Gradle";
 
@@ -43,6 +44,7 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 	private static final List<CommandRule> TEST_RULES = List.of(
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+(?:run\\s+)?test(?::[\\w-]+)?\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+(?:run\\s+)?test(?::[\\w-]+)?\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:(?:--dir|-C|--filter)\\s+(?:\\$\\{\\{[^}]+}}|\\S+)\\s+)*(?:run\\s+)?test(?::[\\w-]+)?\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:run\\s+)?test(?::[\\w-]+)?\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npx\\s+(?:vitest|jest)\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npx\\s+playwright\\s+test\\b[^\\n;&|]*)"),
@@ -52,7 +54,10 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+test\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_GO, "(?:^|[;&|\\n]\\s*)(?<cmd>go\\s+test\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>pytest\\b[^\\n;&|]*)"),
-			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+(?:pytest|unittest)\\b[^\\n;&|]*)"));
+			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+(?:pytest|unittest)\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_RUBY, "(?:^|[;&|\\n]\\s*)(?<cmd>bundle\\s+exec\\s+rspec\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_RUBY, "(?:^|[;&|\\n]\\s*)(?<cmd>bundle\\s+exec\\s+rake\\s+test\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_RUBY, "(?:^|[;&|\\n]\\s*)(?<cmd>bin/rails\\s+test\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> REPORT_RULES = List.of(
 			CommandRule.of("Coverage", "(?:^|[;&|\\n]\\s*)(?<cmd>[^\\n;&|]*(?:--coverage|\\bcoverage\\b|\\bjacoco\\b|\\bnyc\\b)[^\\n;&|]*)"),

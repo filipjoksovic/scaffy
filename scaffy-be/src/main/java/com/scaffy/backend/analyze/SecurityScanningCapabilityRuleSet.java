@@ -37,7 +37,8 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	private static final List<CommandRule> SAST_RULES = List.of(
 			CommandRule.of("Semgrep", "(?:^|[;&|\\n]\\s*)(?<cmd>semgrep\\b[^\\n;&|]*)"),
 			CommandRule.of("Sonar", "(?:^|[;&|\\n]\\s*)(?<cmd>sonar-scanner\\b[^\\n;&|]*)"),
-			CommandRule.of("Bandit", "(?:^|[;&|\\n]\\s*)(?<cmd>bandit\\b[^\\n;&|]*)"));
+			CommandRule.of("Bandit", "(?:^|[;&|\\n]\\s*)(?<cmd>bandit\\b[^\\n;&|]*)"),
+			CommandRule.of("Brakeman", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:bundle\\s+exec\\s+)?brakeman\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> DEPENDENCY_RULES = List.of(
 			CommandRule.of("npm", "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+audit\\b[^\\n;&|]*)"),
@@ -47,6 +48,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of("OWASP Dependency Check", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*dependencyCheckAnalyze\\b[^\\n;&|]*)"),
 			CommandRule.of("Python", "(?:^|[;&|\\n]\\s*)(?<cmd>pip-audit\\b[^\\n;&|]*)"),
 			CommandRule.of("Python", "(?:^|[;&|\\n]\\s*)(?<cmd>safety\\s+check\\b[^\\n;&|]*)"),
+			CommandRule.of("Ruby", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:bundle\\s+exec\\s+)?bundler-audit\\b[^\\n;&|]*)"),
 			CommandRule.of(".NET", "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+list\\s+package\\s+--vulnerable\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> SECRET_RULES = List.of(
@@ -117,7 +119,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			missing.add(MISSING_SECRET);
 		}
 
-		Optional<DetectedPractice> containerIac = containerIac(containerIacMatches, reportOutputs);
+			Optional<DetectedPractice> containerIac = containerIac(containerIacMatches, reportOutputs, actionMatches);
 		if (containerIac.isPresent()) {
 			score += CONTAINER_IAC_WEIGHT;
 			detected.add(containerIac.get());
@@ -198,7 +200,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			return Optional.of(new DetectedPractice(PRACTICE_DEPENDENCY_DETECTED, match.evidence(), match.location()));
 		}
 		return actionMatches.stream()
-				.filter(action -> lower(action.evidence()).contains("dependency-review-action"))
+				.filter(action -> containsAny(lower(action.evidence()), "dependency-review-action", "snyk/actions"))
 				.findFirst()
 				.or(() -> reportOutputs.stream()
 						.filter(output -> containsAny(lower(output.evidence()), "dependency_scanning"))
@@ -217,14 +219,20 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 				.map(output -> new DetectedPractice(PRACTICE_SECRET_DETECTED, output.evidence(), output.location()));
 	}
 
-	private Optional<DetectedPractice> containerIac(List<CommandMatch> containerIacMatches, List<DetectedPractice> reportOutputs) {
+	private Optional<DetectedPractice> containerIac(
+			List<CommandMatch> containerIacMatches,
+			List<DetectedPractice> reportOutputs,
+			List<DetectedPractice> actionMatches) {
 		if (!containerIacMatches.isEmpty()) {
 			CommandMatch match = containerIacMatches.getFirst();
 			return Optional.of(new DetectedPractice(PRACTICE_CONTAINER_IAC_DETECTED, match.evidence(), match.location()));
 		}
-		return reportOutputs.stream()
-				.filter(output -> lower(output.evidence()).contains("container_scanning"))
+		return actionMatches.stream()
+				.filter(action -> containsAny(lower(action.evidence()), "trivy-action", "anchore/scan-action", "snyk/actions/docker"))
 				.findFirst()
+				.or(() -> reportOutputs.stream()
+						.filter(output -> lower(output.evidence()).contains("container_scanning"))
+						.findFirst())
 				.map(output -> new DetectedPractice(PRACTICE_CONTAINER_IAC_DETECTED, output.evidence(), output.location()));
 	}
 
@@ -279,6 +287,15 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 					matches.add(new DetectedPractice(PRACTICE_SAST_DETECTED, step.uses(), step.location()));
 				}
 				else if (uses.startsWith("github/dependency-review-action")) {
+					matches.add(new DetectedPractice(PRACTICE_DEPENDENCY_DETECTED, step.uses(), step.location()));
+				}
+				else if (uses.startsWith("aquasecurity/trivy-action")
+						|| uses.startsWith("anchore/scan-action")
+						|| uses.startsWith("snyk/actions/docker")) {
+					matches.add(new DetectedPractice(PRACTICE_CONTAINER_IAC_DETECTED, step.uses(), step.location()));
+				}
+				else if (uses.startsWith("snyk/actions")
+						|| uses.startsWith("ossf/scorecard-action")) {
 					matches.add(new DetectedPractice(PRACTICE_DEPENDENCY_DETECTED, step.uses(), step.location()));
 				}
 				else if (uses.contains("semgrep") && containsAny(context, "security", "sast", "vulnerability", "secret", "scan")) {
