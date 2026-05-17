@@ -34,7 +34,14 @@ public class PipelineAnalyzer {
 				.sorted(Comparator.comparingInt(ruleSet -> dimensionOrder(ruleSet.dimension())))
 				.map(ruleSet -> ruleSet.analyze(document))
 				.toList();
-		return new AnalysisResponse(provider, dimensions);
+		double overallScore = overallScore(dimensions);
+		return new AnalysisResponse(
+				provider,
+				overallScore,
+				level(overallScore),
+				status(overallScore),
+				confidence(dimensions),
+				dimensions);
 	}
 
 	private PipelineProviderParser parserFor(PipelineProvider provider) {
@@ -55,5 +62,58 @@ public class PipelineAnalyzer {
 			case "notifications" -> 40;
 			default -> 100;
 		};
+	}
+
+	private double overallScore(List<DimensionAnalysis> dimensions) {
+		if (dimensions.isEmpty()) {
+			return 0.0;
+		}
+		double total = dimensions.stream()
+				.mapToDouble(DimensionAnalysis::score)
+				.sum();
+		return round(total / dimensions.size());
+	}
+
+	private AnalysisStatus status(double score) {
+		if (score == 0.0) {
+			return AnalysisStatus.MISSING;
+		}
+		if (score >= 0.8) {
+			return AnalysisStatus.COMPLETE;
+		}
+		return AnalysisStatus.PARTIAL;
+	}
+
+	private Confidence confidence(List<DimensionAnalysis> dimensions) {
+		if (dimensions.isEmpty()) {
+			return Confidence.HIGH;
+		}
+		long highConfidenceDimensions = dimensions.stream()
+				.filter(dimension -> dimension.confidence() == Confidence.HIGH)
+				.count();
+		if (highConfidenceDimensions > dimensions.size() / 2) {
+			return Confidence.HIGH;
+		}
+		return Confidence.MEDIUM;
+	}
+
+	private int level(double score) {
+		if (score == 0.0) {
+			return 1;
+		}
+		if (score < 0.4) {
+			return 2;
+		}
+		if (score < 0.6) {
+			return 3;
+		}
+		if (score < 0.8) {
+			return 4;
+		}
+		return 5;
+	}
+
+	private double round(double score) {
+		return Math.round(score * 100.0) / 100.0;
 	}
 }

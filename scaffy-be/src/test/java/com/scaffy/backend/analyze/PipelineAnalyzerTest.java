@@ -34,6 +34,10 @@ class PipelineAnalyzerTest {
 		DimensionAnalysis build = build(response);
 
 		assertThat(response.provider()).isEqualTo(PipelineProvider.GITHUB_ACTIONS);
+		assertThat(response.overallScore()).isEqualTo(0.85);
+		assertThat(response.overallLevel()).isEqualTo(5);
+		assertThat(response.overallStatus()).isEqualTo(AnalysisStatus.COMPLETE);
+		assertThat(response.overallConfidence()).isEqualTo(Confidence.HIGH);
 		assertThat(build.score()).isEqualTo(0.85);
 		assertThat(build.level()).isEqualTo(5);
 		assertThat(build.status()).isEqualTo(AnalysisStatus.COMPLETE);
@@ -155,6 +159,10 @@ class PipelineAnalyzerTest {
 
 		DimensionAnalysis build = build(response);
 
+		assertThat(response.overallScore()).isEqualTo(0.0);
+		assertThat(response.overallLevel()).isEqualTo(1);
+		assertThat(response.overallStatus()).isEqualTo(AnalysisStatus.MISSING);
+		assertThat(response.overallConfidence()).isEqualTo(Confidence.HIGH);
 		assertThat(build.score()).isEqualTo(0.0);
 		assertThat(build.level()).isEqualTo(1);
 		assertThat(build.status()).isEqualTo(AnalysisStatus.MISSING);
