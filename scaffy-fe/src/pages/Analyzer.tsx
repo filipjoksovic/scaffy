@@ -137,12 +137,7 @@ type AnalysisReportProps = {
 }
 
 function AnalysisReport({ result }: AnalysisReportProps) {
-  const { provider, dimensions } = result
-  const avgScore =
-    dimensions.length > 0
-      ? dimensions.reduce((sum, d) => sum + d.score, 0) / dimensions.length
-      : 0
-  const overallLevel = Math.max(1, Math.round(avgScore * 5))
+  const { provider, dimensions, overallScore, overallLevel } = result
   const radarData = dimensions.map((d) => ({
     subject: capitalize(d.dimension),
     score: d.score,
@@ -154,7 +149,7 @@ function AnalysisReport({ result }: AnalysisReportProps) {
         <Card>
           <Eyebrow>Analysis summary</Eyebrow>
           <div className="analyzer-summary__score">
-            <span className="analyzer-summary__score-value">{avgScore.toFixed(2)}</span>
+            <span className="analyzer-summary__score-value">{overallScore.toFixed(2)}</span>
             <span className="analyzer-summary__score-denom"> / 1.00</span>
           </div>
           <p className="analyzer-summary__level">Level {overallLevel} / 5</p>

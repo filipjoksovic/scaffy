@@ -23,6 +23,10 @@ export type DimensionAnalysis = {
 
 export type AnalysisResponse = {
   provider: PipelineProvider
+  overallScore: number
+  overallLevel: number
+  overallStatus: AnalysisStatus
+  overallConfidence: Confidence
   dimensions: DimensionAnalysis[]
 }
 
