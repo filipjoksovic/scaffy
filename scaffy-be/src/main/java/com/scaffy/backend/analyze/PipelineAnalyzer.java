@@ -49,6 +49,7 @@ public class PipelineAnalyzer {
 			case "build" -> 10;
 			case "test" -> 20;
 			case "code_analysis" -> 25;
+			case "security_scanning" -> 27;
 			case "artifacts" -> 28;
 			case "deployment" -> 30;
 			case "notifications" -> 40;

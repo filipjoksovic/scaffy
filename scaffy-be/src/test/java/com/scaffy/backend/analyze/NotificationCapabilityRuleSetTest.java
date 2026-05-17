@@ -16,6 +16,7 @@ class NotificationCapabilityRuleSetTest {
 					new BuildCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
+					new SecurityScanningCapabilityRuleSet(),
 					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet(),
 					new NotificationCapabilityRuleSet()));
@@ -39,7 +40,7 @@ class NotificationCapabilityRuleSetTest {
 		DimensionAnalysis notifications = notifications(response);
 
 		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "artifacts", "deployment", "notifications");
+				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment", "notifications");
 		assertThat(notifications.score()).isEqualTo(1.0);
 		assertThat(notifications.level()).isEqualTo(5);
 		assertThat(notifications.status()).isEqualTo(AnalysisStatus.COMPLETE);

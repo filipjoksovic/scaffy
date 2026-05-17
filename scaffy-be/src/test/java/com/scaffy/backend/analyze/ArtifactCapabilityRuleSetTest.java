@@ -16,6 +16,7 @@ class ArtifactCapabilityRuleSetTest {
 					new BuildCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
+					new SecurityScanningCapabilityRuleSet(),
 					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet()));
 
@@ -38,7 +39,7 @@ class ArtifactCapabilityRuleSetTest {
 		DimensionAnalysis artifacts = artifacts(response);
 
 		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "artifacts", "deployment");
+				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment");
 		assertThat(artifacts.score()).isEqualTo(0.45);
 		assertThat(artifacts.status()).isEqualTo(AnalysisStatus.PARTIAL);
 		assertThat(artifacts.confidence()).isEqualTo(Confidence.MEDIUM);

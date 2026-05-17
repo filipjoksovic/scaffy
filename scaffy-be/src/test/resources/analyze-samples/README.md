@@ -39,6 +39,11 @@ Expected behavior:
 | `notification-03-gitlab-teams-on-failure.yml` | Complete GitLab Teams notification using `when: on_failure`. |
 | `notification-04-discord-webhook-partial.yml` | Manual Discord webhook notification without automatic trigger or status condition. |
 | `notification-05-email-notification.yml` | Email notification command with automatic trigger and pipeline status context. |
+| `security-01-missing.yml` | Test workflow where the security scanning dimension is missing. |
+| `security-02-github-codeql-complete.yml` | Complete GitHub security workflow with SAST, dependency, secret, image scan, SARIF report, and automatic trigger. |
+| `security-03-dependency-scan-partial.yml` | Partial dependency scanning workflow with automatic pull request trigger. |
+| `security-04-gitlab-security-reports-complete.yml` | Complete GitLab security report workflow with SAST, dependency, container, and secret reports. |
+| `security-05-container-iac-secret-scan.yml` | Partial workflow with secret, container, and IaC scanning. |
 
 Example:
 

@@ -16,6 +16,7 @@ class CodeAnalysisCapabilityRuleSetTest {
 					new BuildCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
+					new SecurityScanningCapabilityRuleSet(),
 					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet()));
 
@@ -40,7 +41,7 @@ class CodeAnalysisCapabilityRuleSetTest {
 		DimensionAnalysis codeAnalysis = codeAnalysis(response);
 
 		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "artifacts", "deployment");
+				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment");
 		assertThat(codeAnalysis.score()).isEqualTo(1.0);
 		assertThat(codeAnalysis.level()).isEqualTo(5);
 		assertThat(codeAnalysis.status()).isEqualTo(AnalysisStatus.COMPLETE);

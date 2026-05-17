@@ -50,21 +50,26 @@ class AnalyzeSamplePipelinesIntegrationTest {
 					.andExpect(jsonPath("$.dimensions[2].level").value(sample.codeAnalysisLevel()))
 					.andExpect(jsonPath("$.dimensions[2].status").value(sample.codeAnalysisStatus()))
 					.andExpect(jsonPath("$.dimensions[2].confidence").value(sample.codeAnalysisConfidence()))
-					.andExpect(jsonPath("$.dimensions[3].dimension").value("artifacts"))
-					.andExpect(jsonPath("$.dimensions[3].score").value(sample.artifactScore()))
-					.andExpect(jsonPath("$.dimensions[3].level").value(sample.artifactLevel()))
-					.andExpect(jsonPath("$.dimensions[3].status").value(sample.artifactStatus()))
-					.andExpect(jsonPath("$.dimensions[3].confidence").value(sample.artifactConfidence()))
-					.andExpect(jsonPath("$.dimensions[4].dimension").value("deployment"))
-					.andExpect(jsonPath("$.dimensions[4].score").value(sample.deploymentScore()))
-					.andExpect(jsonPath("$.dimensions[4].level").value(sample.deploymentLevel()))
-					.andExpect(jsonPath("$.dimensions[4].status").value(sample.deploymentStatus()))
-					.andExpect(jsonPath("$.dimensions[4].confidence").value(sample.deploymentConfidence()))
-					.andExpect(jsonPath("$.dimensions[5].dimension").value("notifications"))
-					.andExpect(jsonPath("$.dimensions[5].score").value(sample.notificationScore()))
-					.andExpect(jsonPath("$.dimensions[5].level").value(sample.notificationLevel()))
-					.andExpect(jsonPath("$.dimensions[5].status").value(sample.notificationStatus()))
-					.andExpect(jsonPath("$.dimensions[5].confidence").value(sample.notificationConfidence()));
+					.andExpect(jsonPath("$.dimensions[3].dimension").value("security_scanning"))
+					.andExpect(jsonPath("$.dimensions[3].score").value(sample.securityScore()))
+					.andExpect(jsonPath("$.dimensions[3].level").value(sample.securityLevel()))
+					.andExpect(jsonPath("$.dimensions[3].status").value(sample.securityStatus()))
+					.andExpect(jsonPath("$.dimensions[3].confidence").value(sample.securityConfidence()))
+					.andExpect(jsonPath("$.dimensions[4].dimension").value("artifacts"))
+					.andExpect(jsonPath("$.dimensions[4].score").value(sample.artifactScore()))
+					.andExpect(jsonPath("$.dimensions[4].level").value(sample.artifactLevel()))
+					.andExpect(jsonPath("$.dimensions[4].status").value(sample.artifactStatus()))
+					.andExpect(jsonPath("$.dimensions[4].confidence").value(sample.artifactConfidence()))
+					.andExpect(jsonPath("$.dimensions[5].dimension").value("deployment"))
+					.andExpect(jsonPath("$.dimensions[5].score").value(sample.deploymentScore()))
+					.andExpect(jsonPath("$.dimensions[5].level").value(sample.deploymentLevel()))
+					.andExpect(jsonPath("$.dimensions[5].status").value(sample.deploymentStatus()))
+					.andExpect(jsonPath("$.dimensions[5].confidence").value(sample.deploymentConfidence()))
+					.andExpect(jsonPath("$.dimensions[6].dimension").value("notifications"))
+					.andExpect(jsonPath("$.dimensions[6].score").value(sample.notificationScore()))
+					.andExpect(jsonPath("$.dimensions[6].level").value(sample.notificationLevel()))
+					.andExpect(jsonPath("$.dimensions[6].status").value(sample.notificationStatus()))
+					.andExpect(jsonPath("$.dimensions[6].confidence").value(sample.notificationConfidence()));
 		}
 	}
 
@@ -102,7 +107,12 @@ class AnalyzeSamplePipelinesIntegrationTest {
 				sampleWithNotifications("notification-02-github-slack-failure-complete.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high"),
 				sampleWithNotifications("notification-03-gitlab-teams-on-failure.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high"),
 				sampleWithNotifications("notification-04-discord-webhook-partial.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.5, 3, "partial", "high"),
-				sampleWithNotifications("notification-05-email-notification.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.8, 5, "complete", "high"));
+				sampleWithNotifications("notification-05-email-notification.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.8, 5, "complete", "high"),
+				sampleWithSecurity("security-01-missing.yml", "github-actions", 0.0, 1, "missing", "high", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
+				sampleWithSecurity("security-02-github-codeql-complete.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high"),
+				sampleWithSecurity("security-03-dependency-scan-partial.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.35, 2, "partial", "high", 0.0, 1, "missing", "high"),
+				sampleWithAll("security-04-gitlab-security-reports-complete.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
+				sampleWithSecurity("security-05-container-iac-secret-scan.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "high", 0.0, 1, "missing", "high"));
 	}
 
 	private Sample sample(
@@ -124,7 +134,7 @@ class AnalyzeSamplePipelinesIntegrationTest {
 			int deploymentLevel,
 			String deploymentStatus,
 			String deploymentConfidence) {
-		return sampleWithArtifactsAndNotifications(
+		return sampleWithAll(
 				filename,
 				provider,
 				buildScore,
@@ -139,6 +149,66 @@ class AnalyzeSamplePipelinesIntegrationTest {
 				codeAnalysisLevel,
 				codeAnalysisStatus,
 				codeAnalysisConfidence,
+				0.0,
+				1,
+				"missing",
+				"high",
+				0.0,
+				1,
+				"missing",
+				"high",
+				deploymentScore,
+				deploymentLevel,
+				deploymentStatus,
+				deploymentConfidence,
+				0.0,
+				1,
+				"missing",
+				"high");
+	}
+
+	private Sample sampleWithSecurity(
+			String filename,
+			String provider,
+			double buildScore,
+			int buildLevel,
+			String buildStatus,
+			String buildConfidence,
+			double testScore,
+			int testLevel,
+			String testStatus,
+			String testConfidence,
+			double codeAnalysisScore,
+			int codeAnalysisLevel,
+			String codeAnalysisStatus,
+			String codeAnalysisConfidence,
+			double securityScore,
+			int securityLevel,
+			String securityStatus,
+			String securityConfidence,
+			double deploymentScore,
+			int deploymentLevel,
+			String deploymentStatus,
+			String deploymentConfidence) {
+		return sampleWithAll(
+				filename,
+				provider,
+				buildScore,
+				buildLevel,
+				buildStatus,
+				buildConfidence,
+				testScore,
+				testLevel,
+				testStatus,
+				testConfidence,
+				codeAnalysisScore,
+				codeAnalysisLevel,
+				codeAnalysisStatus,
+				codeAnalysisConfidence,
+				securityScore,
+				securityLevel,
+				securityStatus,
+				securityConfidence,
 				0.0,
 				1,
 				"missing",
@@ -176,7 +246,7 @@ class AnalyzeSamplePipelinesIntegrationTest {
 			int notificationLevel,
 			String notificationStatus,
 			String notificationConfidence) {
-		return new Sample(
+		return sampleWithAll(
 				filename,
 				provider,
 				buildScore,
@@ -191,6 +261,10 @@ class AnalyzeSamplePipelinesIntegrationTest {
 				codeAnalysisLevel,
 				codeAnalysisStatus,
 				codeAnalysisConfidence,
+				0.0,
+				1,
+				"missing",
+				"high",
 				0.0,
 				1,
 				"missing",
@@ -228,7 +302,7 @@ class AnalyzeSamplePipelinesIntegrationTest {
 			int deploymentLevel,
 			String deploymentStatus,
 			String deploymentConfidence) {
-		return sampleWithArtifactsAndNotifications(
+		return sampleWithAll(
 				filename,
 				provider,
 				buildScore,
@@ -243,6 +317,10 @@ class AnalyzeSamplePipelinesIntegrationTest {
 				codeAnalysisLevel,
 				codeAnalysisStatus,
 				codeAnalysisConfidence,
+				0.0,
+				1,
+				"missing",
+				"high",
 				artifactScore,
 				artifactLevel,
 				artifactStatus,
@@ -257,7 +335,7 @@ class AnalyzeSamplePipelinesIntegrationTest {
 				"high");
 	}
 
-	private Sample sampleWithArtifactsAndNotifications(
+	private Sample sampleWithAll(
 			String filename,
 			String provider,
 			double buildScore,
@@ -272,6 +350,10 @@ class AnalyzeSamplePipelinesIntegrationTest {
 			int codeAnalysisLevel,
 			String codeAnalysisStatus,
 			String codeAnalysisConfidence,
+			double securityScore,
+			int securityLevel,
+			String securityStatus,
+			String securityConfidence,
 			double artifactScore,
 			int artifactLevel,
 			String artifactStatus,
@@ -299,6 +381,10 @@ class AnalyzeSamplePipelinesIntegrationTest {
 				codeAnalysisLevel,
 				codeAnalysisStatus,
 				codeAnalysisConfidence,
+				securityScore,
+				securityLevel,
+				securityStatus,
+				securityConfidence,
 				artifactScore,
 				artifactLevel,
 				artifactStatus,
@@ -336,6 +422,10 @@ class AnalyzeSamplePipelinesIntegrationTest {
 			int codeAnalysisLevel,
 			String codeAnalysisStatus,
 			String codeAnalysisConfidence,
+			double securityScore,
+			int securityLevel,
+			String securityStatus,
+			String securityConfidence,
 			double artifactScore,
 			int artifactLevel,
 			String artifactStatus,

@@ -1,0 +1,8 @@
+name: Dependency security
+on: [pull_request]
+
+jobs:
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm audit --audit-level=high

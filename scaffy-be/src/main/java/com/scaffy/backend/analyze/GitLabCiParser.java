@@ -152,13 +152,13 @@ public class GitLabCiParser implements PipelineProviderParser {
 			Map<Object, Object> map = artifactMap.get();
 			Optional<Map<Object, Object>> reports = YamlSupport.mapValue(map, "reports");
 			if (reports.isPresent()) {
-				if (YamlSupport.hasKey(reports.get(), "codequality")) {
-					outputs.add(new PipelineOutput(
-							"codequality",
-							"artifacts.reports.codequality",
-							JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports.codequality"));
-				}
-				else {
+				Map<Object, Object> reportMap = reports.get();
+				addReportOutput(outputs, reportMap, jobId, "codequality");
+				addReportOutput(outputs, reportMap, jobId, "sast");
+				addReportOutput(outputs, reportMap, jobId, "dependency_scanning");
+				addReportOutput(outputs, reportMap, jobId, "container_scanning");
+				addReportOutput(outputs, reportMap, jobId, "secret_detection");
+				if (outputs.isEmpty()) {
 					outputs.add(new PipelineOutput(
 							"report",
 							"artifacts.reports",
@@ -176,6 +176,16 @@ public class GitLabCiParser implements PipelineProviderParser {
 			return outputs;
 		}
 		return List.of(new PipelineOutput("artifact", "artifacts", JOBS_LOCATION_PREFIX + jobId + ".artifacts"));
+	}
+
+	private void addReportOutput(List<PipelineOutput> outputs, Map<Object, Object> reports, String jobId, String reportType) {
+		if (!YamlSupport.hasKey(reports, reportType)) {
+			return;
+		}
+		outputs.add(new PipelineOutput(
+				reportType,
+				"artifacts.reports." + reportType,
+				JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports." + reportType));
 	}
 
 	private boolean manualOnly(Map<Object, Object> jobMap) {
