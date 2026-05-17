@@ -1,0 +1,9 @@
+name: CI
+on: [push]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm ci
+      - run: npm run build
+      - run: npm test

@@ -19,6 +19,11 @@ Expected behavior:
 | `test-03-automated-test-partial.yml` | Automated GitLab test command without reports or coverage. |
 | `test-04-test-with-artifact-strong.yml` | Automated GitHub test command with uploaded test artifact, but no explicit coverage/report quality signal. |
 | `test-05-complete-test-suite.yml` | Complete GitLab test suite with report, coverage signal, and multiple test layers. |
+| `deploy-01-build-test-only-missing.yml` | Build/test workflow where deployment is missing. |
+| `deploy-02-manual-deploy-partial.yml` | Manual-only Kubernetes deployment with environment and image evidence. |
+| `deploy-03-auto-deploy-no-validation.yml` | Automated GitLab Helm deployment without post-deploy validation. |
+| `deploy-04-complete-kubernetes.yml` | Complete GitHub Kubernetes deployment with environment, image, automatic trigger, and rollout validation. |
+| `deploy-05-cloud-provider.yml` | Complete GitLab GCP Cloud Run deployment with image and health check. |
 
 Example:
 

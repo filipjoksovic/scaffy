@@ -6,6 +6,7 @@ public record PipelineJob(
 		String id,
 		String name,
 		String stage,
+		String environment,
 		boolean manualOnly,
 		String location,
 		List<PipelineStep> steps,

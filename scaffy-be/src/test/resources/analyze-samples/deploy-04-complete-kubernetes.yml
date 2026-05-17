@@ -1,0 +1,12 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - run: kubectl set image deployment/app app=ghcr.io/acme/app:$GITHUB_SHA
+      - run: kubectl rollout status deployment/app
