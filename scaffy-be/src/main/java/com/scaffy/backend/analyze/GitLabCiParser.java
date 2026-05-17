@@ -90,9 +90,23 @@ public class GitLabCiParser implements PipelineProviderParser {
 		String stage = YamlSupport.stringValue(jobMap, "stage").orElse("test");
 		String environment = environment(jobMap);
 		boolean manualOnly = manualOnly(jobMap);
+		String when = YamlSupport.stringValue(jobMap, "when").orElse(null);
+		String condition = rulesText(jobMap);
+		String details = details(jobMap, "variables");
 		List<PipelineStep> steps = scriptSteps(id, script);
 		List<PipelineOutput> outputs = outputs(id, jobMap);
-		return new PipelineJob(id, id, stage, environment, manualOnly, JOBS_LOCATION_PREFIX + id, steps, outputs);
+		return new PipelineJob(
+				id,
+				id,
+				stage,
+				environment,
+				manualOnly,
+				condition,
+				when,
+				details,
+				JOBS_LOCATION_PREFIX + id,
+				steps,
+				outputs);
 	}
 
 	private String environment(Map<Object, Object> jobMap) {
@@ -189,6 +203,24 @@ public class GitLabCiParser implements PipelineProviderParser {
 			}
 		}
 		return sawRule;
+	}
+
+	private String rulesText(Map<Object, Object> jobMap) {
+		return YamlSupport.value(jobMap, "rules")
+				.map(YamlSupport::asString)
+				.filter(value -> !value.isBlank())
+				.orElse(null);
+	}
+
+	private String details(Map<Object, Object> map, String... keys) {
+		List<String> values = new ArrayList<>();
+		for (String key : keys) {
+			YamlSupport.value(map, key)
+					.map(YamlSupport::asString)
+					.filter(value -> !value.isBlank())
+					.ifPresent(value -> values.add(key + ": " + value));
+		}
+		return values.isEmpty() ? null : String.join(" ", values);
 	}
 
 	private boolean reserved(String key) {

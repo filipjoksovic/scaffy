@@ -34,6 +34,11 @@ Expected behavior:
 | `artifact-03-gitlab-paths-partial.yml` | GitLab build with `artifacts.paths` but no publish, reuse, or version signal. |
 | `artifact-04-docker-image-complete.yml` | Complete Docker image artifact with build, push, pull/reuse, SHA tag, and automatic trigger. |
 | `artifact-05-package-publish-complete.yml` | Complete package artifact with package build, publish, version signal, and automatic trigger. |
+| `notification-01-missing.yml` | Test workflow where the notification dimension is missing. |
+| `notification-02-github-slack-failure-complete.yml` | Complete GitHub Slack failure notification with webhook secret and automatic trigger. |
+| `notification-03-gitlab-teams-on-failure.yml` | Complete GitLab Teams notification using `when: on_failure`. |
+| `notification-04-discord-webhook-partial.yml` | Manual Discord webhook notification without automatic trigger or status condition. |
+| `notification-05-email-notification.yml` | Email notification command with automatic trigger and pipeline status context. |
 
 Example:
 

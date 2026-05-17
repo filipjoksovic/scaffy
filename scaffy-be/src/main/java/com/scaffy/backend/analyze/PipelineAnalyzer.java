@@ -51,6 +51,7 @@ public class PipelineAnalyzer {
 			case "code_analysis" -> 25;
 			case "artifacts" -> 28;
 			case "deployment" -> 30;
+			case "notifications" -> 40;
 			default -> 100;
 		};
 	}
