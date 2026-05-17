@@ -1,0 +1,8 @@
+name: Manual Discord notification
+on: [workflow_dispatch]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -X POST https://discord.com/api/webhooks/abc/def -d '{"content":"Done"}'

@@ -75,7 +75,20 @@ public class GitHubActionsParser implements PipelineProviderParser {
 
 	private PipelineJob job(String id, Map<Object, Object> jobMap) {
 		String name = YamlSupport.stringValue(jobMap, "name").orElse(id);
-		return new PipelineJob(id, name, null, environment(jobMap), false, "jobs." + id, steps(id, jobMap), List.of());
+		String condition = YamlSupport.stringValue(jobMap, "if").orElse(null);
+		String details = details(jobMap, "env", "with");
+		return new PipelineJob(
+				id,
+				name,
+				null,
+				environment(jobMap),
+				false,
+				condition,
+				null,
+				details,
+				"jobs." + id,
+				steps(id, jobMap),
+				List.of());
 	}
 
 	private String environment(Map<Object, Object> jobMap) {
@@ -108,10 +121,31 @@ public class GitHubActionsParser implements PipelineProviderParser {
 		YamlSupport.asMap(stepObject).ifPresent(stepMap -> {
 			String command = YamlSupport.stringValue(stepMap, "run").orElse(null);
 			String uses = YamlSupport.stringValue(stepMap, "uses").orElse(null);
+			String name = YamlSupport.stringValue(stepMap, "name").orElse(null);
+			String condition = YamlSupport.stringValue(stepMap, "if").orElse(null);
+			String details = details(stepMap, "with", "env");
 			if (command != null || uses != null) {
-				steps.add(new PipelineStep(command, uses, "jobs." + jobId + ".steps[" + index + "]" + suffix(command, uses), index));
+				steps.add(new PipelineStep(
+						command,
+						uses,
+						name,
+						condition,
+						details,
+						"jobs." + jobId + ".steps[" + index + "]" + suffix(command, uses),
+						index));
 			}
 		});
+	}
+
+	private String details(Map<Object, Object> map, String... keys) {
+		List<String> values = new ArrayList<>();
+		for (String key : keys) {
+			YamlSupport.value(map, key)
+					.map(YamlSupport::asString)
+					.filter(value -> !value.isBlank())
+					.ifPresent(value -> values.add(key + ": " + value));
+		}
+		return values.isEmpty() ? null : String.join(" ", values);
 	}
 
 	private String suffix(String command, String uses) {

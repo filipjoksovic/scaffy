@@ -35,13 +35,15 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of("Generic", "(?:^|[;&|\\n]\\s*)(?<cmd>build)(?=\\s*$|\\s*[;&|])"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+run\\s+build)(?=$|\\s|[;&|])"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+(?:run\\s+)?build)(?=$|\\s|[;&|])"),
+			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:(?:--dir|-C|--filter)\\s+(?:\\$\\{\\{[^}]+}}|\\S+)\\s+)*(?:run\\s+)?build)(?=$|\\s|[;&|])"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>pnpm\\s+(?:run\\s+)?build)(?=$|\\s|[;&|])"),
 			CommandRule.of(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*(?:\\bpackage\\b|\\binstall\\b|\\bverify\\b))"),
-			CommandRule.of(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bbuild\\b)"),
+			CommandRule.of(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*(?:\\bbuild\\b|\\bassemble\\w*\\b))"),
 			CommandRule.of(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+(?:build|publish)\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_GO, "(?:^|[;&|\\n]\\s*)(?<cmd>go\\s+build\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_DOCKER, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:buildx\\s+build|build)\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+build\\b[^\\n;&|]*)"));
+	private static final CommandRule DOCKER_BUILD_ACTION_RULE = CommandRule.of(ECOSYSTEM_DOCKER, "(?<cmd>.*)");
 
 	private static final List<CommandRule> DEPENDENCY_RULES = List.of(
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+ci\\b[^\\n;&|]*)"),
@@ -66,7 +68,9 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 
 	@Override
 	public DimensionAnalysis analyze(PipelineDocument document) {
-		List<CommandMatch> buildMatches = CommandMatcher.findMatches(document, BUILD_RULES);
+		List<CommandMatch> buildMatches = allMatches(
+				CommandMatcher.findMatches(document, BUILD_RULES),
+				buildActionMatches(document));
 		if (buildMatches.isEmpty()) {
 			return new DimensionAnalysis(
 					dimension(),
@@ -160,6 +164,32 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 			}
 		}
 		return Optional.empty();
+	}
+
+	private List<CommandMatch> buildActionMatches(PipelineDocument document) {
+		List<CommandMatch> matches = new ArrayList<>();
+		for (PipelineJob job : document.jobs()) {
+			for (PipelineStep step : job.steps()) {
+				if (dockerBuildAction(step)) {
+					matches.add(new CommandMatch(job, step, step.uses(), step.location(), 0, DOCKER_BUILD_ACTION_RULE));
+				}
+			}
+		}
+		return matches;
+	}
+
+	private boolean dockerBuildAction(PipelineStep step) {
+		return step.uses() != null && step.uses().toLowerCase(Locale.ROOT).startsWith("docker/build-push-action");
+	}
+
+	private List<CommandMatch> allMatches(List<CommandMatch> commandMatches, List<CommandMatch> actionMatches) {
+		List<CommandMatch> matches = new ArrayList<>(commandMatches);
+		for (CommandMatch actionMatch : actionMatches) {
+			if (!matches.contains(actionMatch)) {
+				matches.add(actionMatch);
+			}
+		}
+		return matches;
 	}
 
 	private Set<String> ecosystems(List<CommandMatch> buildMatches, List<CommandMatch> dependencyMatches) {

@@ -9,6 +9,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class PipelineAnalyzer {
 
+	private static final Map<String, DimensionProfile> DIMENSIONS = Map.of(
+			"build", new DimensionProfile(10, 0.20),
+			"test", new DimensionProfile(20, 0.25),
+			"code_analysis", new DimensionProfile(25, 0.10),
+			"security_scanning", new DimensionProfile(27, 0.20),
+			"artifacts", new DimensionProfile(28, 0.07),
+			"deployment", new DimensionProfile(30, 0.15),
+			"notifications", new DimensionProfile(40, 0.03));
+	private static final DimensionProfile DEFAULT_DIMENSION = new DimensionProfile(100, 0.10);
+
 	private final YamlPipelineParser yamlPipelineParser;
 	private final ProviderDetector providerDetector;
 	private final List<PipelineProviderParser> providerParsers;
@@ -34,7 +44,14 @@ public class PipelineAnalyzer {
 				.sorted(Comparator.comparingInt(ruleSet -> dimensionOrder(ruleSet.dimension())))
 				.map(ruleSet -> ruleSet.analyze(document))
 				.toList();
-		return new AnalysisResponse(provider, dimensions);
+		double overallScore = overallScore(dimensions);
+		return new AnalysisResponse(
+				provider,
+				overallScore,
+				AnalysisSupport.level(overallScore),
+				AnalysisSupport.status(overallScore),
+				confidence(dimensions),
+				dimensions);
 	}
 
 	private PipelineProviderParser parserFor(PipelineProvider provider) {
@@ -45,11 +62,43 @@ public class PipelineAnalyzer {
 	}
 
 	private int dimensionOrder(String dimension) {
-		return switch (dimension) {
-			case "build" -> 10;
-			case "test" -> 20;
-			case "deployment" -> 30;
-			default -> 100;
-		};
+		return profile(dimension).order();
+	}
+
+	private double overallScore(List<DimensionAnalysis> dimensions) {
+		if (dimensions.isEmpty()) {
+			return 0.0;
+		}
+		double weightedTotal = dimensions.stream()
+				.mapToDouble(dimension -> dimension.score() * dimensionWeight(dimension.dimension()))
+				.sum();
+		double weightTotal = dimensions.stream()
+				.mapToDouble(dimension -> dimensionWeight(dimension.dimension()))
+				.sum();
+		return AnalysisSupport.round(weightedTotal / weightTotal);
+	}
+
+	private double dimensionWeight(String dimension) {
+		return profile(dimension).weight();
+	}
+
+	private DimensionProfile profile(String dimension) {
+		return DIMENSIONS.getOrDefault(dimension, DEFAULT_DIMENSION);
+	}
+
+	private Confidence confidence(List<DimensionAnalysis> dimensions) {
+		if (dimensions.isEmpty()) {
+			return Confidence.HIGH;
+		}
+		long highConfidenceDimensions = dimensions.stream()
+				.filter(dimension -> dimension.confidence() == Confidence.HIGH)
+				.count();
+		if (highConfidenceDimensions > dimensions.size() / 2) {
+			return Confidence.HIGH;
+		}
+		return Confidence.MEDIUM;
+	}
+
+	private record DimensionProfile(int order, double weight) {
 	}
 }

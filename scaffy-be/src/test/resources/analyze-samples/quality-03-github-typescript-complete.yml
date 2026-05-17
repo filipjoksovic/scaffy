@@ -1,0 +1,13 @@
+name: TypeScript quality
+on: [pull_request]
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: prettier --check .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: code-quality
+          path: reports/code-quality.json

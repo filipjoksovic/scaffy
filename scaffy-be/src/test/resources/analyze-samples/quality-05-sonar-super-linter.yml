@@ -1,0 +1,8 @@
+name: Sonar and Super Linter
+on: [push]
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: github/super-linter@v6
+      - uses: sonarsource/sonarcloud-github-action@v2

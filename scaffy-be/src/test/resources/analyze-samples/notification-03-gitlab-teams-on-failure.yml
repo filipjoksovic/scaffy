@@ -1,0 +1,7 @@
+notify_failure:
+  stage: notify
+  when: on_failure
+  variables:
+    MSTEAMS_WEBHOOK: $MSTEAMS_WEBHOOK
+  script:
+    - curl -X POST "$MSTEAMS_WEBHOOK" -H "Content-Type: application/json" -d '{"text":"Pipeline failed"}'

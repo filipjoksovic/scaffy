@@ -1,0 +1,8 @@
+name: Email notification
+on: [push]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sendmail -t team@example.com < pipeline-status.txt

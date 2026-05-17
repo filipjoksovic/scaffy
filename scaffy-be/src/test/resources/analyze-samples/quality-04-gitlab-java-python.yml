@@ -1,0 +1,12 @@
+stages:
+  - test
+
+code_quality:
+  stage: test
+  script:
+    - ./gradlew pmdMain
+    - black --check .
+    - mypy src
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json

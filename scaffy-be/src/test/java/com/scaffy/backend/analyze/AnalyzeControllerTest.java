@@ -41,6 +41,10 @@ class AnalyzeControllerTest {
 		mockMvc().perform(multipart("/api/analyze").file(file))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.provider").value("github-actions"))
+				.andExpect(jsonPath("$.overallScore").value(0.17))
+				.andExpect(jsonPath("$.overallLevel").value(2))
+				.andExpect(jsonPath("$.overallStatus").value("partial"))
+				.andExpect(jsonPath("$.overallConfidence").value("high"))
 				.andExpect(jsonPath("$.dimensions[0].dimension").value("build"))
 				.andExpect(jsonPath("$.dimensions[0].score").value(0.85))
 				.andExpect(jsonPath("$.dimensions[0].level").value(5))
@@ -50,9 +54,21 @@ class AnalyzeControllerTest {
 				.andExpect(jsonPath("$.dimensions[1].dimension").value("test"))
 				.andExpect(jsonPath("$.dimensions[1].score").value(0.0))
 				.andExpect(jsonPath("$.dimensions[1].status").value("missing"))
-				.andExpect(jsonPath("$.dimensions[2].dimension").value("deployment"))
+				.andExpect(jsonPath("$.dimensions[2].dimension").value("code_analysis"))
 				.andExpect(jsonPath("$.dimensions[2].score").value(0.0))
-				.andExpect(jsonPath("$.dimensions[2].status").value("missing"));
+				.andExpect(jsonPath("$.dimensions[2].status").value("missing"))
+				.andExpect(jsonPath("$.dimensions[3].dimension").value("security_scanning"))
+				.andExpect(jsonPath("$.dimensions[3].score").value(0.0))
+				.andExpect(jsonPath("$.dimensions[3].status").value("missing"))
+				.andExpect(jsonPath("$.dimensions[4].dimension").value("artifacts"))
+				.andExpect(jsonPath("$.dimensions[4].score").value(0.0))
+				.andExpect(jsonPath("$.dimensions[4].status").value("missing"))
+				.andExpect(jsonPath("$.dimensions[5].dimension").value("deployment"))
+				.andExpect(jsonPath("$.dimensions[5].score").value(0.0))
+				.andExpect(jsonPath("$.dimensions[5].status").value("missing"))
+				.andExpect(jsonPath("$.dimensions[6].dimension").value("notifications"))
+				.andExpect(jsonPath("$.dimensions[6].score").value(0.0))
+				.andExpect(jsonPath("$.dimensions[6].status").value("missing"));
 	}
 
 	@Test

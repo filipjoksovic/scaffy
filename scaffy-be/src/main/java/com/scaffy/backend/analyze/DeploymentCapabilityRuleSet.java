@@ -42,6 +42,7 @@ public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of("Firebase", "(?:^|[;&|\\n]\\s*)(?<cmd>firebase\\s+deploy\\b[^\\n;&|]*)"),
 			CommandRule.of("Vercel", "(?:^|[;&|\\n]\\s*)(?<cmd>vercel\\s+deploy\\b[^\\n;&|]*)"),
 			CommandRule.of("Netlify", "(?:^|[;&|\\n]\\s*)(?<cmd>netlify\\s+deploy\\b[^\\n;&|]*)"),
+			CommandRule.of("Deployment script", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?(?:scripts/)?[^\\s;&|]*deploy[^\\s;&|]*\\.sh\\b[^\\n;&|]*)"),
 			CommandRule.of("Remote shell", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:scp|rsync|ssh)\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> ARTIFACT_IMAGE_RULES = List.of(
@@ -195,6 +196,7 @@ public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 				"$ci_commit_sha",
 				"$ci_commit_short_sha",
 				"$github_sha",
+				"github.sha",
 				"$ci_registry_image",
 				"ghcr.io",
 				"gcr.io",

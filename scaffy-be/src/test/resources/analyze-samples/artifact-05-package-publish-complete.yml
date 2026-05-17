@@ -1,0 +1,8 @@
+name: Package artifact
+on: [push]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python -m build
+      - run: twine upload dist/* --comment $VERSION

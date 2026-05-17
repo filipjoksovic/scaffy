@@ -90,9 +90,23 @@ public class GitLabCiParser implements PipelineProviderParser {
 		String stage = YamlSupport.stringValue(jobMap, "stage").orElse("test");
 		String environment = environment(jobMap);
 		boolean manualOnly = manualOnly(jobMap);
+		String when = YamlSupport.stringValue(jobMap, "when").orElse(null);
+		String condition = rulesText(jobMap);
+		String details = details(jobMap, "variables");
 		List<PipelineStep> steps = scriptSteps(id, script);
 		List<PipelineOutput> outputs = outputs(id, jobMap);
-		return new PipelineJob(id, id, stage, environment, manualOnly, JOBS_LOCATION_PREFIX + id, steps, outputs);
+		return new PipelineJob(
+				id,
+				id,
+				stage,
+				environment,
+				manualOnly,
+				condition,
+				when,
+				details,
+				JOBS_LOCATION_PREFIX + id,
+				steps,
+				outputs);
 	}
 
 	private String environment(Map<Object, Object> jobMap) {
@@ -128,10 +142,50 @@ public class GitLabCiParser implements PipelineProviderParser {
 	}
 
 	private List<PipelineOutput> outputs(String jobId, Map<Object, Object> jobMap) {
-		if (!YamlSupport.hasKey(jobMap, "artifacts")) {
+		Object artifacts = YamlSupport.value(jobMap, "artifacts").orElse(null);
+		if (artifacts == null) {
 			return List.of();
 		}
+		List<PipelineOutput> outputs = new ArrayList<>();
+		Optional<Map<Object, Object>> artifactMap = YamlSupport.asMap(artifacts);
+		if (artifactMap.isPresent()) {
+			Map<Object, Object> map = artifactMap.get();
+			Optional<Map<Object, Object>> reports = YamlSupport.mapValue(map, "reports");
+			if (reports.isPresent()) {
+				Map<Object, Object> reportMap = reports.get();
+				addReportOutput(outputs, reportMap, jobId, "codequality");
+				addReportOutput(outputs, reportMap, jobId, "sast");
+				addReportOutput(outputs, reportMap, jobId, "dependency_scanning");
+				addReportOutput(outputs, reportMap, jobId, "container_scanning");
+				addReportOutput(outputs, reportMap, jobId, "secret_detection");
+				if (outputs.isEmpty()) {
+					outputs.add(new PipelineOutput(
+							"report",
+							"artifacts.reports",
+							JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports"));
+				}
+			}
+			if (YamlSupport.hasKey(map, "paths")) {
+				outputs.add(new PipelineOutput(
+						"paths",
+						"artifacts.paths",
+						JOBS_LOCATION_PREFIX + jobId + ".artifacts.paths"));
+			}
+		}
+		if (!outputs.isEmpty()) {
+			return outputs;
+		}
 		return List.of(new PipelineOutput("artifact", "artifacts", JOBS_LOCATION_PREFIX + jobId + ".artifacts"));
+	}
+
+	private void addReportOutput(List<PipelineOutput> outputs, Map<Object, Object> reports, String jobId, String reportType) {
+		if (!YamlSupport.hasKey(reports, reportType)) {
+			return;
+		}
+		outputs.add(new PipelineOutput(
+				reportType,
+				"artifacts.reports." + reportType,
+				JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports." + reportType));
 	}
 
 	private boolean manualOnly(Map<Object, Object> jobMap) {
@@ -159,6 +213,24 @@ public class GitLabCiParser implements PipelineProviderParser {
 			}
 		}
 		return sawRule;
+	}
+
+	private String rulesText(Map<Object, Object> jobMap) {
+		return YamlSupport.value(jobMap, "rules")
+				.map(YamlSupport::asString)
+				.filter(value -> !value.isBlank())
+				.orElse(null);
+	}
+
+	private String details(Map<Object, Object> map, String... keys) {
+		List<String> values = new ArrayList<>();
+		for (String key : keys) {
+			YamlSupport.value(map, key)
+					.map(YamlSupport::asString)
+					.filter(value -> !value.isBlank())
+					.ifPresent(value -> values.add(key + ": " + value));
+		}
+		return values.isEmpty() ? null : String.join(" ", values);
 	}
 
 	private boolean reserved(String key) {

@@ -12,7 +12,13 @@ class DeploymentCapabilityRuleSetTest {
 			new YamlPipelineParser(),
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
-			List.of(new BuildCapabilityRuleSet(), new TestCapabilityRuleSet(), new DeploymentCapabilityRuleSet()));
+			List.of(
+					new BuildCapabilityRuleSet(),
+					new TestCapabilityRuleSet(),
+					new CodeAnalysisCapabilityRuleSet(),
+					new SecurityScanningCapabilityRuleSet(),
+					new ArtifactCapabilityRuleSet(),
+					new DeploymentCapabilityRuleSet()));
 
 	@Test
 	void detectsCompleteGitHubActionsKubernetesDeployment() {
@@ -33,7 +39,8 @@ class DeploymentCapabilityRuleSetTest {
 
 		DimensionAnalysis deployment = deployment(response);
 
-		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension).containsExactly("build", "test", "deployment");
+		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
+				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment");
 		assertThat(deployment.score()).isEqualTo(1.0);
 		assertThat(deployment.level()).isEqualTo(5);
 		assertThat(deployment.status()).isEqualTo(AnalysisStatus.COMPLETE);

@@ -1,6 +1,6 @@
-# Build analyzer sample pipelines
+# Analyzer sample pipelines
 
-Use these files to manually exercise `/api/analyze` with different build maturity signals.
+Use these files to manually exercise `/api/analyze` with different maturity signals.
 
 Expected behavior:
 
@@ -24,6 +24,26 @@ Expected behavior:
 | `deploy-03-auto-deploy-no-validation.yml` | Automated GitLab Helm deployment without post-deploy validation. |
 | `deploy-04-complete-kubernetes.yml` | Complete GitHub Kubernetes deployment with environment, image, automatic trigger, and rollout validation. |
 | `deploy-05-cloud-provider.yml` | Complete GitLab GCP Cloud Run deployment with image and health check. |
+| `quality-01-build-only-missing.yml` | Build-only workflow where the code analysis dimension is missing. |
+| `quality-02-github-lint-partial.yml` | GitHub lint-only workflow with automatic trigger, but no formatter, type check, or report. |
+| `quality-03-github-typescript-complete.yml` | Complete GitHub TypeScript code analysis with lint, typecheck, formatter, report, and automatic trigger. |
+| `quality-04-gitlab-java-python.yml` | Complete GitLab code quality job with static analysis, formatter, type checking, and codequality report. |
+| `quality-05-sonar-super-linter.yml` | GitHub action-based Sonar/Super-Linter workflow. |
+| `artifact-01-missing.yml` | Test workflow where the artifact dimension is missing. |
+| `artifact-02-github-upload-partial.yml` | GitHub build with uploaded artifact but no publish, reuse, or version signal. |
+| `artifact-03-gitlab-paths-partial.yml` | GitLab build with `artifacts.paths` but no publish, reuse, or version signal. |
+| `artifact-04-docker-image-complete.yml` | Complete Docker image artifact with build, push, pull/reuse, SHA tag, and automatic trigger. |
+| `artifact-05-package-publish-complete.yml` | Complete package artifact with package build, publish, version signal, and automatic trigger. |
+| `notification-01-missing.yml` | Test workflow where the notification dimension is missing. |
+| `notification-02-github-slack-failure-complete.yml` | Complete GitHub Slack failure notification with webhook secret and automatic trigger. |
+| `notification-03-gitlab-teams-on-failure.yml` | Complete GitLab Teams notification using `when: on_failure`. |
+| `notification-04-discord-webhook-partial.yml` | Manual Discord webhook notification without automatic trigger or status condition. |
+| `notification-05-email-notification.yml` | Email notification command with automatic trigger and pipeline status context. |
+| `security-01-missing.yml` | Test workflow where the security scanning dimension is missing. |
+| `security-02-github-codeql-complete.yml` | Complete GitHub security workflow with SAST, dependency, secret, image scan, SARIF report, and automatic trigger. |
+| `security-03-dependency-scan-partial.yml` | Partial dependency scanning workflow with automatic pull request trigger. |
+| `security-04-gitlab-security-reports-complete.yml` | Complete GitLab security report workflow with SAST, dependency, container, and secret reports. |
+| `security-05-container-iac-secret-scan.yml` | Partial workflow with secret, container, and IaC scanning. |
 
 Example:
 
