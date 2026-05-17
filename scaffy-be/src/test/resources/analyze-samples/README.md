@@ -1,6 +1,6 @@
-# Build analyzer sample pipelines
+# Analyzer sample pipelines
 
-Use these files to manually exercise `/api/analyze` with different build maturity signals.
+Use these files to manually exercise `/api/analyze` with different maturity signals.
 
 Expected behavior:
 
@@ -24,6 +24,11 @@ Expected behavior:
 | `deploy-03-auto-deploy-no-validation.yml` | Automated GitLab Helm deployment without post-deploy validation. |
 | `deploy-04-complete-kubernetes.yml` | Complete GitHub Kubernetes deployment with environment, image, automatic trigger, and rollout validation. |
 | `deploy-05-cloud-provider.yml` | Complete GitLab GCP Cloud Run deployment with image and health check. |
+| `quality-01-build-only-missing.yml` | Build-only workflow where the code analysis dimension is missing. |
+| `quality-02-github-lint-partial.yml` | GitHub lint-only workflow with automatic trigger, but no formatter, type check, or report. |
+| `quality-03-github-typescript-complete.yml` | Complete GitHub TypeScript code analysis with lint, typecheck, formatter, report, and automatic trigger. |
+| `quality-04-gitlab-java-python.yml` | Complete GitLab code quality job with static analysis, formatter, type checking, and codequality report. |
+| `quality-05-sonar-super-linter.yml` | GitHub action-based Sonar/Super-Linter workflow. |
 
 Example:
 

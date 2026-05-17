@@ -128,8 +128,19 @@ public class GitLabCiParser implements PipelineProviderParser {
 	}
 
 	private List<PipelineOutput> outputs(String jobId, Map<Object, Object> jobMap) {
-		if (!YamlSupport.hasKey(jobMap, "artifacts")) {
+		Object artifacts = YamlSupport.value(jobMap, "artifacts").orElse(null);
+		if (artifacts == null) {
 			return List.of();
+		}
+		Optional<Map<Object, Object>> artifactMap = YamlSupport.asMap(artifacts);
+		if (artifactMap.isPresent()) {
+			Optional<Map<Object, Object>> reports = YamlSupport.mapValue(artifactMap.get(), "reports");
+			if (reports.isPresent() && YamlSupport.hasKey(reports.get(), "codequality")) {
+				return List.of(new PipelineOutput(
+						"codequality",
+						"artifacts.reports.codequality",
+						JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports.codequality"));
+			}
 		}
 		return List.of(new PipelineOutput("artifact", "artifacts", JOBS_LOCATION_PREFIX + jobId + ".artifacts"));
 	}
