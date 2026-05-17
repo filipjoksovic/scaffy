@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 
 type CardProps = HTMLAttributes<HTMLElement> & {
-  as?: 'article' | 'div' | 'form'
+  as?: 'article' | 'div' | 'form' | 'section'
   children: ReactNode
   inverted?: boolean
 }
