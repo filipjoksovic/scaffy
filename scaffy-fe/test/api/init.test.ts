@@ -24,7 +24,7 @@ describe('initProject', () => {
 
     await expect(initProject(request)).resolves.toBe(blob)
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/init', {
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/init$/), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),

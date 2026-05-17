@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Button, Card, Eyebrow, StateRow, TextInput } from '../components'
+import { AppFrame, Button, Card, Eyebrow, StateRow, TextInput } from '../components'
 import { ChoiceCard } from '../components/wizard/ChoiceCard'
 import { StepIndicator } from '../components/wizard/StepIndicator'
 import { downloadBlob, initProject } from '../api/init'
@@ -90,24 +89,7 @@ export function Initializer() {
   }
 
   return (
-    <main className="app-shell">
-      <nav aria-label="Primary" className="top-nav">
-        <Link aria-label="Scaffy home" className="wordmark" to="/">
-          <span aria-hidden="true" className="wordmark-mark" />
-          Scaffy
-        </Link>
-        <div className="nav-links">
-          <Link to="/">Initializer</Link>
-          <Link to="/analyzer">Analyzer</Link>
-          <Link to="/design">Design Language</Link>
-        </div>
-        <div className="nav-actions">
-          <a className="text-link" href="https://github.com/filipjoksovic/scaffy" rel="noreferrer" target="_blank">
-            GitHub
-          </a>
-        </div>
-      </nav>
-
+    <AppFrame>
       <section aria-labelledby="wizard-title" className="wizard-band">
         <header className="wizard-header">
           <Eyebrow>Project initializer</Eyebrow>
@@ -173,14 +155,7 @@ export function Initializer() {
         </div>
       </section>
 
-      <footer className="footer">
-        <strong>Scaffy</strong>
-        <Link to="/">Initializer</Link>
-        <Link to="/analyzer">Analyzer</Link>
-        <Link to="/design">Design</Link>
-        <span>Iter 1 · Angular + Spring Boot</span>
-      </footer>
-    </main>
+    </AppFrame>
   )
 }
 

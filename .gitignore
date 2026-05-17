@@ -16,3 +16,6 @@ output/playwright/
 
 # IDE workspace folders
 .idea/
+
+# Node
+node_modules/

@@ -1,4 +1,5 @@
 export { Badge } from './Badge'
+export { AppFrame } from './AppFrame'
 export { Button } from './Button'
 export { Card } from './Card'
 export { CodeBlock } from './CodeBlock'

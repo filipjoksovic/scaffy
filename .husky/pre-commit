@@ -1,0 +1,1 @@
+cd scaffy-fe && npx lint-staged

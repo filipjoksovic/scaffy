@@ -48,7 +48,7 @@
 
 .nav-links {
   justify-content: center;
-  gap: 28px;
+  gap: var(--space-xs);
 }
 
 .nav-links a,
@@ -59,9 +59,19 @@
   text-decoration: none;
 }
 
+.nav-links a {
+  border-radius: var(--radius-pill);
+  padding: 7px 12px;
+}
+
 .nav-links a:hover,
-.footer a:hover {
+.footer a:hover,
+.nav-links a.active {
   color: var(--color-ink);
+}
+
+.nav-links a.active {
+  background: var(--color-surface-strong);
 }
 
 .nav-actions {
@@ -220,11 +230,13 @@
 
 .footer {
   justify-content: center;
-  gap: var(--space-lg);
+  gap: var(--space-md);
   width: min(var(--container-max), calc(100% - 48px));
   margin: 0 auto;
-  padding: 48px 0 64px;
+  padding: 36px 0 52px;
   border-top: 1px solid var(--color-hairline);
+  color: var(--color-muted);
+  font-size: 14px;
 }
 
 .footer strong {

@@ -1,255 +1,352 @@
-import { useState } from 'react'
-import type { ChangeEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts'
-import { Badge, Button, Card, Eyebrow, StateRow } from '../components'
-import { analyzePipeline } from '../api/analyze'
-import type { AnalysisResponse, DimensionAnalysis, PipelineProvider } from '../api/analyze'
+import { type ChangeEvent, useMemo, useRef, useState } from 'react'
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from 'recharts'
+import { analyzePipeline, type AnalysisResponse, type DimensionAnalysis } from '../api/analyze'
+import { AppFrame, Badge, Button, Card, Eyebrow, StateRow } from '../components'
+
+const ACCEPTED_EXTENSIONS = ['.yml', '.yaml']
 
 type AnalyzeStatus =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'success'; result: AnalysisResponse }
+  | { kind: 'success'; report: AnalysisResponse }
   | { kind: 'error'; message: string }
 
-function formatProvider(provider: PipelineProvider): string {
-  if (provider === 'github-actions') return 'GitHub Actions'
-  if (provider === 'gitlab-ci') return 'GitLab CI'
-  return provider
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
 export function Analyzer() {
+  const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
   const [status, setStatus] = useState<AnalyzeStatus>({ kind: 'idle' })
 
-  function onFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const selected = e.target.files?.[0] ?? null
-    setFile(selected)
+  const canAnalyze = file !== null && validationError === null && status.kind !== 'loading'
+  const issueCount = useMemo(() => {
+    if (status.kind !== 'success') return 0
+    return status.report.dimensions.reduce((total, dimension) => total + dimension.missingPractices.length, 0)
+  }, [status])
+
+  function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] ?? null
     setStatus({ kind: 'idle' })
+    setFile(selected)
+    setValidationError(validateFile(selected))
+  }
+
+  function clearFile() {
+    setFile(null)
+    setValidationError(null)
+    setStatus({ kind: 'idle' })
+    if (inputRef.current) inputRef.current.value = ''
   }
 
   async function analyze() {
-    if (!file) return
+    const error = validateFile(file)
+    setValidationError(error)
+    if (!file || error) return
+
     setStatus({ kind: 'loading' })
     try {
-      const result = await analyzePipeline(file)
-      setStatus({ kind: 'success', result })
+      const report = await analyzePipeline(file)
+      setStatus({ kind: 'success', report })
     } catch (err) {
       setStatus({
         kind: 'error',
-        message: err instanceof Error ? err.message : 'Analysis failed.',
+        message: err instanceof Error ? err.message : 'Pipeline analysis failed.',
       })
     }
   }
 
   return (
-    <main className="app-shell">
-      <nav aria-label="Primary" className="top-nav">
-        <Link aria-label="Scaffy home" className="wordmark" to="/">
-          <span aria-hidden="true" className="wordmark-mark" />
-          Scaffy
-        </Link>
-        <div className="nav-links">
-          <Link to="/">Initializer</Link>
-          <Link to="/analyzer">Analyzer</Link>
-          <Link to="/design">Design Language</Link>
-        </div>
-        <div className="nav-actions">
-          <a
-            className="text-link"
-            href="https://github.com/filipjoksovic/scaffy"
-            rel="noreferrer"
-            target="_blank"
-          >
-            GitHub
-          </a>
-        </div>
-      </nav>
-
+    <AppFrame>
       <section aria-labelledby="analyzer-title" className="analyzer-band">
-        <header className="wizard-header">
+        <header className="page-header">
           <Eyebrow>Pipeline analyzer</Eyebrow>
-          <h1 id="analyzer-title">Measure CI/CD maturity across your pipeline.</h1>
+          <h1 id="analyzer-title">Upload a pipeline and review its CI/CD maturity.</h1>
           <p>
-            Upload a GitHub Actions or GitLab CI YAML file. Scaffy scores it across build, test,
-            and deployment dimensions and highlights what's missing.
+            Analyze GitHub Actions or GitLab CI YAML files against build, test, security,
+            artifacts, deployment, notification, and code quality practices.
           </p>
         </header>
 
-        <div className="analyzer-upload">
-          <label className="analyzer-upload__label" htmlFor="analyzer-file">
-            <span className="analyzer-upload__label-text">
-              {file ? file.name : 'Choose a .yml or .yaml file'}
-            </span>
-          </label>
-          <input
-            accept=".yml,.yaml"
-            className="analyzer-upload__input"
-            id="analyzer-file"
-            onChange={onFileChange}
-            type="file"
-          />
-          <Button disabled={!file || status.kind === 'loading'} onClick={analyze}>
-            {status.kind === 'loading' ? 'Analyzing…' : 'Analyze'}
-          </Button>
-        </div>
+        <div className="analyzer-layout">
+          <Card as="section" className="upload-panel">
+            <div>
+              <Eyebrow>Upload</Eyebrow>
+              <h2>Pipeline file</h2>
+              <p>Use a single .yml or .yaml file. The backend performs provider detection and scoring.</p>
+            </div>
 
-        {(status.kind === 'loading' || status.kind === 'error') && (
-          <div className="analyzer-feedback">
-            {status.kind === 'loading' && (
-              <StateRow
-                detail="Reading pipeline structure and scoring dimensions…"
-                label="Analyzing pipeline"
-                tone="loading"
+            <label className={validationError ? 'file-drop file-drop--error' : 'file-drop'} htmlFor="pipeline-file">
+              <span>{file ? file.name : 'Choose a pipeline YAML file'}</span>
+              <small>{file ? formatFileSize(file.size) : 'GitHub Actions and GitLab CI are supported.'}</small>
+              <input
+                accept=".yml,.yaml"
+                id="pipeline-file"
+                onChange={selectFile}
+                ref={inputRef}
+                type="file"
               />
+            </label>
+
+            <div className="upload-actions">
+              <Button disabled={!canAnalyze} onClick={analyze}>
+                {status.kind === 'loading' ? 'Analyzing...' : 'Analyze pipeline'}
+              </Button>
+              <Button disabled={!file && status.kind === 'idle'} onClick={clearFile} variant="secondary">
+                Clear
+              </Button>
+            </div>
+
+            {validationError && (
+              <StateRow detail={validationError} icon="!" label="File cannot be analyzed" tone="error" />
+            )}
+
+            {status.kind === 'loading' && (
+              <StateRow detail="Calling /api/analyze with the selected YAML file." label="Analyzing pipeline" tone="loading" />
             )}
             {status.kind === 'error' && (
-              <StateRow
-                detail={status.message}
-                icon="!"
-                label="Analysis failed"
-                tone="error"
-              />
+              <StateRow detail={status.message} icon="!" label="Analysis failed" tone="error" />
             )}
-          </div>
-        )}
+          </Card>
 
-        {status.kind === 'success' && <AnalysisReport result={status.result} />}
+          {status.kind === 'success' ? (
+            <ReportPanel issueCount={issueCount} report={status.report} />
+          ) : (
+            <Card as="section" className="report-empty">
+              <Eyebrow>Report</Eyebrow>
+              <h2>No analysis yet</h2>
+              <p>
+                The report will show an overall maturity rating, dimension scores, detected practices,
+                and the missing practices that need attention.
+              </p>
+            </Card>
+          )}
+        </div>
       </section>
-
-      <footer className="footer">
-        <strong>Scaffy</strong>
-        <Link to="/">Initializer</Link>
-        <Link to="/analyzer">Analyzer</Link>
-        <Link to="/design">Design</Link>
-        <span>Iter 1 · Angular + Spring Boot</span>
-      </footer>
-    </main>
+    </AppFrame>
   )
 }
 
-type AnalysisReportProps = {
-  result: AnalysisResponse
+function ReportPanel({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
+  const [openSection, setOpenSection] = useState<string | null>('overall')
+
+  function toggleSection(section: string) {
+    setOpenSection((current) => (current === section ? null : section))
+  }
+
+  return (
+    <section aria-label="Pipeline analysis report" className="report-panel">
+      <Card as="section" className={openSection === 'overall' ? 'accordion-section accordion-section--open' : 'accordion-section'}>
+        <button
+          aria-controls="overall-report-details"
+          aria-expanded={openSection === 'overall'}
+          className="accordion-trigger score-card"
+          onClick={() => toggleSection('overall')}
+          type="button"
+        >
+          <div>
+            <Eyebrow>Overall rating</Eyebrow>
+            <div className="score-card__value">{formatScore(report.overallScore)}</div>
+          </div>
+          <div className="score-card__summary">
+            <div className="score-card__meta">
+              <Badge>{formatProvider(report.provider)}</Badge>
+              <Badge>Level {report.overallLevel}</Badge>
+              <Badge>{formatLabel(report.overallStatus)}</Badge>
+              <Badge>{formatLabel(report.overallConfidence)} confidence</Badge>
+            </div>
+            <p>{issueCount === 0 ? 'No missing practices were reported.' : `${issueCount} issue${issueCount === 1 ? '' : 's'} found across analyzed dimensions.`}</p>
+          </div>
+          <span className="accordion-chevron" aria-hidden="true">{openSection === 'overall' ? 'Hide' : 'Show'}</span>
+        </button>
+        {openSection === 'overall' && (
+          <div className="accordion-content" id="overall-report-details">
+            <OverallDetail issueCount={issueCount} report={report} />
+          </div>
+        )}
+      </Card>
+
+      <div className="dimension-grid">
+        {report.dimensions.map((dimension) => (
+          <DimensionAccordion
+            dimension={dimension}
+            key={dimension.dimension}
+            onToggle={() => toggleSection(dimension.dimension)}
+            open={openSection === dimension.dimension}
+          />
+        ))}
+      </div>
+    </section>
+  )
 }
 
-function AnalysisReport({ result }: AnalysisReportProps) {
-  const { provider, dimensions, overallScore, overallLevel } = result
-  const radarData = dimensions.map((d) => ({
-    subject: capitalize(d.dimension),
-    score: d.score,
+function DimensionAccordion({
+  dimension,
+  onToggle,
+  open,
+}: {
+  dimension: DimensionAnalysis
+  onToggle: () => void
+  open: boolean
+}) {
+  const contentId = `${dimension.dimension}-details`
+
+  return (
+    <Card as="section" className={open ? 'accordion-section accordion-section--open' : 'accordion-section'}>
+      <button
+        aria-controls={contentId}
+        aria-expanded={open}
+        className="accordion-trigger dimension-card"
+        onClick={onToggle}
+        type="button"
+      >
+        <div className="dimension-card__head">
+          <div>
+            <h3>{formatDimension(dimension.dimension)}</h3>
+            <p>Level {dimension.level} · {formatLabel(dimension.status)}</p>
+          </div>
+          <strong>{formatScore(dimension.score)}</strong>
+        </div>
+        <div aria-hidden="true" className="score-bar">
+          <span style={{ width: formatScore(dimension.score) }} />
+        </div>
+        <div className="dimension-card__details">
+          <span>{dimension.detectedPractices.length} detected</span>
+          <span>{dimension.missingPractices.length} missing</span>
+          <span>{formatLabel(dimension.confidence)} confidence</span>
+        </div>
+        <span className="accordion-chevron" aria-hidden="true">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && (
+        <div className="accordion-content" id={contentId}>
+          <DimensionDetail dimension={dimension} />
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function OverallDetail({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
+  const radarData = report.dimensions.map((dimension) => ({
+    dimension: formatDimension(dimension.dimension),
+    score: Math.round(dimension.score * 100),
   }))
 
   return (
-    <div className="analyzer-result">
-      <div className="analyzer-summary">
-        <Card>
-          <Eyebrow>Analysis summary</Eyebrow>
-          <div className="analyzer-summary__score">
-            <span className="analyzer-summary__score-value">{overallScore.toFixed(2)}</span>
-            <span className="analyzer-summary__score-denom"> / 1.00</span>
-          </div>
-          <p className="analyzer-summary__level">Level {overallLevel} / 5</p>
-          <dl className="analyzer-summary__meta">
-            <div>
-              <dt>Provider</dt>
-              <dd>{formatProvider(provider)}</dd>
-            </div>
-            <div>
-              <dt>Dimensions scored</dt>
-              <dd>{dimensions.length}</dd>
-            </div>
-          </dl>
-        </Card>
-
-        <Card>
-          <Eyebrow>Score breakdown</Eyebrow>
-          <ResponsiveContainer height={220} width="100%">
-            <RadarChart data={radarData}>
-              <PolarGrid stroke="var(--color-hairline)" />
+    <>
+      <div className="section-title-row">
+        <div>
+          <Eyebrow>Dimension overview</Eyebrow>
+          <h2>Report breakdown</h2>
+        </div>
+        <Badge>{issueCount} open</Badge>
+      </div>
+      <div className="overview-detail">
+        <div className="radar-panel" aria-label="Dimension score spider graph">
+          <ResponsiveContainer height={300} width="100%">
+            <RadarChart data={radarData} outerRadius="72%">
+              <PolarGrid stroke="var(--color-hairline-strong)" />
               <PolarAngleAxis
-                dataKey="subject"
-                tick={{ fill: 'var(--color-body)', fontSize: 13 }}
+                dataKey="dimension"
+                tick={{ fill: 'var(--color-body)', fontSize: 12 }}
               />
+              <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
               <Radar
                 dataKey="score"
                 fill="var(--color-primary)"
-                fillOpacity={0.2}
+                fillOpacity={0.18}
                 stroke="var(--color-primary)"
                 strokeWidth={2}
               />
             </RadarChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
+
+        <div className="overview-grid">
+          {report.dimensions.map((dimension) => (
+            <div className="overview-row" key={dimension.dimension}>
+              <span>{formatDimension(dimension.dimension)}</span>
+              <strong>{formatScore(dimension.score)}</strong>
+              <small>{dimension.missingPractices.length} missing</small>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function DimensionDetail({ dimension }: { dimension: DimensionAnalysis }) {
+  return (
+    <div className="detail-columns">
+      <div className="issue-group">
+        <h3>Missing practices</h3>
+        {dimension.missingPractices.length > 0 ? (
+          <ul>
+            {dimension.missingPractices.map((practice) => (
+              <li key={practice}>{practice}</li>
+            ))}
+          </ul>
+        ) : (
+          <StateRow detail="No missing practices were reported for this dimension." icon="✓" label="No issues found" tone="success" />
+        )}
       </div>
 
-      <div className="analyzer-dimension-grid">
-        {dimensions.map((dim) => (
-          <DimensionCard dim={dim} key={dim.dimension} />
-        ))}
+      <div className="detected-group">
+        <h3>Detected practices</h3>
+        {dimension.detectedPractices.length > 0 ? (
+          <ul>
+            {dimension.detectedPractices.map((practice) => (
+              <li key={`${practice.practice}-${practice.location}-${practice.evidence}`}>
+                <strong>{practice.practice}</strong>
+                <span>{practice.evidence}</span>
+                {practice.location && <code>{practice.location}</code>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <StateRow detail="No detected practices were reported for this dimension." label="No evidence found" tone="empty" />
+        )}
       </div>
     </div>
   )
 }
 
-type DimensionCardProps = {
-  dim: DimensionAnalysis
+function validateFile(file: File | null): string | null {
+  if (!file) return null
+  const normalizedName = file.name.toLowerCase()
+  if (!ACCEPTED_EXTENSIONS.some((extension) => normalizedName.endsWith(extension))) {
+    return 'Upload a .yml or .yaml pipeline file.'
+  }
+  return null
 }
 
-function DimensionCard({ dim }: DimensionCardProps) {
-  const hasDetected = dim.detectedPractices.length > 0
-  const hasMissing = dim.missingPractices.length > 0
-  const isEmpty = !hasDetected && !hasMissing
+function formatScore(score: number): string {
+  return `${Math.round(score * 100)}%`
+}
 
-  return (
-    <Card>
-      <Eyebrow>{capitalize(dim.dimension)}</Eyebrow>
-      <div className="analyzer-dim-score">
-        <span className="analyzer-dim-score__value">{dim.score.toFixed(2)} / 1.00</span>
-        <Badge className={`badge--${dim.status}`}>{dim.status}</Badge>
-      </div>
-      <p className="analyzer-dim-meta">
-        Level {dim.level} / 5 · {dim.confidence} confidence
-      </p>
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
 
-      {isEmpty && (
-        <p className="analyzer-no-practices">No practices analyzed for this dimension.</p>
-      )}
+function formatProvider(provider: string): string {
+  if (provider === 'github-actions') return 'GitHub Actions'
+  if (provider === 'gitlab-ci') return 'GitLab CI'
+  return formatLabel(provider)
+}
 
-      {hasDetected && (
-        <>
-          <p className="analyzer-section-label">Detected</p>
-          <ul className="analyzer-practice-list">
-            {dim.detectedPractices.map((practice, i) => (
-              <li className="analyzer-practice-list__item" key={i}>
-                <span>{practice.practice}</span>
-                {practice.evidence && (
-                  <code className="analyzer-practice-evidence">{practice.evidence}</code>
-                )}
-                {practice.location && (
-                  <span className="analyzer-practice-location">{practice.location}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+function formatDimension(dimension: string): string {
+  return dimension
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
 
-      {hasMissing && (
-        <>
-          <p className="analyzer-section-label">Missing</p>
-          <ul className="analyzer-practice-list analyzer-practice-list--missing">
-            {dim.missingPractices.map((practice, i) => (
-              <li className="analyzer-practice-list__item" key={i}>
-                {practice}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </Card>
-  )
+function formatLabel(value: string): string {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }

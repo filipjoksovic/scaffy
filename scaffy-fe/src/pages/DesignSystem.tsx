@@ -57,7 +57,7 @@ export function DesignSystem() {
           <a href="#states">States</a>
         </div>
         <div className="nav-actions">
-          <Link className="text-link" to="/">
+          <Link className="text-link" to="/init">
             Back to initializer
           </Link>
         </div>

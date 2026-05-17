@@ -1,21 +1,11 @@
+import { apiUrl, throwApiError } from './client'
+
 export type InitRequest = {
   projectName: string
   frontend: string
   backend: string
   pipeline: string
   includeDocker?: boolean
-}
-
-type InitErrorResponse = {
-  error?: string
-  message?: string
-  details?: Record<string, string>
-}
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
-
-function apiUrl(path: string): string {
-  return `${API_BASE_URL}${path}`
 }
 
 export async function initProject(request: InitRequest): Promise<Blob> {
@@ -26,21 +16,7 @@ export async function initProject(request: InitRequest): Promise<Blob> {
   })
 
   if (!response.ok) {
-    let body: InitErrorResponse | undefined
-    try {
-      body = (await response.json()) as InitErrorResponse
-    } catch {
-      // fall through to status-based message
-    }
-
-    if (body?.details) {
-      const fieldDetail = Object.entries(body.details)
-        .map(([field, msg]) => `${field}: ${msg}`)
-        .join('; ')
-      throw new Error(fieldDetail || body.message || body.error || `Request failed (${response.status})`)
-    }
-
-    throw new Error(body?.message || body?.error || `Request failed (${response.status})`)
+    await throwApiError(response)
   }
 
   return response.blob()

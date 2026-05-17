@@ -1,8 +1,8 @@
-export type PipelineProvider = 'github-actions' | 'gitlab-ci'
+import { apiUrl, throwApiError } from './client'
 
-export type AnalysisStatus = 'missing' | 'partial' | 'complete'
-
-export type Confidence = 'low' | 'medium' | 'high'
+export type AnalysisStatus = 'missing' | 'partial' | 'complete' | (string & {})
+export type AnalysisConfidence = 'low' | 'medium' | 'high' | (string & {})
+export type PipelineProvider = 'github-actions' | 'gitlab-ci' | (string & {})
 
 export type DetectedPractice = {
   practice: string
@@ -16,7 +16,7 @@ export type DimensionAnalysis = {
   score: number
   level: number
   status: AnalysisStatus
-  confidence: Confidence
+  confidence: AnalysisConfidence
   detectedPractices: DetectedPractice[]
   missingPractices: string[]
 }
@@ -26,39 +26,21 @@ export type AnalysisResponse = {
   overallScore: number
   overallLevel: number
   overallStatus: AnalysisStatus
-  overallConfidence: Confidence
+  overallConfidence: AnalysisConfidence
   dimensions: DimensionAnalysis[]
 }
 
-type AnalyzeErrorResponse = {
-  error?: string
-  message?: string
-}
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
-
-function apiUrl(path: string): string {
-  return `${API_BASE_URL}${path}`
-}
-
 export async function analyzePipeline(file: File): Promise<AnalysisResponse> {
-  const form = new FormData()
-  form.append('file', file)
+  const formData = new FormData()
+  formData.append('file', file)
 
   const response = await fetch(apiUrl('/api/analyze'), {
     method: 'POST',
-    body: form,
+    body: formData,
   })
 
   if (!response.ok) {
-    let body: AnalyzeErrorResponse | undefined
-    try {
-      body = (await response.json()) as AnalyzeErrorResponse
-    } catch {
-      // fall through to status-based message
-    }
-
-    throw new Error(body?.message || body?.error || `Request failed (${response.status})`)
+    await throwApiError(response)
   }
 
   return response.json() as Promise<AnalysisResponse>
