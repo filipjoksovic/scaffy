@@ -29,6 +29,11 @@ Expected behavior:
 | `quality-03-github-typescript-complete.yml` | Complete GitHub TypeScript code analysis with lint, typecheck, formatter, report, and automatic trigger. |
 | `quality-04-gitlab-java-python.yml` | Complete GitLab code quality job with static analysis, formatter, type checking, and codequality report. |
 | `quality-05-sonar-super-linter.yml` | GitHub action-based Sonar/Super-Linter workflow. |
+| `artifact-01-missing.yml` | Test workflow where the artifact dimension is missing. |
+| `artifact-02-github-upload-partial.yml` | GitHub build with uploaded artifact but no publish, reuse, or version signal. |
+| `artifact-03-gitlab-paths-partial.yml` | GitLab build with `artifacts.paths` but no publish, reuse, or version signal. |
+| `artifact-04-docker-image-complete.yml` | Complete Docker image artifact with build, push, pull/reuse, SHA tag, and automatic trigger. |
+| `artifact-05-package-publish-complete.yml` | Complete package artifact with package build, publish, version signal, and automatic trigger. |
 
 Example:
 

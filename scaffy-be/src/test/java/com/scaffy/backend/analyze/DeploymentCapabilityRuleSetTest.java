@@ -16,6 +16,7 @@ class DeploymentCapabilityRuleSetTest {
 					new BuildCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
+					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet()));
 
 	@Test
@@ -38,7 +39,7 @@ class DeploymentCapabilityRuleSetTest {
 		DimensionAnalysis deployment = deployment(response);
 
 		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "deployment");
+				.containsExactly("build", "test", "code_analysis", "artifacts", "deployment");
 		assertThat(deployment.score()).isEqualTo(1.0);
 		assertThat(deployment.level()).isEqualTo(5);
 		assertThat(deployment.status()).isEqualTo(AnalysisStatus.COMPLETE);

@@ -53,9 +53,12 @@ class AnalyzeControllerTest {
 				.andExpect(jsonPath("$.dimensions[2].dimension").value("code_analysis"))
 				.andExpect(jsonPath("$.dimensions[2].score").value(0.0))
 				.andExpect(jsonPath("$.dimensions[2].status").value("missing"))
-				.andExpect(jsonPath("$.dimensions[3].dimension").value("deployment"))
+				.andExpect(jsonPath("$.dimensions[3].dimension").value("artifacts"))
 				.andExpect(jsonPath("$.dimensions[3].score").value(0.0))
-				.andExpect(jsonPath("$.dimensions[3].status").value("missing"));
+				.andExpect(jsonPath("$.dimensions[3].status").value("missing"))
+				.andExpect(jsonPath("$.dimensions[4].dimension").value("deployment"))
+				.andExpect(jsonPath("$.dimensions[4].score").value(0.0))
+				.andExpect(jsonPath("$.dimensions[4].status").value("missing"));
 	}
 
 	@Test

@@ -98,7 +98,7 @@ class PipelineAnalyzerTest {
 		assertThat(build.score()).isEqualTo(1.0);
 		assertThat(build.level()).isEqualTo(5);
 		assertThat(build.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(evidence(build)).contains("npm ci", "npm run build", "artifacts");
+		assertThat(evidence(build)).contains("npm ci", "npm run build", "artifacts.paths");
 	}
 
 	@Test

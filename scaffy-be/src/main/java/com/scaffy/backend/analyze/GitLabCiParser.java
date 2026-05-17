@@ -132,15 +132,34 @@ public class GitLabCiParser implements PipelineProviderParser {
 		if (artifacts == null) {
 			return List.of();
 		}
+		List<PipelineOutput> outputs = new ArrayList<>();
 		Optional<Map<Object, Object>> artifactMap = YamlSupport.asMap(artifacts);
 		if (artifactMap.isPresent()) {
-			Optional<Map<Object, Object>> reports = YamlSupport.mapValue(artifactMap.get(), "reports");
-			if (reports.isPresent() && YamlSupport.hasKey(reports.get(), "codequality")) {
-				return List.of(new PipelineOutput(
-						"codequality",
-						"artifacts.reports.codequality",
-						JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports.codequality"));
+			Map<Object, Object> map = artifactMap.get();
+			Optional<Map<Object, Object>> reports = YamlSupport.mapValue(map, "reports");
+			if (reports.isPresent()) {
+				if (YamlSupport.hasKey(reports.get(), "codequality")) {
+					outputs.add(new PipelineOutput(
+							"codequality",
+							"artifacts.reports.codequality",
+							JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports.codequality"));
+				}
+				else {
+					outputs.add(new PipelineOutput(
+							"report",
+							"artifacts.reports",
+							JOBS_LOCATION_PREFIX + jobId + ".artifacts.reports"));
+				}
 			}
+			if (YamlSupport.hasKey(map, "paths")) {
+				outputs.add(new PipelineOutput(
+						"paths",
+						"artifacts.paths",
+						JOBS_LOCATION_PREFIX + jobId + ".artifacts.paths"));
+			}
+		}
+		if (!outputs.isEmpty()) {
+			return outputs;
 		}
 		return List.of(new PipelineOutput("artifact", "artifacts", JOBS_LOCATION_PREFIX + jobId + ".artifacts"));
 	}
