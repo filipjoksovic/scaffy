@@ -1,4 +1,5 @@
 import { type ChangeEvent, useMemo, useRef, useState } from 'react'
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from 'recharts'
 import { analyzePipeline, type AnalysisResponse, type DimensionAnalysis } from '../api/analyze'
 import { AppFrame, Badge, Button, Card, Eyebrow, StateRow } from '../components'
 
@@ -224,6 +225,11 @@ function DimensionAccordion({
 }
 
 function OverallDetail({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
+  const radarData = report.dimensions.map((dimension) => ({
+    dimension: formatDimension(dimension.dimension),
+    score: Math.round(dimension.score * 100),
+  }))
+
   return (
     <>
       <div className="section-title-row">
@@ -233,14 +239,36 @@ function OverallDetail({ issueCount, report }: { issueCount: number; report: Ana
         </div>
         <Badge>{issueCount} open</Badge>
       </div>
-      <div className="overview-grid">
-        {report.dimensions.map((dimension) => (
-          <div className="overview-row" key={dimension.dimension}>
-            <span>{formatDimension(dimension.dimension)}</span>
-            <strong>{formatScore(dimension.score)}</strong>
-            <small>{dimension.missingPractices.length} missing</small>
-          </div>
-        ))}
+      <div className="overview-detail">
+        <div className="radar-panel" aria-label="Dimension score spider graph">
+          <ResponsiveContainer height={300} width="100%">
+            <RadarChart data={radarData} outerRadius="72%">
+              <PolarGrid stroke="var(--color-hairline-strong)" />
+              <PolarAngleAxis
+                dataKey="dimension"
+                tick={{ fill: 'var(--color-body)', fontSize: 12 }}
+              />
+              <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+              <Radar
+                dataKey="score"
+                fill="var(--color-primary)"
+                fillOpacity={0.18}
+                stroke="var(--color-primary)"
+                strokeWidth={2}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="overview-grid">
+          {report.dimensions.map((dimension) => (
+            <div className="overview-row" key={dimension.dimension}>
+              <span>{formatDimension(dimension.dimension)}</span>
+              <strong>{formatScore(dimension.score)}</strong>
+              <small>{dimension.missingPractices.length} missing</small>
+            </div>
+          ))}
+        </div>
       </div>
     </>
   )

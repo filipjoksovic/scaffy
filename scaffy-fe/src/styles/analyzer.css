@@ -267,10 +267,24 @@
   gap: var(--space-base);
 }
 
+.overview-detail,
 .overview-grid,
 .detail-columns {
   display: grid;
   gap: var(--space-base);
+}
+
+.overview-detail {
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.radar-panel {
+  min-width: 0;
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+  padding: var(--space-sm);
 }
 
 .overview-grid {
@@ -347,6 +361,7 @@
   }
 
   .dimension-grid,
+  .overview-detail,
   .overview-grid,
   .detail-columns {
     grid-template-columns: 1fr;
