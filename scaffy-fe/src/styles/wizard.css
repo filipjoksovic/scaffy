@@ -1,14 +1,14 @@
 .wizard-band {
   width: min(var(--container-max), calc(100% - 48px));
   margin: 0 auto;
-  padding: 64px 0 var(--space-section);
+  padding: 48px 0 72px;
   display: grid;
   gap: var(--space-xl);
 }
 
 .wizard-header {
   display: grid;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   max-width: 760px;
 }
 

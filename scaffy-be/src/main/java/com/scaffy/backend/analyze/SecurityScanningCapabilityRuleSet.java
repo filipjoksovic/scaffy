@@ -310,7 +310,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean securityReport(PipelineOutput output) {
-		return AnalysisSupport.containsAny(
+		return containsAny(
 				AnalysisSupport.lower(output.type() + " " + output.evidence()),
 				"sast",
 				"dependency_scanning",
