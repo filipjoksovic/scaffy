@@ -98,6 +98,7 @@ export function Initializer() {
         </Link>
         <div className="nav-links">
           <Link to="/">Initializer</Link>
+          <Link to="/analyzer">Analyzer</Link>
           <Link to="/design">Design Language</Link>
         </div>
         <div className="nav-actions">
@@ -175,6 +176,7 @@ export function Initializer() {
       <footer className="footer">
         <strong>Scaffy</strong>
         <Link to="/">Initializer</Link>
+        <Link to="/analyzer">Analyzer</Link>
         <Link to="/design">Design</Link>
         <span>Iter 1 · Angular + Spring Boot</span>
       </footer>
