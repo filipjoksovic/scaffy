@@ -2,7 +2,6 @@ package com.scaffy.backend.analyze;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import org.springframework.core.annotation.Order;
@@ -123,12 +122,12 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 			missing.add(MISSING_AUTOMATIC_TRIGGER);
 		}
 
-		double roundedScore = round(score);
+		double roundedScore = AnalysisSupport.round(score);
 		return new DimensionAnalysis(
 				dimension(),
 				roundedScore,
-				level(roundedScore),
-				roundedScore >= 0.8 ? AnalysisStatus.COMPLETE : AnalysisStatus.PARTIAL,
+				AnalysisSupport.level(roundedScore),
+				AnalysisSupport.status(roundedScore),
 				confidence(artifactOutput.isPresent(), registryPublish.isPresent() || artifactReuse.isPresent()),
 				detected,
 				missing);
@@ -190,7 +189,7 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 	private Optional<DetectedPractice> versioningAction(PipelineDocument document) {
 		for (PipelineJob job : document.jobs()) {
 			for (PipelineStep step : job.steps()) {
-				if (dockerBuildAction(step) && containsAny(lower(step.details()), "tags=", "github.sha", "github_sha", "ci_commit_sha")) {
+				if (dockerBuildAction(step) && AnalysisSupport.containsAny(AnalysisSupport.lower(step.details()), "tags=", "github.sha", "github_sha", "ci_commit_sha")) {
 					return Optional.of(new DetectedPractice(PRACTICE_VERSIONING_DETECTED, step.details(), step.location()));
 				}
 			}
@@ -253,28 +252,19 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean uploadArtifactAction(PipelineStep step) {
-		return step.uses() != null && lower(step.uses()).startsWith("actions/upload-artifact");
+		return step.uses() != null && AnalysisSupport.lower(step.uses()).startsWith("actions/upload-artifact");
 	}
 
 	private boolean downloadArtifactAction(PipelineStep step) {
-		return step.uses() != null && lower(step.uses()).startsWith("actions/download-artifact");
+		return step.uses() != null && AnalysisSupport.lower(step.uses()).startsWith("actions/download-artifact");
 	}
 
 	private boolean dockerBuildAction(PipelineStep step) {
-		return step.uses() != null && lower(step.uses()).startsWith("docker/build-push-action");
+		return step.uses() != null && AnalysisSupport.lower(step.uses()).startsWith("docker/build-push-action");
 	}
 
 	private boolean dockerBuildPushAction(PipelineStep step) {
-		return dockerBuildAction(step) && containsAny(lower(step.details()), "push=true", "push: true");
-	}
-
-	private boolean containsAny(String text, String... needles) {
-		for (String needle : needles) {
-			if (text.contains(needle)) {
-				return true;
-			}
-		}
-		return false;
+		return dockerBuildAction(step) && AnalysisSupport.containsAny(AnalysisSupport.lower(step.details()), "push=true", "push: true");
 	}
 
 	private Confidence confidence(boolean artifactOutputDetected, boolean publishOrReuseDetected) {
@@ -284,27 +274,4 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 		return Confidence.MEDIUM;
 	}
 
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
-	}
-
-	private String lower(String value) {
-		return value == null ? "" : value.toLowerCase(Locale.ROOT);
-	}
 }

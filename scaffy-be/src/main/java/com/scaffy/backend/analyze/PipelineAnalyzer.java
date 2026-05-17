@@ -9,6 +9,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class PipelineAnalyzer {
 
+	private static final Map<String, DimensionProfile> DIMENSIONS = Map.of(
+			"build", new DimensionProfile(10, 0.20),
+			"test", new DimensionProfile(20, 0.25),
+			"code_analysis", new DimensionProfile(25, 0.10),
+			"security_scanning", new DimensionProfile(27, 0.20),
+			"artifacts", new DimensionProfile(28, 0.07),
+			"deployment", new DimensionProfile(30, 0.15),
+			"notifications", new DimensionProfile(40, 0.03));
+	private static final DimensionProfile DEFAULT_DIMENSION = new DimensionProfile(100, 0.10);
+
 	private final YamlPipelineParser yamlPipelineParser;
 	private final ProviderDetector providerDetector;
 	private final List<PipelineProviderParser> providerParsers;
@@ -38,8 +48,8 @@ public class PipelineAnalyzer {
 		return new AnalysisResponse(
 				provider,
 				overallScore,
-				level(overallScore),
-				status(overallScore),
+				AnalysisSupport.level(overallScore),
+				AnalysisSupport.status(overallScore),
 				confidence(dimensions),
 				dimensions);
 	}
@@ -52,16 +62,7 @@ public class PipelineAnalyzer {
 	}
 
 	private int dimensionOrder(String dimension) {
-		return switch (dimension) {
-			case "build" -> 10;
-			case "test" -> 20;
-			case "code_analysis" -> 25;
-			case "security_scanning" -> 27;
-			case "artifacts" -> 28;
-			case "deployment" -> 30;
-			case "notifications" -> 40;
-			default -> 100;
-		};
+		return profile(dimension).order();
 	}
 
 	private double overallScore(List<DimensionAnalysis> dimensions) {
@@ -74,30 +75,15 @@ public class PipelineAnalyzer {
 		double weightTotal = dimensions.stream()
 				.mapToDouble(dimension -> dimensionWeight(dimension.dimension()))
 				.sum();
-		return round(weightedTotal / weightTotal);
+		return AnalysisSupport.round(weightedTotal / weightTotal);
 	}
 
 	private double dimensionWeight(String dimension) {
-		return switch (dimension) {
-			case "build" -> 0.20;
-			case "test" -> 0.25;
-			case "code_analysis" -> 0.10;
-			case "security_scanning" -> 0.20;
-			case "artifacts" -> 0.07;
-			case "deployment" -> 0.15;
-			case "notifications" -> 0.03;
-			default -> 0.10;
-		};
+		return profile(dimension).weight();
 	}
 
-	private AnalysisStatus status(double score) {
-		if (score == 0.0) {
-			return AnalysisStatus.MISSING;
-		}
-		if (score >= 0.8) {
-			return AnalysisStatus.COMPLETE;
-		}
-		return AnalysisStatus.PARTIAL;
+	private DimensionProfile profile(String dimension) {
+		return DIMENSIONS.getOrDefault(dimension, DEFAULT_DIMENSION);
 	}
 
 	private Confidence confidence(List<DimensionAnalysis> dimensions) {
@@ -113,23 +99,6 @@ public class PipelineAnalyzer {
 		return Confidence.MEDIUM;
 	}
 
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
+	private record DimensionProfile(int order, double weight) {
 	}
 }

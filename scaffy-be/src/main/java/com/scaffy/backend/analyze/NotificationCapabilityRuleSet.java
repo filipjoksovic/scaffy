@@ -2,7 +2,6 @@ package com.scaffy.backend.analyze;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import org.springframework.core.annotation.Order;
@@ -100,12 +99,12 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 			missing.add(MISSING_AUTOMATIC_TRIGGER);
 		}
 
-		double roundedScore = round(score);
+		double roundedScore = AnalysisSupport.round(score);
 		return new DimensionAnalysis(
 				dimension(),
 				roundedScore,
-				level(roundedScore),
-				roundedScore >= 0.8 ? AnalysisStatus.COMPLETE : AnalysisStatus.PARTIAL,
+				AnalysisSupport.level(roundedScore),
+				AnalysisSupport.status(roundedScore),
 				confidence(channel.isPresent(), statusCondition.isPresent(), deliveryTarget.isPresent()),
 				detected,
 				missing);
@@ -131,19 +130,7 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 		List<NotificationCandidate> candidates = new ArrayList<>();
 		for (PipelineJob job : document.jobs()) {
 			for (PipelineStep step : job.steps()) {
-				String context = lower(String.join(
-						" ",
-						value(job.id()),
-						value(job.name()),
-						value(job.stage()),
-						value(job.condition()),
-						value(job.when()),
-						value(job.details()),
-						value(step.name()),
-						value(step.condition()),
-						value(step.details()),
-						value(step.command()),
-						value(step.uses())));
+				String context = AnalysisSupport.lower(AnalysisSupport.context(job, step));
 				if (notificationContext(context)) {
 					candidates.add(new NotificationCandidate(job, step, evidence(step), step.location(), context));
 				}
@@ -181,7 +168,7 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 
 	private Optional<DetectedPractice> pipelineContext(PipelineDocument document, List<NotificationCandidate> candidates) {
 		for (NotificationCandidate candidate : candidates) {
-			if (containsAny(candidate.context(), "deploy", "deployment", "release", "pipeline", "workflow", "status")) {
+			if (AnalysisSupport.containsAny(candidate.context(), "deploy", "deployment", "release", "pipeline", "workflow", "status")) {
 				return Optional.of(new DetectedPractice(
 						PRACTICE_PIPELINE_CONTEXT_DETECTED,
 						contextEvidence(candidate),
@@ -229,12 +216,12 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 		if (channelSignal(context) || deliverySignal(context)) {
 			return true;
 		}
-		return containsAny(context, "notify", "notification", "alert", "pipeline status")
+		return AnalysisSupport.containsAny(context, "notify", "notification", "alert", "pipeline status")
 				&& (context.contains("curl") || context.contains("webhook") || context.contains("post"));
 	}
 
 	private boolean channelSignal(String context) {
-		return containsAny(
+		return AnalysisSupport.containsAny(
 				context,
 				"slack",
 				"chat.postmessage",
@@ -254,7 +241,7 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean deliverySignal(String context) {
-		return containsAny(
+		return AnalysisSupport.containsAny(
 				context,
 				"hooks.slack.com/services",
 				"slack_webhook",
@@ -274,8 +261,8 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean explicitWebhookPost(String context) {
-		return containsAny(context, "webhook", "hooks.slack.com", "discord.com/api/webhooks", "office.com/webhook")
-				&& containsAny(context, "curl", "post", "-x post", "--request post");
+		return AnalysisSupport.containsAny(context, "webhook", "hooks.slack.com", "discord.com/api/webhooks", "office.com/webhook")
+				&& AnalysisSupport.containsAny(context, "curl", "post", "-x post", "--request post");
 	}
 
 	private Optional<String> conditionEvidence(NotificationCandidate candidate) {
@@ -288,15 +275,15 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 		if (statusConditionText(candidate.job().condition())) {
 			return Optional.of(candidate.job().condition());
 		}
-		if (containsAny(candidate.context(), "on_failure", "failure()", "always()", "cancelled()", "success()")) {
+		if (AnalysisSupport.containsAny(candidate.context(), "on_failure", "failure()", "always()", "cancelled()", "success()")) {
 			return Optional.of(candidate.evidence());
 		}
 		return Optional.empty();
 	}
 
 	private boolean statusConditionText(String value) {
-		String text = lower(value);
-		return containsAny(text, "failure()", "always()", "cancelled()", "success()", "on_failure", "failed", "failure");
+		String text = AnalysisSupport.lower(value);
+		return AnalysisSupport.containsAny(text, "failure()", "always()", "cancelled()", "success()", "on_failure", "failed", "failure");
 	}
 
 	private String conditionLocation(NotificationCandidate candidate) {
@@ -313,23 +300,23 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private String contextEvidence(NotificationCandidate candidate) {
-		if (hasText(candidate.job().stage()) && containsAny(lower(candidate.job().stage()), "deploy", "release")) {
+		if (AnalysisSupport.hasText(candidate.job().stage()) && AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().stage()), "deploy", "release")) {
 			return "stage: " + candidate.job().stage();
 		}
-		if (containsAny(lower(candidate.job().id()), "deploy", "release", "notify", "notification")) {
+		if (AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().id()), "deploy", "release", "notify", "notification")) {
 			return candidate.job().id();
 		}
 		return candidate.evidence();
 	}
 
 	private String evidence(PipelineStep step) {
-		if (hasText(step.uses())) {
+		if (AnalysisSupport.hasText(step.uses())) {
 			return step.uses();
 		}
-		if (hasText(step.command())) {
+		if (AnalysisSupport.hasText(step.command())) {
 			return step.command();
 		}
-		if (hasText(step.details())) {
+		if (AnalysisSupport.hasText(step.details())) {
 			return step.details();
 		}
 		return step.location();
@@ -340,47 +327,6 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 			return Confidence.HIGH;
 		}
 		return Confidence.MEDIUM;
-	}
-
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
-	}
-
-	private boolean containsAny(String text, String... needles) {
-		for (String needle : needles) {
-			if (text.contains(needle)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private boolean hasText(String value) {
-		return value != null && !value.isBlank();
-	}
-
-	private String value(String value) {
-		return value == null ? "" : value;
-	}
-
-	private String lower(String value) {
-		return value == null ? "" : value.toLowerCase(Locale.ROOT);
 	}
 
 	private record NotificationCandidate(

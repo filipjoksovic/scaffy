@@ -2,7 +2,6 @@ package com.scaffy.backend.analyze;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import org.springframework.core.annotation.Order;
@@ -88,7 +87,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 		List<CommandMatch> formatterMatches = CommandMatcher.findMatches(document, FORMATTER_RULES);
 		List<CommandMatch> typeDeepMatches = codeAnalysisContext(document, CommandMatcher.findMatches(document, TYPE_DEEP_ANALYSIS_RULES));
 		List<DetectedPractice> actionMatches = actionMatches(document);
-		List<CommandMatch> allAnalysisMatches = allMatches(codeAnalysisMatches, formatterMatches, typeDeepMatches);
+		List<CommandMatch> allAnalysisMatches = AnalysisSupport.distinct(codeAnalysisMatches, formatterMatches, typeDeepMatches);
 		if (allAnalysisMatches.isEmpty() && actionMatches.isEmpty()) {
 			return missingAnalysis();
 		}
@@ -142,12 +141,12 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 			missing.add(MISSING_AUTOMATIC_TRIGGER);
 		}
 
-		double roundedScore = round(score);
+		double roundedScore = AnalysisSupport.round(score);
 		return new DimensionAnalysis(
 				dimension(),
 				roundedScore,
-				level(roundedScore),
-				roundedScore >= 0.8 ? AnalysisStatus.COMPLETE : AnalysisStatus.PARTIAL,
+				AnalysisSupport.level(roundedScore),
+				AnalysisSupport.status(roundedScore),
 				confidence(automaticTrigger.isPresent(), reportOutput.isPresent()),
 				detected,
 				missing);
@@ -173,19 +172,6 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 		return codeAnalysisContext(document, CommandMatcher.findMatches(document, CODE_ANALYSIS_RULES));
 	}
 
-	@SafeVarargs
-	private final List<CommandMatch> allMatches(List<CommandMatch>... matchGroups) {
-		List<CommandMatch> matches = new ArrayList<>();
-		for (List<CommandMatch> matchGroup : matchGroups) {
-			for (CommandMatch match : matchGroup) {
-				if (!matches.contains(match)) {
-					matches.add(match);
-				}
-			}
-		}
-		return matches;
-	}
-
 	private List<CommandMatch> codeAnalysisContext(PipelineDocument document, List<CommandMatch> matches) {
 		List<CommandMatch> filtered = new ArrayList<>();
 		for (CommandMatch match : matches) {
@@ -197,15 +183,15 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean semgrep(CommandMatch match) {
-		return lower(match.evidence()).contains("semgrep");
+		return AnalysisSupport.lower(match.evidence()).contains("semgrep");
 	}
 
 	private boolean codeAnalysisSemgrepContext(CommandMatch match) {
-		String context = lower(match.evidence() + " " + match.job().id() + " " + match.job().name() + " " + match.job().stage());
-		if (containsAny(context, "sast", "security", "vulnerab", "secret", "dependency", "scan")) {
+		String context = AnalysisSupport.lower(match.evidence() + " " + match.job().id() + " " + match.job().name() + " " + match.job().stage());
+		if (AnalysisSupport.containsAny(context, "sast", "security", "vulnerab", "secret", "dependency", "scan")) {
 			return false;
 		}
-		return containsAny(context, "lint", "static", "quality", "analysis", "analyze", "semgrep");
+		return AnalysisSupport.containsAny(context, "lint", "static", "quality", "analysis", "analyze", "semgrep");
 	}
 
 	private Optional<DetectedPractice> lintStaticPractice(
@@ -233,7 +219,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean deeperAction(String evidence) {
-		String action = lower(evidence);
+		String action = AnalysisSupport.lower(evidence);
 		return action.contains("sonarsource/")
 				|| action.contains("golangci/golangci-lint-action")
 				|| action.contains("reviewdog/");
@@ -255,7 +241,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 		if (step.uses() == null) {
 			return false;
 		}
-		String uses = lower(step.uses());
+		String uses = AnalysisSupport.lower(step.uses());
 		return uses.startsWith("github/super-linter")
 				|| uses.startsWith("super-linter/super-linter")
 				|| uses.startsWith("sonarsource/sonarqube-scan-action")
@@ -280,7 +266,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 			}
 		}
 		for (DetectedPractice actionMatch : actionMatches) {
-			if (containsAny(lower(actionMatch.evidence()), "sonar", "reviewdog")) {
+			if (AnalysisSupport.containsAny(AnalysisSupport.lower(actionMatch.evidence()), "sonar", "reviewdog")) {
 				return Optional.of(new DetectedPractice(
 						PRACTICE_REPORT_OUTPUT_DETECTED,
 						actionMatch.evidence(),
@@ -291,19 +277,19 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean codeQualityOutput(PipelineOutput output) {
-		return containsAny(lower(output.type() + " " + output.evidence()), "codequality", "code-quality", "code quality");
+		return AnalysisSupport.containsAny(AnalysisSupport.lower(output.type() + " " + output.evidence()), "codequality", "code-quality", "code quality");
 	}
 
 	private boolean codeQualityJob(PipelineJob job) {
-		return containsAny(lower(job.id() + " " + job.name() + " " + job.stage()), "quality", "lint", "static", "analysis");
+		return AnalysisSupport.containsAny(AnalysisSupport.lower(job.id() + " " + job.name() + " " + job.stage()), "quality", "lint", "static", "analysis");
 	}
 
 	private boolean codeQualityUploadAction(PipelineStep step) {
 		if (step.uses() == null) {
 			return false;
 		}
-		String uses = lower(step.uses());
-		return uses.startsWith("actions/upload-artifact") && containsAny(lower(step.location()), "quality", "lint", "analysis");
+		String uses = AnalysisSupport.lower(step.uses());
+		return uses.startsWith("actions/upload-artifact") && AnalysisSupport.containsAny(AnalysisSupport.lower(step.location()), "quality", "lint", "analysis");
 	}
 
 	private Optional<DetectedPractice> automaticTrigger(PipelineDocument document, List<CommandMatch> codeAnalysisMatches) {
@@ -337,39 +323,6 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 			return Confidence.HIGH;
 		}
 		return Confidence.MEDIUM;
-	}
-
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
-	}
-
-	private boolean containsAny(String text, String... needles) {
-		for (String needle : needles) {
-			if (text.contains(needle)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private String lower(String value) {
-		return value == null ? "" : value.toLowerCase(Locale.ROOT);
 	}
 
 }

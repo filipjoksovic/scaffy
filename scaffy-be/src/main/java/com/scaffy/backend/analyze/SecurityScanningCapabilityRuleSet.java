@@ -2,7 +2,6 @@ package com.scaffy.backend.analyze;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import org.springframework.core.annotation.Order;
@@ -77,7 +76,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 		List<CommandMatch> secretMatches = CommandMatcher.findMatches(document, SECRET_RULES);
 		List<CommandMatch> containerIacMatches = CommandMatcher.findMatches(document, CONTAINER_IAC_RULES);
 		List<DetectedPractice> actionMatches = actionMatches(document);
-		List<DetectedPractice> reportOutputs = reportOutputs(document, allMatches(sastMatches, dependencyMatches, secretMatches, containerIacMatches));
+		List<DetectedPractice> reportOutputs = reportOutputs(document, AnalysisSupport.distinct(sastMatches, dependencyMatches, secretMatches, containerIacMatches));
 
 		if (sastMatches.isEmpty()
 				&& dependencyMatches.isEmpty()
@@ -119,7 +118,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			missing.add(MISSING_SECRET);
 		}
 
-			Optional<DetectedPractice> containerIac = containerIac(containerIacMatches, reportOutputs, actionMatches);
+		Optional<DetectedPractice> containerIac = containerIac(containerIacMatches, reportOutputs, actionMatches);
 		if (containerIac.isPresent()) {
 			score += CONTAINER_IAC_WEIGHT;
 			detected.add(containerIac.get());
@@ -137,7 +136,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			missing.add(MISSING_REPORT);
 		}
 
-		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, allMatches(sastMatches, dependencyMatches, secretMatches, containerIacMatches), reportOutputs);
+		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, AnalysisSupport.distinct(sastMatches, dependencyMatches, secretMatches, containerIacMatches), reportOutputs);
 		if (automaticTrigger.isPresent()) {
 			score += AUTOMATIC_TRIGGER_WEIGHT;
 			detected.add(automaticTrigger.get());
@@ -146,12 +145,12 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			missing.add(MISSING_AUTOMATIC_TRIGGER);
 		}
 
-		double roundedScore = round(score);
+		double roundedScore = AnalysisSupport.round(score);
 		return new DimensionAnalysis(
 				dimension(),
 				roundedScore,
-				level(roundedScore),
-				roundedScore >= 0.8 ? AnalysisStatus.COMPLETE : AnalysisStatus.PARTIAL,
+				AnalysisSupport.level(roundedScore),
+				AnalysisSupport.status(roundedScore),
 				confidence(automaticTrigger.isPresent(), report.isPresent()),
 				detected,
 				missing);
@@ -183,10 +182,10 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			return Optional.of(new DetectedPractice(PRACTICE_SAST_DETECTED, match.evidence(), match.location()));
 		}
 		return actionMatches.stream()
-				.filter(action -> containsAny(lower(action.evidence()), "github/codeql-action", "semgrep"))
+				.filter(action -> AnalysisSupport.containsAny(AnalysisSupport.lower(action.evidence()), "github/codeql-action", "semgrep"))
 				.findFirst()
 				.or(() -> reportOutputs.stream()
-						.filter(output -> containsAny(lower(output.evidence()), "sast"))
+						.filter(output -> AnalysisSupport.containsAny(AnalysisSupport.lower(output.evidence()), "sast"))
 						.findFirst())
 				.map(practice -> new DetectedPractice(PRACTICE_SAST_DETECTED, practice.evidence(), practice.location()));
 	}
@@ -200,10 +199,10 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			return Optional.of(new DetectedPractice(PRACTICE_DEPENDENCY_DETECTED, match.evidence(), match.location()));
 		}
 		return actionMatches.stream()
-				.filter(action -> containsAny(lower(action.evidence()), "dependency-review-action", "snyk/actions"))
+				.filter(action -> AnalysisSupport.containsAny(AnalysisSupport.lower(action.evidence()), "dependency-review-action", "snyk/actions"))
 				.findFirst()
 				.or(() -> reportOutputs.stream()
-						.filter(output -> containsAny(lower(output.evidence()), "dependency_scanning"))
+						.filter(output -> AnalysisSupport.containsAny(AnalysisSupport.lower(output.evidence()), "dependency_scanning"))
 						.findFirst())
 				.map(practice -> new DetectedPractice(PRACTICE_DEPENDENCY_DETECTED, practice.evidence(), practice.location()));
 	}
@@ -214,7 +213,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			return Optional.of(new DetectedPractice(PRACTICE_SECRET_DETECTED, match.evidence(), match.location()));
 		}
 		return reportOutputs.stream()
-				.filter(output -> lower(output.evidence()).contains("secret_detection"))
+				.filter(output -> AnalysisSupport.lower(output.evidence()).contains("secret_detection"))
 				.findFirst()
 				.map(output -> new DetectedPractice(PRACTICE_SECRET_DETECTED, output.evidence(), output.location()));
 	}
@@ -228,10 +227,10 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			return Optional.of(new DetectedPractice(PRACTICE_CONTAINER_IAC_DETECTED, match.evidence(), match.location()));
 		}
 		return actionMatches.stream()
-				.filter(action -> containsAny(lower(action.evidence()), "trivy-action", "anchore/scan-action", "snyk/actions/docker"))
+				.filter(action -> AnalysisSupport.containsAny(AnalysisSupport.lower(action.evidence()), "trivy-action", "anchore/scan-action", "snyk/actions/docker"))
 				.findFirst()
 				.or(() -> reportOutputs.stream()
-						.filter(output -> lower(output.evidence()).contains("container_scanning"))
+						.filter(output -> AnalysisSupport.lower(output.evidence()).contains("container_scanning"))
 						.findFirst())
 				.map(output -> new DetectedPractice(PRACTICE_CONTAINER_IAC_DETECTED, output.evidence(), output.location()));
 	}
@@ -240,7 +239,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 		return reportOutputs.stream()
 				.findFirst()
 				.or(() -> actionMatches.stream()
-						.filter(action -> lower(action.evidence()).contains("upload-sarif"))
+						.filter(action -> AnalysisSupport.lower(action.evidence()).contains("upload-sarif"))
 						.findFirst()
 						.map(action -> new DetectedPractice(PRACTICE_REPORT_DETECTED, action.evidence(), action.location())));
 	}
@@ -248,7 +247,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	private List<CommandMatch> securityContext(List<CommandMatch> matches) {
 		List<CommandMatch> filtered = new ArrayList<>();
 		for (CommandMatch match : matches) {
-			String evidence = lower(match.evidence());
+			String evidence = AnalysisSupport.lower(match.evidence());
 			if ((!evidence.contains("semgrep") && !evidence.contains("sonar-scanner")) || securitySpecificContext(match)) {
 				filtered.add(match);
 			}
@@ -257,29 +256,16 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean securitySpecificContext(CommandMatch match) {
-		String context = lower(context(match.job(), match.step()));
-		return containsAny(context, "security", "sast", "vulnerability", "vulnerable", "secret", "dependency", "scan");
-	}
-
-	@SafeVarargs
-	private final List<CommandMatch> allMatches(List<CommandMatch>... matchGroups) {
-		List<CommandMatch> matches = new ArrayList<>();
-		for (List<CommandMatch> matchGroup : matchGroups) {
-			for (CommandMatch match : matchGroup) {
-				if (!matches.contains(match)) {
-					matches.add(match);
-				}
-			}
-		}
-		return matches;
+		String context = AnalysisSupport.lower(AnalysisSupport.context(match.job(), match.step()));
+		return AnalysisSupport.containsAny(context, "security", "sast", "vulnerability", "vulnerable", "secret", "dependency", "scan");
 	}
 
 	private List<DetectedPractice> actionMatches(PipelineDocument document) {
 		List<DetectedPractice> matches = new ArrayList<>();
 		for (PipelineJob job : document.jobs()) {
 			for (PipelineStep step : job.steps()) {
-				String uses = lower(step.uses());
-				String context = lower(context(job, step));
+				String uses = AnalysisSupport.lower(step.uses());
+				String context = AnalysisSupport.lower(AnalysisSupport.context(job, step));
 				if (uses.startsWith("github/codeql-action/upload-sarif")) {
 					matches.add(new DetectedPractice(PRACTICE_REPORT_DETECTED, step.uses(), step.location()));
 				}
@@ -298,7 +284,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 						|| uses.startsWith("ossf/scorecard-action")) {
 					matches.add(new DetectedPractice(PRACTICE_DEPENDENCY_DETECTED, step.uses(), step.location()));
 				}
-				else if (uses.contains("semgrep") && containsAny(context, "security", "sast", "vulnerability", "secret", "scan")) {
+				else if (uses.contains("semgrep") && AnalysisSupport.containsAny(context, "security", "sast", "vulnerability", "secret", "scan")) {
 					matches.add(new DetectedPractice(PRACTICE_SAST_DETECTED, step.uses(), step.location()));
 				}
 			}
@@ -324,8 +310,8 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean securityReport(PipelineOutput output) {
-		return containsAny(
-				lower(output.type() + " " + output.evidence()),
+		return AnalysisSupport.containsAny(
+				AnalysisSupport.lower(output.type() + " " + output.evidence()),
 				"sast",
 				"dependency_scanning",
 				"container_scanning",
@@ -333,15 +319,15 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean securityJob(PipelineJob job) {
-		return containsAny(lower(job.id() + " " + job.name() + " " + job.stage()), "security", "sast", "vulnerability", "secret", "scan");
+		return AnalysisSupport.containsAny(AnalysisSupport.lower(job.id() + " " + job.name() + " " + job.stage()), "security", "sast", "vulnerability", "secret", "scan");
 	}
 
 	private boolean securitySarifUpload(PipelineStep step) {
-		return step.uses() != null && lower(step.uses()).startsWith("github/codeql-action/upload-sarif");
+		return step.uses() != null && AnalysisSupport.lower(step.uses()).startsWith("github/codeql-action/upload-sarif");
 	}
 
 	private boolean securityArtifactUpload(PipelineJob job, PipelineStep step) {
-		return step.uses() != null && lower(step.uses()).startsWith("actions/upload-artifact") && securityJob(job);
+		return step.uses() != null && AnalysisSupport.lower(step.uses()).startsWith("actions/upload-artifact") && securityJob(job);
 	}
 
 	private Optional<DetectedPractice> automaticTrigger(
@@ -389,63 +375,10 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 		return Optional.empty();
 	}
 
-	private String context(PipelineJob job, PipelineStep step) {
-		return String.join(
-				" ",
-				value(job.id()),
-				value(job.name()),
-				value(job.stage()),
-				value(job.condition()),
-				value(job.when()),
-				value(job.details()),
-				value(step.name()),
-				value(step.condition()),
-				value(step.details()),
-				value(step.command()),
-				value(step.uses()));
-	}
-
 	private Confidence confidence(boolean automaticTriggerDetected, boolean reportDetected) {
 		if (automaticTriggerDetected || reportDetected) {
 			return Confidence.HIGH;
 		}
 		return Confidence.MEDIUM;
-	}
-
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
-	}
-
-	private boolean containsAny(String text, String... needles) {
-		for (String needle : needles) {
-			if (text.contains(needle)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private String value(String value) {
-		return value == null ? "" : value;
-	}
-
-	private String lower(String value) {
-		return value == null ? "" : value.toLowerCase(Locale.ROOT);
 	}
 }
