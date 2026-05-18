@@ -35,14 +35,14 @@ final class YamlSupport {
 	}
 
 	static Optional<Map<Object, Object>> asMap(Object value) {
-		if (!Map.class.isInstance(value)) {
+		if (!(value instanceof Map)) {
 			return Optional.empty();
 		}
 		return Optional.of(castMap(value));
 	}
 
 	static Optional<List<Object>> asList(Object value) {
-		if (!List.class.isInstance(value)) {
+		if (!(value instanceof List)) {
 			return Optional.empty();
 		}
 		return Optional.of(castList(value));

@@ -10,7 +10,7 @@ export function AppFrame({ children }: AppFrameProps) {
     <main className="app-shell">
       <nav aria-label="Primary" className="top-nav">
         <Link aria-label="Scaffy home" className="wordmark" to="/">
-          <span aria-hidden="true" className="wordmark-mark" />
+          <span aria-hidden="true" className="wordmark-mark" />{" "}
           Scaffy
         </Link>
         <div className="nav-links">

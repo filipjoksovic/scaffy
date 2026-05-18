@@ -20,7 +20,7 @@ public class YamlPipelineParser {
 			if (loaded == null) {
 				throw PipelineAnalysisException.invalidUpload("Uploaded pipeline file must not be empty.");
 			}
-			if (!Map.class.isInstance(loaded)) {
+			if (!(loaded instanceof Map)) {
 				throw unsupportedProvider();
 			}
 			return rootMap(loaded);

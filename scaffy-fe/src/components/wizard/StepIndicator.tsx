@@ -9,8 +9,14 @@ export function StepIndicator({ current, onJump, steps }: StepIndicatorProps) {
     <ol aria-label="Wizard progress" className="step-indicator">
       {steps.map((label, index) => {
         const stepNumber = index + 1
-        const state =
-          stepNumber < current ? 'done' : stepNumber === current ? 'current' : 'pending'
+        let state: 'done' | 'current' | 'pending'
+        if (stepNumber < current) {
+          state = 'done'
+        } else if (stepNumber === current) {
+          state = 'current'
+        } else {
+          state = 'pending'
+        }
         const reachable = stepNumber <= current
 
         return (

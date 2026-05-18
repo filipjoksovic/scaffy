@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class GitLabCiParser implements PipelineProviderParser {
 
 	private static final String WORKFLOW = "workflow";
+	private static final String RULES = "rules";
 	private static final String JOBS_LOCATION_PREFIX = "jobs.";
 
 	private static final Set<String> RESERVED_TOP_LEVEL_KEYS = Set.of(
@@ -50,7 +51,7 @@ public class GitLabCiParser implements PipelineProviderParser {
 	}
 
 	private void collectMergeRequestTriggers(Map<Object, Object> candidate, String baseLocation, List<PipelineTrigger> triggers) {
-		Object rules = YamlSupport.value(candidate, "rules").orElse(null);
+		Object rules = YamlSupport.value(candidate, RULES).orElse(null);
 		List<Object> ruleList = YamlSupport.asList(rules).orElse(List.of());
 		for (int i = 0; i < ruleList.size(); i++) {
 			addMergeRequestTrigger(ruleList.get(i), baseLocation, i, triggers);
@@ -194,7 +195,7 @@ public class GitLabCiParser implements PipelineProviderParser {
 			return true;
 		}
 
-		Object rules = YamlSupport.value(jobMap, "rules").orElse(null);
+		Object rules = YamlSupport.value(jobMap, RULES).orElse(null);
 		List<Object> ruleList = YamlSupport.asList(rules).orElse(List.of());
 		if (ruleList.isEmpty()) {
 			return false;
@@ -216,7 +217,7 @@ public class GitLabCiParser implements PipelineProviderParser {
 	}
 
 	private String rulesText(Map<Object, Object> jobMap) {
-		return YamlSupport.value(jobMap, "rules")
+		return YamlSupport.value(jobMap, RULES)
 				.map(YamlSupport::asString)
 				.filter(value -> !value.isBlank())
 				.orElse(null);

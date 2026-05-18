@@ -30,6 +30,10 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String MISSING_PIPELINE_CONTEXT = "No deployment or pipeline-result notification context detected";
 	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic notification trigger detected";
 
+	private static final String KEYWORD_DEPLOY = "deploy";
+	private static final String KEYWORD_RELEASE = "release";
+	private static final String OFFICE_COM_WEBHOOK = "office.com/webhook";
+
 	private static final List<CommandRule> DEPLOYMENT_RULES = List.of(
 			CommandRule.of("Kubernetes", "(?:^|[;&|\\n]\\s*)(?<cmd>kubectl\\s+(?:apply|patch|set\\s+image|rollout\\s+(?:restart|undo|status))\\b[^\\n;&|]*)"),
 			CommandRule.of("Helm", "(?:^|[;&|\\n]\\s*)(?<cmd>helm\\s+(?:upgrade|install)\\b[^\\n;&|]*)"),
@@ -168,7 +172,7 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 
 	private Optional<DetectedPractice> pipelineContext(PipelineDocument document, List<NotificationCandidate> candidates) {
 		for (NotificationCandidate candidate : candidates) {
-			if (AnalysisSupport.containsAny(candidate.context(), "deploy", "deployment", "release", "pipeline", "workflow", "status")) {
+			if (AnalysisSupport.containsAny(candidate.context(), KEYWORD_DEPLOY, "deployment", KEYWORD_RELEASE, "pipeline", "workflow", "status")) {
 				return Optional.of(new DetectedPractice(
 						PRACTICE_PIPELINE_CONTEXT_DETECTED,
 						contextEvidence(candidate),
@@ -230,7 +234,7 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 				"rtcamp/action-slack-notify",
 				"teams",
 				"msteams",
-				"office.com/webhook",
+				OFFICE_COM_WEBHOOK,
 				"discord",
 				"sendgrid",
 				"sendmail",
@@ -248,7 +252,7 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 				"slack_webhook_url",
 				"msteams_webhook",
 				"teams_webhook",
-				"office.com/webhook",
+				OFFICE_COM_WEBHOOK,
 				"discord_webhook",
 				"discord.com/api/webhooks",
 				"webhook_url",
@@ -261,7 +265,7 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean explicitWebhookPost(String context) {
-		return AnalysisSupport.containsAny(context, "webhook", "hooks.slack.com", "discord.com/api/webhooks", "office.com/webhook")
+		return AnalysisSupport.containsAny(context, "webhook", "hooks.slack.com", "discord.com/api/webhooks", OFFICE_COM_WEBHOOK)
 				&& AnalysisSupport.containsAny(context, "curl", "post", "-x post", "--request post");
 	}
 
@@ -300,10 +304,10 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private String contextEvidence(NotificationCandidate candidate) {
-		if (AnalysisSupport.hasText(candidate.job().stage()) && AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().stage()), "deploy", "release")) {
+		if (AnalysisSupport.hasText(candidate.job().stage()) && AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().stage()), KEYWORD_DEPLOY, KEYWORD_RELEASE)) {
 			return "stage: " + candidate.job().stage();
 		}
-		if (AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().id()), "deploy", "release", "notify", "notification")) {
+		if (AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().id()), KEYWORD_DEPLOY, KEYWORD_RELEASE, "notify", "notification")) {
 			return candidate.job().id();
 		}
 		return candidate.evidence();

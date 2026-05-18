@@ -33,6 +33,11 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String MISSING_REPORT = "No security report or artifact detected";
 	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic security scanning trigger detected";
 
+	private static final String TOOL_SEMGREP = "semgrep";
+	private static final String KEYWORD_VULNERABILITY = "vulnerability";
+	private static final String KEYWORD_SECRET = "secret";
+	private static final String KEYWORD_SECURITY = "security";
+
 	private static final List<CommandRule> SAST_RULES = List.of(
 			CommandRule.of("Semgrep", "(?:^|[;&|\\n]\\s*)(?<cmd>semgrep\\b[^\\n;&|]*)"),
 			CommandRule.of("Sonar", "(?:^|[;&|\\n]\\s*)(?<cmd>sonar-scanner\\b[^\\n;&|]*)"),
@@ -182,7 +187,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			return Optional.of(new DetectedPractice(PRACTICE_SAST_DETECTED, match.evidence(), match.location()));
 		}
 		return actionMatches.stream()
-				.filter(action -> AnalysisSupport.containsAny(AnalysisSupport.lower(action.evidence()), "github/codeql-action", "semgrep"))
+				.filter(action -> AnalysisSupport.containsAny(AnalysisSupport.lower(action.evidence()), "github/codeql-action", TOOL_SEMGREP))
 				.findFirst()
 				.or(() -> reportOutputs.stream()
 						.filter(output -> AnalysisSupport.containsAny(AnalysisSupport.lower(output.evidence()), "sast"))
@@ -248,7 +253,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 		List<CommandMatch> filtered = new ArrayList<>();
 		for (CommandMatch match : matches) {
 			String evidence = AnalysisSupport.lower(match.evidence());
-			if ((!evidence.contains("semgrep") && !evidence.contains("sonar-scanner")) || securitySpecificContext(match)) {
+			if ((!evidence.contains(TOOL_SEMGREP) && !evidence.contains("sonar-scanner")) || securitySpecificContext(match)) {
 				filtered.add(match);
 			}
 		}
@@ -257,7 +262,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 
 	private boolean securitySpecificContext(CommandMatch match) {
 		String context = AnalysisSupport.lower(AnalysisSupport.context(match.job(), match.step()));
-		return AnalysisSupport.containsAny(context, "security", "sast", "vulnerability", "vulnerable", "secret", "dependency", "scan");
+		return AnalysisSupport.containsAny(context, KEYWORD_SECURITY, "sast", KEYWORD_VULNERABILITY, "vulnerable", KEYWORD_SECRET, "dependency", "scan");
 	}
 
 	private List<DetectedPractice> actionMatches(PipelineDocument document) {
@@ -284,7 +289,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 						|| uses.startsWith("ossf/scorecard-action")) {
 					matches.add(new DetectedPractice(PRACTICE_DEPENDENCY_DETECTED, step.uses(), step.location()));
 				}
-				else if (uses.contains("semgrep") && AnalysisSupport.containsAny(context, "security", "sast", "vulnerability", "secret", "scan")) {
+				else if (uses.contains(TOOL_SEMGREP) && AnalysisSupport.containsAny(context, KEYWORD_SECURITY, "sast", KEYWORD_VULNERABILITY, KEYWORD_SECRET, "scan")) {
 					matches.add(new DetectedPractice(PRACTICE_SAST_DETECTED, step.uses(), step.location()));
 				}
 			}
@@ -319,7 +324,7 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean securityJob(PipelineJob job) {
-		return AnalysisSupport.containsAny(AnalysisSupport.lower(job.id() + " " + job.name() + " " + job.stage()), "security", "sast", "vulnerability", "secret", "scan");
+		return AnalysisSupport.containsAny(AnalysisSupport.lower(job.id() + " " + job.name() + " " + job.stage()), KEYWORD_SECURITY, "sast", KEYWORD_VULNERABILITY, KEYWORD_SECRET, "scan");
 	}
 
 	private boolean securitySarifUpload(PipelineStep step) {

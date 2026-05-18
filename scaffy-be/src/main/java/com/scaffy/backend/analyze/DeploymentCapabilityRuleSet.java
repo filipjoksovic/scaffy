@@ -162,7 +162,7 @@ public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 
 	private Optional<String> inferredEnvironment(PipelineJob job) {
 		String stage = lower(job.stage());
-		if ("deploy".equals(stage) || "deployment".equals(stage)) {
+		if ("deploy".equals(stage) || DIMENSION.equals(stage)) {
 			return Optional.of("stage: " + job.stage());
 		}
 

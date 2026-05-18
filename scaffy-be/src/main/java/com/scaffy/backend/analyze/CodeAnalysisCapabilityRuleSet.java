@@ -37,6 +37,9 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String MISSING_REPORT_OUTPUT = "No code quality report or artifact detected";
 	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic code analysis trigger detected";
 
+	private static final String KEYWORD_ANALYSIS = "analysis";
+	private static final String KEYWORD_QUALITY = "quality";
+
 	private static final List<CommandRule> CODE_ANALYSIS_RULES = List.of(
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+run\\s+lint(?::[\\w-]+)?\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>yarn\\s+(?:run\\s+)?lint(?::[\\w-]+)?\\b[^\\n;&|]*)"),
@@ -85,7 +88,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	public DimensionAnalysis analyze(PipelineDocument document) {
 		List<CommandMatch> codeAnalysisMatches = codeAnalysisMatches(document);
 		List<CommandMatch> formatterMatches = CommandMatcher.findMatches(document, FORMATTER_RULES);
-		List<CommandMatch> typeDeepMatches = codeAnalysisContext(document, CommandMatcher.findMatches(document, TYPE_DEEP_ANALYSIS_RULES));
+		List<CommandMatch> typeDeepMatches = codeAnalysisContext(CommandMatcher.findMatches(document, TYPE_DEEP_ANALYSIS_RULES));
 		List<DetectedPractice> actionMatches = actionMatches(document);
 		List<CommandMatch> allAnalysisMatches = AnalysisSupport.distinct(codeAnalysisMatches, formatterMatches, typeDeepMatches);
 		if (allAnalysisMatches.isEmpty() && actionMatches.isEmpty()) {
@@ -169,10 +172,10 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private List<CommandMatch> codeAnalysisMatches(PipelineDocument document) {
-		return codeAnalysisContext(document, CommandMatcher.findMatches(document, CODE_ANALYSIS_RULES));
+		return codeAnalysisContext(CommandMatcher.findMatches(document, CODE_ANALYSIS_RULES));
 	}
 
-	private List<CommandMatch> codeAnalysisContext(PipelineDocument document, List<CommandMatch> matches) {
+	private List<CommandMatch> codeAnalysisContext(List<CommandMatch> matches) {
 		List<CommandMatch> filtered = new ArrayList<>();
 		for (CommandMatch match : matches) {
 			if (!semgrep(match) || codeAnalysisSemgrepContext(match)) {
@@ -191,7 +194,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 		if (AnalysisSupport.containsAny(context, "sast", "security", "vulnerab", "secret", "dependency", "scan")) {
 			return false;
 		}
-		return AnalysisSupport.containsAny(context, "lint", "static", "quality", "analysis", "analyze", "semgrep");
+		return AnalysisSupport.containsAny(context, "lint", "static", KEYWORD_QUALITY, KEYWORD_ANALYSIS, "analyze", "semgrep");
 	}
 
 	private Optional<DetectedPractice> lintStaticPractice(
@@ -281,7 +284,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	}
 
 	private boolean codeQualityJob(PipelineJob job) {
-		return AnalysisSupport.containsAny(AnalysisSupport.lower(job.id() + " " + job.name() + " " + job.stage()), "quality", "lint", "static", "analysis");
+		return AnalysisSupport.containsAny(AnalysisSupport.lower(job.id() + " " + job.name() + " " + job.stage()), KEYWORD_QUALITY, "lint", "static", KEYWORD_ANALYSIS);
 	}
 
 	private boolean codeQualityUploadAction(PipelineStep step) {
@@ -289,7 +292,7 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 			return false;
 		}
 		String uses = AnalysisSupport.lower(step.uses());
-		return uses.startsWith("actions/upload-artifact") && AnalysisSupport.containsAny(AnalysisSupport.lower(step.location()), "quality", "lint", "analysis");
+		return uses.startsWith("actions/upload-artifact") && AnalysisSupport.containsAny(AnalysisSupport.lower(step.location()), KEYWORD_QUALITY, "lint", KEYWORD_ANALYSIS);
 	}
 
 	private Optional<DetectedPractice> automaticTrigger(PipelineDocument document, List<CommandMatch> codeAnalysisMatches) {

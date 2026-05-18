@@ -472,7 +472,7 @@ function HeroShaderCanvas() {
     }
   }, [])
 
-  return <canvas aria-hidden="true" className="landing-hero__shader" ref={canvasRef} />
+  return <canvas aria-hidden="true" className="landing-hero__shader" ref={canvasRef} tabIndex={-1} />
 }
 
 function createShader(gl: WebGLRenderingContext, type: number, source: string) {

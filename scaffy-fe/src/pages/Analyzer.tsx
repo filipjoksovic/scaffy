@@ -127,6 +127,7 @@ export function Analyzer() {
 
 function ReportPanel({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
   const [openSection, setOpenSection] = useState<string | null>('overall')
+  const issueSuffix = issueCount === 1 ? '' : 's'
 
   function toggleSection(section: string) {
     setOpenSection((current) => (current === section ? null : section))
@@ -153,7 +154,7 @@ function ReportPanel({ issueCount, report }: { issueCount: number; report: Analy
               <Badge>{formatLabel(report.overallStatus)}</Badge>
               <Badge>{formatLabel(report.overallConfidence)} confidence</Badge>
             </div>
-            <p>{issueCount === 0 ? 'No missing practices were reported.' : `${issueCount} issue${issueCount === 1 ? '' : 's'} found across analyzed dimensions.`}</p>
+            <p>{issueCount === 0 ? 'No missing practices were reported.' : `${issueCount} issue${issueSuffix} found across analyzed dimensions.`}</p>
           </div>
           <span className="accordion-chevron" aria-hidden="true">{openSection === 'overall' ? 'Hide' : 'Show'}</span>
         </button>

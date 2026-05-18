@@ -30,17 +30,19 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String MISSING_VERSIONING = "No artifact identity or versioning detected";
 	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic artifact trigger detected";
 
+	private static final String ECOSYSTEM_DOCKER_IMAGE = "Docker image";
+
 	private static final List<CommandRule> ARTIFACT_OUTPUT_RULES = List.of(
 			CommandRule.of("Archive", "(?:^|[;&|\\n]\\s*)(?<cmd>zip\\b[^\\n;&|]*)"),
 			CommandRule.of("Archive", "(?:^|[;&|\\n]\\s*)(?<cmd>tar\\b[^\\n;&|]*)"),
 			CommandRule.of("Java archive", "(?:^|[;&|\\n]\\s*)(?<cmd>jar\\b[^\\n;&|]*(?:\\b-c\\b|\\bcf\\b|\\bcvf\\b)[^\\n;&|]*)"),
 			CommandRule.of(".NET", "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+publish\\b[^\\n;&|]*)"),
 			CommandRule.of("Python", "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+build\\b[^\\n;&|]*)"),
-			CommandRule.of("Docker image", "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:buildx\\s+build|build)\\b[^\\n;&|]*)"));
+			CommandRule.of(ECOSYSTEM_DOCKER_IMAGE, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:buildx\\s+build|build)\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> REGISTRY_PUBLISH_RULES = List.of(
-			CommandRule.of("Docker image", "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+push\\b[^\\n;&|]*)"),
-			CommandRule.of("Docker image", "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+buildx\\s+build\\b[^\\n;&|]*--push[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_DOCKER_IMAGE, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+push\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_DOCKER_IMAGE, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+buildx\\s+build\\b[^\\n;&|]*--push[^\\n;&|]*)"),
 			CommandRule.of("npm", "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+publish\\b[^\\n;&|]*)"),
 			CommandRule.of("Maven", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdeploy\\b[^\\n;&|]*)"),
 			CommandRule.of("Gradle", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bpublish\\b[^\\n;&|]*)"),
@@ -48,7 +50,7 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of("Python", "(?:^|[;&|\\n]\\s*)(?<cmd>twine\\s+upload\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> ARTIFACT_REUSE_RULES = List.of(
-			CommandRule.of("Docker image", "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+pull\\b[^\\n;&|]*)"));
+			CommandRule.of(ECOSYSTEM_DOCKER_IMAGE, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+pull\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> VERSIONING_RULES = List.of(
 			CommandRule.of("Commit SHA", "(?:^|[;&|\\n]\\s*)(?<cmd>[^\\n;&|]*(?:\\$GITHUB_SHA|\\$CI_COMMIT_SHA|\\$CI_COMMIT_SHORT_SHA)[^\\n;&|]*)"),
