@@ -1,0 +1,38 @@
+# GitLab CI sample: explicit rollback stage triggered on deploy failure
+# Demonstrates ROLLBACK_SIGNAL_PRESENT for Deployment Automation dimension.
+stages:
+  - build
+  - deploy
+  - rollback
+
+build:
+  stage: build
+  image: bitnami/kubectl:1.31
+  script:
+    - docker build -t registry.example.com/api:$CI_COMMIT_SHA .
+    - docker push registry.example.com/api:$CI_COMMIT_SHA
+
+deploy:
+  stage: deploy
+  image: bitnami/kubectl:1.31
+  environment:
+    name: production
+    url: https://api.example.com
+  script:
+    - kubectl set image deployment/api api=registry.example.com/api:$CI_COMMIT_SHA
+    - kubectl rollout status deployment/api --timeout=300s
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+rollback:
+  stage: rollback
+  image: bitnami/kubectl:1.31
+  when: on_failure
+  needs:
+    - deploy
+  environment:
+    name: production
+    action: rollback
+  script:
+    - kubectl rollout undo deployment/api
+    - kubectl rollout status deployment/api --timeout=300s
