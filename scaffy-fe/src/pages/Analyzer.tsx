@@ -151,7 +151,7 @@ function ReportPanel({ issueCount, report }: { issueCount: number; report: Analy
             <div className="score-card__meta">
               <Badge>{formatProvider(report.provider)}</Badge>
               <Badge>Level {report.overallLevel}</Badge>
-              <Badge>{formatLabel(report.overallStatus)}</Badge>
+              <Badge className={statusBadgeClassName(report.overallStatus)}>{formatLabel(report.overallStatus)}</Badge>
               <Badge>{formatLabel(report.overallConfidence)} confidence</Badge>
             </div>
             <p>{issueCount === 0 ? 'No missing practices were reported.' : `${issueCount} issue${issueSuffix} found across analyzed dimensions.`}</p>
@@ -350,4 +350,8 @@ function formatLabel(value: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
+}
+
+function statusBadgeClassName(status: string): string | undefined {
+  return status === 'not_evaluated' ? 'badge--not-evaluated' : undefined
 }

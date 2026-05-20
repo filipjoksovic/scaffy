@@ -81,4 +81,37 @@ describe('analyzePipeline', () => {
 
     await expect(analyzePipeline(file)).rejects.toThrow('Request failed (500)')
   })
+
+  it('passes through dimensions marked as not_evaluated', async () => {
+    const notEvaluatedReport: AnalysisResponse = {
+      provider: 'github-actions',
+      overallScore: 0,
+      overallLevel: 1,
+      overallStatus: 'not_evaluated',
+      overallConfidence: 'low',
+      dimensions: [
+        {
+          dimension: 'security_integration',
+          score: 0,
+          level: 1,
+          status: 'not_evaluated',
+          confidence: 'low',
+          detectedPractices: [],
+          missingPractices: [],
+        },
+      ],
+    }
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(notEvaluatedReport),
+      }),
+    )
+
+    const file = new File(['name: ci'], 'ci.yml', { type: 'text/yaml' })
+
+    await expect(analyzePipeline(file)).resolves.toEqual(notEvaluatedReport)
+  })
 })

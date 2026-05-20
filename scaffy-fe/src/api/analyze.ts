@@ -1,6 +1,6 @@
 import { apiUrl, throwApiError } from './client'
 
-export type AnalysisStatus = 'missing' | 'partial' | 'complete' | (string & {})
+export type AnalysisStatus = 'missing' | 'partial' | 'complete' | 'not_evaluated' | (string & {})
 export type AnalysisConfidence = 'low' | 'medium' | 'high' | (string & {})
 export type PipelineProvider = 'github-actions' | 'gitlab-ci' | (string & {})
 

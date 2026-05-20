@@ -267,6 +267,12 @@
   gap: var(--space-base);
 }
 
+.badge.badge--not-evaluated {
+  background: transparent;
+  border: 1px dashed var(--color-hairline-strong);
+  color: var(--color-muted);
+}
+
 .overview-detail,
 .overview-grid,
 .detail-columns {
