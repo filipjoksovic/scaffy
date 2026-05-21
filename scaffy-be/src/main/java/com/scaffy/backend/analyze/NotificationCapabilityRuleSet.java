@@ -11,123 +11,51 @@ import org.springframework.stereotype.Component;
 @Order(40)
 public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 
-	private static final double CHANNEL_WEIGHT = 0.35;
-	private static final double STATUS_CONDITION_WEIGHT = 0.20;
-	private static final double DELIVERY_TARGET_WEIGHT = 0.15;
-	private static final double PIPELINE_CONTEXT_WEIGHT = 0.15;
-	private static final double AUTOMATIC_TRIGGER_WEIGHT = 0.15;
+	private static final String CAPABILITY_NOTIFICATION_CHANNEL = "Notification channel";
+	private static final String CAPABILITY_STATUS_ALERTING = "Status-based alerting";
 
-	private static final String DIMENSION = "notifications";
 	private static final String PRACTICE_CHANNEL_DETECTED = "Notification channel or integration detected";
 	private static final String PRACTICE_STATUS_CONDITION_DETECTED = "Failure or status notification condition detected";
 	private static final String PRACTICE_DELIVERY_TARGET_DETECTED = "External notification delivery target detected";
-	private static final String PRACTICE_PIPELINE_CONTEXT_DETECTED = "Deployment or pipeline-result notification context detected";
-	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic notification trigger detected";
 
-	private static final String MISSING_CHANNEL = "No notification channel or integration detected";
-	private static final String MISSING_STATUS_CONDITION = "No failure or status notification condition detected";
-	private static final String MISSING_DELIVERY_TARGET = "No external notification delivery target detected";
-	private static final String MISSING_PIPELINE_CONTEXT = "No deployment or pipeline-result notification context detected";
-	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic notification trigger detected";
-
-	private static final String KEYWORD_DEPLOY = "deploy";
-	private static final String KEYWORD_RELEASE = "release";
 	private static final String OFFICE_COM_WEBHOOK = "office.com/webhook";
-
-	private static final List<CommandRule> DEPLOYMENT_RULES = List.of(
-			CommandRule.of("Kubernetes", "(?:^|[;&|\\n]\\s*)(?<cmd>kubectl\\s+(?:apply|patch|set\\s+image|rollout\\s+(?:restart|undo|status))\\b[^\\n;&|]*)"),
-			CommandRule.of("Helm", "(?:^|[;&|\\n]\\s*)(?<cmd>helm\\s+(?:upgrade|install)\\b[^\\n;&|]*)"),
-			CommandRule.of("Docker", "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:compose\\s+up|stack\\s+deploy|service\\s+update)\\b[^\\n;&|]*)"),
-			CommandRule.of("Cloud", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:aws\\s+(?:ecs\\s+update-service|deploy\\s+create-deployment)|gcloud\\s+(?:run\\s+deploy|app\\s+deploy)|az\\s+(?:webapp\\s+deploy|containerapp\\s+update))\\b[^\\n;&|]*)"),
-			CommandRule.of("PaaS", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:firebase|vercel|netlify)\\s+deploy\\b[^\\n;&|]*)"));
 
 	@Override
 	public String dimension() {
-		return DIMENSION;
+		return "workflow_quality";
 	}
 
 	@Override
-	public DimensionAnalysis analyze(PipelineDocument document) {
+	public List<CapabilityFinding> detect(PipelineDocument document) {
+		List<CapabilityFinding> findings = new ArrayList<>();
 		List<NotificationCandidate> candidates = candidates(document);
+
+		// Notification channel
 		Optional<DetectedPractice> channel = channel(candidates);
-		Optional<DetectedPractice> deliveryTarget = deliveryTarget(candidates);
-
-		if (channel.isEmpty() && deliveryTarget.isEmpty()) {
-			return missingAnalysis();
-		}
-
-		double score = 0.0;
-		List<DetectedPractice> detected = new ArrayList<>();
-		List<String> missing = new ArrayList<>();
-
+		Optional<DetectedPractice> delivery = deliveryTarget(candidates);
 		if (channel.isPresent()) {
-			score += CHANNEL_WEIGHT;
-			detected.add(channel.get());
+			findings.add(CapabilityFinding.positive("NOTIFICATION_CHANNEL_PRESENT", dimension(), CAPABILITY_NOTIFICATION_CHANNEL,
+					channel.get().evidence(), channel.get().location()));
+		}
+		else if (delivery.isPresent()) {
+			findings.add(CapabilityFinding.positive("NOTIFICATION_CHANNEL_PRESENT", dimension(), CAPABILITY_NOTIFICATION_CHANNEL,
+					delivery.get().evidence(), delivery.get().location()));
 		}
 		else {
-			missing.add(MISSING_CHANNEL);
+			findings.add(CapabilityFinding.missing("NOTIFICATION_MISSING", dimension(), CAPABILITY_NOTIFICATION_CHANNEL));
 		}
 
+		// Status-based alerting
 		Optional<DetectedPractice> statusCondition = statusCondition(candidates);
 		if (statusCondition.isPresent()) {
-			score += STATUS_CONDITION_WEIGHT;
-			detected.add(statusCondition.get());
+			findings.add(CapabilityFinding.positive("STATUS_CONDITION_PRESENT", dimension(), CAPABILITY_STATUS_ALERTING,
+					statusCondition.get().evidence(), statusCondition.get().location()));
 		}
 		else {
-			missing.add(MISSING_STATUS_CONDITION);
+			findings.add(CapabilityFinding.missing("STATUS_CONDITION_MISSING", dimension(), CAPABILITY_STATUS_ALERTING));
 		}
 
-		if (deliveryTarget.isPresent()) {
-			score += DELIVERY_TARGET_WEIGHT;
-			detected.add(deliveryTarget.get());
-		}
-		else {
-			missing.add(MISSING_DELIVERY_TARGET);
-		}
-
-		Optional<DetectedPractice> pipelineContext = pipelineContext(document, candidates);
-		if (pipelineContext.isPresent()) {
-			score += PIPELINE_CONTEXT_WEIGHT;
-			detected.add(pipelineContext.get());
-		}
-		else {
-			missing.add(MISSING_PIPELINE_CONTEXT);
-		}
-
-		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, candidates);
-		if (automaticTrigger.isPresent()) {
-			score += AUTOMATIC_TRIGGER_WEIGHT;
-			detected.add(automaticTrigger.get());
-		}
-		else {
-			missing.add(MISSING_AUTOMATIC_TRIGGER);
-		}
-
-		double roundedScore = AnalysisSupport.round(score);
-		return new DimensionAnalysis(
-				dimension(),
-				roundedScore,
-				AnalysisSupport.level(roundedScore),
-				AnalysisSupport.status(roundedScore),
-				confidence(channel.isPresent(), statusCondition.isPresent(), deliveryTarget.isPresent()),
-				detected,
-				missing);
-	}
-
-	private DimensionAnalysis missingAnalysis() {
-		return new DimensionAnalysis(
-				dimension(),
-				0.0,
-				1,
-				AnalysisStatus.MISSING,
-				Confidence.HIGH,
-				List.of(),
-				List.of(
-						MISSING_CHANNEL,
-						MISSING_STATUS_CONDITION,
-						MISSING_DELIVERY_TARGET,
-						MISSING_PIPELINE_CONTEXT,
-						MISSING_AUTOMATIC_TRIGGER));
+		return findings;
 	}
 
 	private List<NotificationCandidate> candidates(PipelineDocument document) {
@@ -168,52 +96,6 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 				.filter(candidate -> deliverySignal(candidate.context()))
 				.findFirst()
 				.map(candidate -> new DetectedPractice(PRACTICE_DELIVERY_TARGET_DETECTED, candidate.evidence(), candidate.location()));
-	}
-
-	private Optional<DetectedPractice> pipelineContext(PipelineDocument document, List<NotificationCandidate> candidates) {
-		for (NotificationCandidate candidate : candidates) {
-			if (AnalysisSupport.containsAny(candidate.context(), KEYWORD_DEPLOY, "deployment", KEYWORD_RELEASE, "pipeline", "workflow", "status")) {
-				return Optional.of(new DetectedPractice(
-						PRACTICE_PIPELINE_CONTEXT_DETECTED,
-						contextEvidence(candidate),
-						candidate.job().location()));
-			}
-		}
-
-		List<CommandMatch> deployments = CommandMatcher.findMatches(document, DEPLOYMENT_RULES);
-		if (!deployments.isEmpty() && !candidates.isEmpty()) {
-			CommandMatch deployment = deployments.getFirst();
-			return Optional.of(new DetectedPractice(
-					PRACTICE_PIPELINE_CONTEXT_DETECTED,
-					deployment.evidence(),
-					deployment.location()));
-		}
-		return Optional.empty();
-	}
-
-	private Optional<DetectedPractice> automaticTrigger(PipelineDocument document, List<NotificationCandidate> candidates) {
-		if (document.provider() == PipelineProvider.GITHUB_ACTIONS) {
-			return document.triggers().stream()
-					.filter(PipelineTrigger::automatic)
-					.findFirst()
-					.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()));
-		}
-
-		Optional<NotificationCandidate> automaticCandidate = candidates.stream()
-				.filter(candidate -> !candidate.job().manualOnly())
-				.findFirst();
-		if (automaticCandidate.isEmpty()) {
-			return Optional.empty();
-		}
-
-		return document.triggers().stream()
-				.filter(PipelineTrigger::automatic)
-				.findFirst()
-				.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()))
-				.or(() -> automaticCandidate.map(candidate -> new DetectedPractice(
-						PRACTICE_AUTOMATIC_TRIGGER_DETECTED,
-						"non-manual GitLab CI notification job",
-						candidate.job().location())));
 	}
 
 	private boolean notificationContext(String context) {
@@ -303,16 +185,6 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 		return candidate.location();
 	}
 
-	private String contextEvidence(NotificationCandidate candidate) {
-		if (AnalysisSupport.hasText(candidate.job().stage()) && AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().stage()), KEYWORD_DEPLOY, KEYWORD_RELEASE)) {
-			return "stage: " + candidate.job().stage();
-		}
-		if (AnalysisSupport.containsAny(AnalysisSupport.lower(candidate.job().id()), KEYWORD_DEPLOY, KEYWORD_RELEASE, "notify", "notification")) {
-			return candidate.job().id();
-		}
-		return candidate.evidence();
-	}
-
 	private String evidence(PipelineStep step) {
 		if (AnalysisSupport.hasText(step.uses())) {
 			return step.uses();
@@ -324,13 +196,6 @@ public class NotificationCapabilityRuleSet implements CapabilityRuleSet {
 			return step.details();
 		}
 		return step.location();
-	}
-
-	private Confidence confidence(boolean channelDetected, boolean statusConditionDetected, boolean deliveryTargetDetected) {
-		if (channelDetected && (statusConditionDetected || deliveryTargetDetected)) {
-			return Confidence.HIGH;
-		}
-		return Confidence.MEDIUM;
 	}
 
 	private record NotificationCandidate(

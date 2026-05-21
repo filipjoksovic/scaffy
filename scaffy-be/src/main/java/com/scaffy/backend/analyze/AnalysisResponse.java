@@ -7,6 +7,5 @@ public record AnalysisResponse(
 		double overallScore,
 		int overallLevel,
 		AnalysisStatus overallStatus,
-		Confidence overallConfidence,
-		List<DimensionAnalysis> dimensions) {
+		List<DomainScore> dimensions) {
 }

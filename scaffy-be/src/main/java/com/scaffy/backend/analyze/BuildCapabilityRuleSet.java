@@ -1,12 +1,9 @@
 package com.scaffy.backend.analyze;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -15,11 +12,8 @@ import org.springframework.stereotype.Component;
 @Order(10)
 public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 
-	private static final double BUILD_COMMAND_WEIGHT = 0.35;
-	private static final double DEPENDENCY_INSTALL_WEIGHT = 0.20;
-	private static final double ECOSYSTEM_WEIGHT = 0.15;
-	private static final double AUTOMATIC_TRIGGER_WEIGHT = 0.15;
-	private static final double BUILD_OUTPUT_WEIGHT = 0.15;
+	private static final String CAPABILITY_BUILD_SCRIPTING = "Build scripting maturity";
+	private static final String CAPABILITY_DEPENDENCY_HANDLING = "Dependency handling";
 
 	private static final String ECOSYSTEM_NODE_JS = "Node.js";
 	private static final String ECOSYSTEM_DOTNET = ".NET";
@@ -28,8 +22,6 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String ECOSYSTEM_PYTHON = "Python";
 	private static final String TOOL_MAVEN = "Maven";
 	private static final String TOOL_GRADLE = "Gradle";
-	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic trigger detected";
-	private static final String PRACTICE_BUILD_OUTPUT_DETECTED = "Build output detected";
 
 	private static final List<CommandRule> BUILD_RULES = List.of(
 			CommandRule.of("Generic", "(?:^|[;&|\\n]\\s*)(?<cmd>build)(?=\\s*$|\\s*[;&|])"),
@@ -53,100 +45,55 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+restore\\b[^\\n;&|]*)"),
 			CommandRule.of(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdependency:go-offline\\b[^\\n;&|]*)"));
 
-	private static final List<CommandRule> PUBLISH_RULES = List.of(
-			CommandRule.of("npm", "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+publish\\b[^\\n;&|]*)"),
-			CommandRule.of(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdeploy\\b[^\\n;&|]*)"),
-			CommandRule.of(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bpublish\\b[^\\n;&|]*)"),
-			CommandRule.of(ECOSYSTEM_DOTNET, "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+nuget\\s+push\\b[^\\n;&|]*)"),
-			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>twine\\s+upload\\b[^\\n;&|]*)"),
-			CommandRule.of(ECOSYSTEM_DOCKER, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+push\\b[^\\n;&|]*)"));
-
 	@Override
 	public String dimension() {
-		return "build";
+		return "build_release";
 	}
 
 	@Override
-	public DimensionAnalysis analyze(PipelineDocument document) {
+	public List<CapabilityFinding> detect(PipelineDocument document) {
+		List<CapabilityFinding> findings = new ArrayList<>();
+
 		List<CommandMatch> buildMatches = allMatches(
 				CommandMatcher.findMatches(document, BUILD_RULES),
 				buildActionMatches(document));
+
 		if (buildMatches.isEmpty()) {
-			return new DimensionAnalysis(
-					dimension(),
-					0.0,
-					1,
-					AnalysisStatus.MISSING,
-					Confidence.HIGH,
-					List.of(),
-					List.of(
-							"No build command detected",
-							"No dependency install/restore before build detected",
-							"No build ecosystem detected",
-							"No automatic build trigger detected",
-							"No explicit build artifact detected"));
+			findings.add(CapabilityFinding.missing("BUILD_STAGE_PRESENT", dimension(), CAPABILITY_BUILD_SCRIPTING));
+			findings.add(CapabilityFinding.missing("MISSING_PACKAGE_MANAGEMENT", dimension(), CAPABILITY_DEPENDENCY_HANDLING));
+			return findings;
 		}
 
-		double score = BUILD_COMMAND_WEIGHT;
-		List<DetectedPractice> detected = new ArrayList<>();
-		List<String> missing = new ArrayList<>();
-
 		CommandMatch primaryBuild = buildMatches.getFirst();
-		detected.add(new DetectedPractice("Build command detected", primaryBuild.evidence(), primaryBuild.location()));
+		findings.add(CapabilityFinding.positive("BUILD_STAGE_PRESENT", dimension(), CAPABILITY_BUILD_SCRIPTING,
+				primaryBuild.evidence(), primaryBuild.location()));
+
+		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, buildMatches);
+		if (automaticTrigger.isPresent()) {
+			findings.add(CapabilityFinding.positive("BUILD_AUTOMATIC_TRIGGER", dimension(), CAPABILITY_BUILD_SCRIPTING,
+					automaticTrigger.get().evidence(), automaticTrigger.get().location()));
+		}
 
 		List<CommandMatch> dependencyMatches = CommandMatcher.findMatches(document, DEPENDENCY_RULES);
 		Optional<CommandMatch> dependencyBeforeBuild = dependencyBeforeBuild(dependencyMatches, buildMatches);
 		if (dependencyBeforeBuild.isPresent()) {
 			CommandMatch dependency = dependencyBeforeBuild.get();
-			score += DEPENDENCY_INSTALL_WEIGHT;
-			Map<String, String> metadata = deterministicInstall(dependency.evidence())
-					? Map.of("deterministic", "true")
-					: Map.of("deterministic", "false");
-			String practice = deterministicInstall(dependency.evidence())
-					? "Clean dependency install detected"
-					: "Dependency install/restore detected";
-			detected.add(new DetectedPractice(practice, dependency.evidence(), dependency.location(), metadata));
+			if (deterministicInstall(dependency.evidence())) {
+				findings.add(CapabilityFinding.positive("DETERMINISTIC_INSTALL_PRESENT", dimension(), CAPABILITY_DEPENDENCY_HANDLING,
+						dependency.evidence(), dependency.location()));
+			}
+			else {
+				findings.add(CapabilityFinding.positive("DEPENDENCY_INSTALL_PRESENT", dimension(), CAPABILITY_DEPENDENCY_HANDLING,
+						dependency.evidence(), dependency.location()));
+				findings.add(CapabilityFinding.smell("NON_DETERMINISTIC_INSTALL", dimension(), CAPABILITY_DEPENDENCY_HANDLING,
+						dependency.evidence(), dependency.location()));
+			}
 		}
 		else {
-			missing.add("No dependency install/restore before build detected");
+			findings.add(CapabilityFinding.missing("MISSING_PACKAGE_MANAGEMENT", dimension(), CAPABILITY_DEPENDENCY_HANDLING));
 		}
 
-		Set<String> ecosystems = ecosystems(buildMatches, dependencyMatches);
-		if (ecosystems.isEmpty()) {
-			missing.add("No build ecosystem detected");
-		}
-		else {
-			score += ECOSYSTEM_WEIGHT;
-			detected.add(new DetectedPractice("Build ecosystem detected", String.join(", ", ecosystems), primaryBuild.location()));
-		}
-
-		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, buildMatches);
-		if (automaticTrigger.isPresent()) {
-			score += AUTOMATIC_TRIGGER_WEIGHT;
-			detected.add(automaticTrigger.get());
-		}
-		else {
-			missing.add("No automatic build trigger detected");
-		}
-
-		Optional<DetectedPractice> buildOutput = buildOutput(document, buildMatches);
-		if (buildOutput.isPresent()) {
-			score += BUILD_OUTPUT_WEIGHT;
-			detected.add(buildOutput.get());
-		}
-		else {
-			missing.add("No explicit build artifact detected");
-		}
-
-		double roundedScore = round(score);
-		return new DimensionAnalysis(
-				dimension(),
-				roundedScore,
-				level(roundedScore),
-				roundedScore >= 0.8 ? AnalysisStatus.COMPLETE : AnalysisStatus.PARTIAL,
-				confidence(automaticTrigger.isPresent()),
-				detected,
-				missing);
+		return findings;
 	}
 
 	private Optional<CommandMatch> dependencyBeforeBuild(List<CommandMatch> dependencies, List<CommandMatch> builds) {
@@ -192,23 +139,12 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 		return matches;
 	}
 
-	private Set<String> ecosystems(List<CommandMatch> buildMatches, List<CommandMatch> dependencyMatches) {
-		Set<String> ecosystems = new LinkedHashSet<>();
-		for (CommandMatch buildMatch : buildMatches) {
-			ecosystems.add(buildMatch.rule().ecosystem());
-		}
-		for (CommandMatch dependencyMatch : dependencyMatches) {
-			ecosystems.add(dependencyMatch.rule().ecosystem());
-		}
-		return ecosystems;
-	}
-
 	private Optional<DetectedPractice> automaticTrigger(PipelineDocument document, List<CommandMatch> buildMatches) {
 		if (document.provider() == PipelineProvider.GITHUB_ACTIONS) {
 			return document.triggers().stream()
 					.filter(PipelineTrigger::automatic)
 					.findFirst()
-					.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()));
+					.map(trigger -> new DetectedPractice("Automatic trigger detected", trigger.name(), trigger.location()));
 		}
 
 		boolean automaticBuildJob = buildMatches.stream().anyMatch(match -> !match.job().manualOnly());
@@ -219,46 +155,14 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 		return document.triggers().stream()
 				.filter(PipelineTrigger::automatic)
 				.findFirst()
-				.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()))
+				.map(trigger -> new DetectedPractice("Automatic trigger detected", trigger.name(), trigger.location()))
 				.or(() -> buildMatches.stream()
 						.filter(match -> !match.job().manualOnly())
 						.findFirst()
 						.map(match -> new DetectedPractice(
-								PRACTICE_AUTOMATIC_TRIGGER_DETECTED,
+								"Automatic trigger detected",
 								"non-manual GitLab CI build job",
 								match.job().location())));
-	}
-
-	private Optional<DetectedPractice> buildOutput(PipelineDocument document, List<CommandMatch> buildMatches) {
-		Optional<CommandMatch> dockerBuild = buildMatches.stream()
-				.filter(match -> ECOSYSTEM_DOCKER.equals(match.rule().ecosystem()))
-				.findFirst();
-		if (dockerBuild.isPresent()) {
-			CommandMatch match = dockerBuild.get();
-			return Optional.of(new DetectedPractice(PRACTICE_BUILD_OUTPUT_DETECTED, match.evidence(), match.location()));
-		}
-
-		for (CommandMatch buildMatch : buildMatches) {
-			if (!buildMatch.job().outputs().isEmpty()) {
-				PipelineOutput output = buildMatch.job().outputs().getFirst();
-				return Optional.of(new DetectedPractice(PRACTICE_BUILD_OUTPUT_DETECTED, output.evidence(), output.location()));
-			}
-			for (PipelineStep step : buildMatch.job().steps()) {
-				if (step.uses() != null && step.uses().toLowerCase(Locale.ROOT).startsWith("actions/upload-artifact")) {
-					return Optional.of(new DetectedPractice(PRACTICE_BUILD_OUTPUT_DETECTED, step.uses(), step.location()));
-				}
-			}
-		}
-
-		List<CommandMatch> publishMatches = CommandMatcher.findMatches(document, PUBLISH_RULES);
-		for (CommandMatch publishMatch : publishMatches) {
-			boolean sameBuildJob = buildMatches.stream().anyMatch(buildMatch -> buildMatch.job().equals(publishMatch.job()));
-			if (sameBuildJob) {
-				return Optional.of(new DetectedPractice(PRACTICE_BUILD_OUTPUT_DETECTED, publishMatch.evidence(), publishMatch.location()));
-			}
-		}
-
-		return Optional.empty();
 	}
 
 	private boolean deterministicInstall(String evidence) {
@@ -293,27 +197,4 @@ public class BuildCapabilityRuleSet implements CapabilityRuleSet {
 		return tokens.size() >= 2 && first.equals(tokens.get(0)) && second.equals(tokens.get(1));
 	}
 
-	private Confidence confidence(boolean automaticTriggerDetected) {
-		return automaticTriggerDetected ? Confidence.HIGH : Confidence.MEDIUM;
-	}
-
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
-	}
 }

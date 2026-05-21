@@ -11,24 +11,14 @@ import org.springframework.stereotype.Component;
 @Order(28)
 public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 
-	private static final double ARTIFACT_OUTPUT_WEIGHT = 0.30;
-	private static final double REGISTRY_PUBLISH_WEIGHT = 0.25;
-	private static final double ARTIFACT_REUSE_WEIGHT = 0.15;
-	private static final double VERSIONING_WEIGHT = 0.15;
-	private static final double AUTOMATIC_TRIGGER_WEIGHT = 0.15;
+	private static final String CAPABILITY_PACKAGING = "Packaging & artifacts";
+	private static final String CAPABILITY_REGISTRY_PUBLISH = "Registry / release publish";
+	private static final String CAPABILITY_VERSIONING = "Versioning / tagging";
 
-	private static final String DIMENSION = "artifacts";
 	private static final String PRACTICE_ARTIFACT_OUTPUT_DETECTED = "Artifact or archive output detected";
 	private static final String PRACTICE_REGISTRY_PUBLISH_DETECTED = "Package or image registry publish detected";
 	private static final String PRACTICE_ARTIFACT_REUSE_DETECTED = "Artifact reuse or download detected";
 	private static final String PRACTICE_VERSIONING_DETECTED = "Artifact identity or versioning detected";
-	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic artifact trigger detected";
-
-	private static final String MISSING_ARTIFACT_OUTPUT = "No artifact or archive output detected";
-	private static final String MISSING_REGISTRY_PUBLISH = "No package or image registry publish detected";
-	private static final String MISSING_ARTIFACT_REUSE = "No artifact reuse or download detected";
-	private static final String MISSING_VERSIONING = "No artifact identity or versioning detected";
-	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic artifact trigger detected";
 
 	private static final String ECOSYSTEM_DOCKER_IMAGE = "Docker image";
 
@@ -58,97 +48,51 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 
 	@Override
 	public String dimension() {
-		return DIMENSION;
+		return "build_release";
 	}
 
 	@Override
-	public DimensionAnalysis analyze(PipelineDocument document) {
+	public List<CapabilityFinding> detect(PipelineDocument document) {
+		List<CapabilityFinding> findings = new ArrayList<>();
+
 		Optional<DetectedPractice> artifactOutput = artifactOutput(document);
-		List<CommandMatch> registryPublishMatches = CommandMatcher.findMatches(document, REGISTRY_PUBLISH_RULES);
-		Optional<DetectedPractice> registryPublish = firstPractice(
-				registryPublishMatches,
-				PRACTICE_REGISTRY_PUBLISH_DETECTED)
-				.or(() -> registryPublishAction(document));
-		Optional<DetectedPractice> artifactReuse = artifactReuse(document);
-		Optional<DetectedPractice> versioning = firstPractice(
-				CommandMatcher.findMatches(document, VERSIONING_RULES),
-				PRACTICE_VERSIONING_DETECTED)
-				.or(() -> versioningAction(document));
-
-		if (artifactOutput.isEmpty() && registryPublish.isEmpty() && artifactReuse.isEmpty()) {
-			return missingAnalysis();
-		}
-
-		double score = 0.0;
-		List<DetectedPractice> detected = new ArrayList<>();
-		List<String> missing = new ArrayList<>();
-
 		if (artifactOutput.isPresent()) {
-			score += ARTIFACT_OUTPUT_WEIGHT;
-			detected.add(artifactOutput.get());
+			findings.add(CapabilityFinding.positive("ARTIFACT_OUTPUT_PRESENT", dimension(), CAPABILITY_PACKAGING,
+					artifactOutput.get().evidence(), artifactOutput.get().location()));
 		}
 		else {
-			missing.add(MISSING_ARTIFACT_OUTPUT);
+			findings.add(CapabilityFinding.missing("PIPELINE_MISSING_ARTIFACT_PUBLISH", dimension(), CAPABILITY_PACKAGING));
 		}
 
+		Optional<DetectedPractice> registryPublish = firstPractice(
+				CommandMatcher.findMatches(document, REGISTRY_PUBLISH_RULES), PRACTICE_REGISTRY_PUBLISH_DETECTED)
+				.or(() -> registryPublishAction(document));
 		if (registryPublish.isPresent()) {
-			score += REGISTRY_PUBLISH_WEIGHT;
-			detected.add(registryPublish.get());
+			findings.add(CapabilityFinding.positive("REGISTRY_PUBLISH_PRESENT", dimension(), CAPABILITY_REGISTRY_PUBLISH,
+					registryPublish.get().evidence(), registryPublish.get().location()));
 		}
 		else {
-			missing.add(MISSING_REGISTRY_PUBLISH);
+			findings.add(CapabilityFinding.missing("NO_RELEASE_STAGE", dimension(), CAPABILITY_REGISTRY_PUBLISH));
 		}
 
+		Optional<DetectedPractice> artifactReuse = artifactReuse(document);
 		if (artifactReuse.isPresent()) {
-			score += ARTIFACT_REUSE_WEIGHT;
-			detected.add(artifactReuse.get());
-		}
-		else {
-			missing.add(MISSING_ARTIFACT_REUSE);
+			findings.add(CapabilityFinding.positive("ARTIFACT_REUSE_PRESENT", dimension(), CAPABILITY_REGISTRY_PUBLISH,
+					artifactReuse.get().evidence(), artifactReuse.get().location()));
 		}
 
+		Optional<DetectedPractice> versioning = firstPractice(
+				CommandMatcher.findMatches(document, VERSIONING_RULES), PRACTICE_VERSIONING_DETECTED)
+				.or(() -> versioningAction(document));
 		if (versioning.isPresent()) {
-			score += VERSIONING_WEIGHT;
-			detected.add(versioning.get());
+			findings.add(CapabilityFinding.positive("VERSIONED_ARTIFACT", dimension(), CAPABILITY_VERSIONING,
+					versioning.get().evidence(), versioning.get().location()));
 		}
 		else {
-			missing.add(MISSING_VERSIONING);
+			findings.add(CapabilityFinding.missing("RELEASE_TAGGING_PRESENT", dimension(), CAPABILITY_VERSIONING));
 		}
 
-		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, artifactOutput, registryPublish);
-		if (automaticTrigger.isPresent()) {
-			score += AUTOMATIC_TRIGGER_WEIGHT;
-			detected.add(automaticTrigger.get());
-		}
-		else {
-			missing.add(MISSING_AUTOMATIC_TRIGGER);
-		}
-
-		double roundedScore = AnalysisSupport.round(score);
-		return new DimensionAnalysis(
-				dimension(),
-				roundedScore,
-				AnalysisSupport.level(roundedScore),
-				AnalysisSupport.status(roundedScore),
-				confidence(artifactOutput.isPresent(), registryPublish.isPresent() || artifactReuse.isPresent()),
-				detected,
-				missing);
-	}
-
-	private DimensionAnalysis missingAnalysis() {
-		return new DimensionAnalysis(
-				dimension(),
-				0.0,
-				1,
-				AnalysisStatus.MISSING,
-				Confidence.HIGH,
-				List.of(),
-				List.of(
-						MISSING_ARTIFACT_OUTPUT,
-						MISSING_REGISTRY_PUBLISH,
-						MISSING_ARTIFACT_REUSE,
-						MISSING_VERSIONING,
-						MISSING_AUTOMATIC_TRIGGER));
+		return findings;
 	}
 
 	private Optional<DetectedPractice> artifactOutput(PipelineDocument document) {
@@ -205,54 +149,6 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 				.map(match -> new DetectedPractice(practice, match.evidence(), match.location()));
 	}
 
-	private Optional<DetectedPractice> automaticTrigger(
-			PipelineDocument document,
-			Optional<DetectedPractice> artifactOutput,
-			Optional<DetectedPractice> registryPublish) {
-		if (document.provider() == PipelineProvider.GITHUB_ACTIONS) {
-			return document.triggers().stream()
-					.filter(PipelineTrigger::automatic)
-					.findFirst()
-					.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()));
-		}
-
-		Optional<PipelineJob> producingJob = automaticProducingGitLabJob(document, artifactOutput, registryPublish);
-		if (producingJob.isEmpty()) {
-			return Optional.empty();
-		}
-
-		return document.triggers().stream()
-				.filter(PipelineTrigger::automatic)
-				.findFirst()
-				.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()))
-				.or(() -> producingJob.map(job -> new DetectedPractice(
-						PRACTICE_AUTOMATIC_TRIGGER_DETECTED,
-						"non-manual GitLab CI artifact job",
-						job.location())));
-	}
-
-	private Optional<PipelineJob> automaticProducingGitLabJob(
-			PipelineDocument document,
-			Optional<DetectedPractice> artifactOutput,
-			Optional<DetectedPractice> registryPublish) {
-		for (PipelineJob job : document.jobs()) {
-			if (job.manualOnly()) {
-				continue;
-			}
-			if (!job.outputs().isEmpty() || practiceInJob(artifactOutput, job) || practiceInJob(registryPublish, job)) {
-				return Optional.of(job);
-			}
-		}
-		return Optional.empty();
-	}
-
-	private boolean practiceInJob(Optional<DetectedPractice> practice, PipelineJob job) {
-		return practice
-				.map(DetectedPractice::location)
-				.map(location -> location.startsWith(job.location()))
-				.orElse(false);
-	}
-
 	private boolean uploadArtifactAction(PipelineStep step) {
 		return step.uses() != null && AnalysisSupport.lower(step.uses()).startsWith("actions/upload-artifact");
 	}
@@ -267,13 +163,6 @@ public class ArtifactCapabilityRuleSet implements CapabilityRuleSet {
 
 	private boolean dockerBuildPushAction(PipelineStep step) {
 		return dockerBuildAction(step) && AnalysisSupport.containsAny(AnalysisSupport.lower(step.details()), "push=true", "push: true");
-	}
-
-	private Confidence confidence(boolean artifactOutputDetected, boolean publishOrReuseDetected) {
-		if (artifactOutputDetected && publishOrReuseDetected) {
-			return Confidence.HIGH;
-		}
-		return Confidence.MEDIUM;
 	}
 
 }

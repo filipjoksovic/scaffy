@@ -11,27 +11,15 @@ import org.springframework.stereotype.Component;
 @Order(27)
 public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 
-	private static final double SAST_WEIGHT = 0.25;
-	private static final double DEPENDENCY_WEIGHT = 0.20;
-	private static final double SECRET_WEIGHT = 0.15;
-	private static final double CONTAINER_IAC_WEIGHT = 0.15;
-	private static final double REPORT_WEIGHT = 0.10;
-	private static final double AUTOMATIC_TRIGGER_WEIGHT = 0.15;
+	private static final String CAPABILITY_STATIC_ANALYSIS = "Static analysis";
+	private static final String CAPABILITY_DEP_CONTAINER_SCAN = "Dependency / container scanning";
+	private static final String CAPABILITY_SECRET_HYGIENE = "Secret hygiene";
 
-	private static final String DIMENSION = "security_scanning";
 	private static final String PRACTICE_SAST_DETECTED = "SAST or static security scanning detected";
 	private static final String PRACTICE_DEPENDENCY_DETECTED = "Dependency or SCA scanning detected";
 	private static final String PRACTICE_SECRET_DETECTED = "Secret scanning detected";
 	private static final String PRACTICE_CONTAINER_IAC_DETECTED = "Container image or IaC scanning detected";
 	private static final String PRACTICE_REPORT_DETECTED = "Security report or artifact detected";
-	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic security scanning trigger detected";
-
-	private static final String MISSING_SAST = "No SAST or static security scanning detected";
-	private static final String MISSING_DEPENDENCY = "No dependency or SCA scanning detected";
-	private static final String MISSING_SECRET = "No secret scanning detected";
-	private static final String MISSING_CONTAINER_IAC = "No container image or IaC scanning detected";
-	private static final String MISSING_REPORT = "No security report or artifact detected";
-	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic security scanning trigger detected";
 
 	private static final String TOOL_SEMGREP = "semgrep";
 	private static final String KEYWORD_VULNERABILITY = "vulnerability";
@@ -71,11 +59,11 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 
 	@Override
 	public String dimension() {
-		return DIMENSION;
+		return "security_integration";
 	}
 
 	@Override
-	public DimensionAnalysis analyze(PipelineDocument document) {
+	public List<CapabilityFinding> detect(PipelineDocument document) {
 		List<CommandMatch> sastMatches = securityContext(CommandMatcher.findMatches(document, SAST_RULES));
 		List<CommandMatch> dependencyMatches = CommandMatcher.findMatches(document, DEPENDENCY_RULES);
 		List<CommandMatch> secretMatches = CommandMatcher.findMatches(document, SECRET_RULES);
@@ -83,99 +71,46 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 		List<DetectedPractice> actionMatches = actionMatches(document);
 		List<DetectedPractice> reportOutputs = reportOutputs(document, AnalysisSupport.distinct(sastMatches, dependencyMatches, secretMatches, containerIacMatches));
 
-		if (sastMatches.isEmpty()
-				&& dependencyMatches.isEmpty()
-				&& secretMatches.isEmpty()
-				&& containerIacMatches.isEmpty()
-				&& actionMatches.isEmpty()
-				&& reportOutputs.isEmpty()) {
-			return missingAnalysis();
-		}
+		List<CapabilityFinding> findings = new ArrayList<>();
 
-		double score = 0.0;
-		List<DetectedPractice> detected = new ArrayList<>();
-		List<String> missing = new ArrayList<>();
-
+		// Static analysis
 		Optional<DetectedPractice> sast = sast(sastMatches, actionMatches, reportOutputs);
 		if (sast.isPresent()) {
-			score += SAST_WEIGHT;
-			detected.add(sast.get());
+			findings.add(CapabilityFinding.positive("SAST_PRESENT", dimension(), CAPABILITY_STATIC_ANALYSIS,
+					sast.get().evidence(), sast.get().location()));
 		}
 		else {
-			missing.add(MISSING_SAST);
+			findings.add(CapabilityFinding.missing("SAST_MISSING", dimension(), CAPABILITY_STATIC_ANALYSIS));
 		}
 
+		// Dependency / container scanning
 		Optional<DetectedPractice> dependency = dependency(dependencyMatches, actionMatches, reportOutputs);
 		if (dependency.isPresent()) {
-			score += DEPENDENCY_WEIGHT;
-			detected.add(dependency.get());
-		}
-		else {
-			missing.add(MISSING_DEPENDENCY);
-		}
-
-		Optional<DetectedPractice> secret = secret(secretMatches, reportOutputs);
-		if (secret.isPresent()) {
-			score += SECRET_WEIGHT;
-			detected.add(secret.get());
-		}
-		else {
-			missing.add(MISSING_SECRET);
+			findings.add(CapabilityFinding.positive("DEPENDENCY_SCAN_PRESENT", dimension(), CAPABILITY_DEP_CONTAINER_SCAN,
+					dependency.get().evidence(), dependency.get().location()));
 		}
 
 		Optional<DetectedPractice> containerIac = containerIac(containerIacMatches, reportOutputs, actionMatches);
 		if (containerIac.isPresent()) {
-			score += CONTAINER_IAC_WEIGHT;
-			detected.add(containerIac.get());
+			findings.add(CapabilityFinding.positive("CONTAINER_SCAN_PRESENT", dimension(), CAPABILITY_DEP_CONTAINER_SCAN,
+					containerIac.get().evidence(), containerIac.get().location()));
+		}
+
+		if (dependency.isEmpty() && containerIac.isEmpty()) {
+			findings.add(CapabilityFinding.missing("DEPENDENCY_SCAN_MISSING", dimension(), CAPABILITY_DEP_CONTAINER_SCAN));
+		}
+
+		// Secret hygiene
+		Optional<DetectedPractice> secret = secret(secretMatches, reportOutputs);
+		if (secret.isPresent()) {
+			findings.add(CapabilityFinding.positive("SECRET_SCAN_PRESENT", dimension(), CAPABILITY_SECRET_HYGIENE,
+					secret.get().evidence(), secret.get().location()));
 		}
 		else {
-			missing.add(MISSING_CONTAINER_IAC);
+			findings.add(CapabilityFinding.missing("SECRET_SCAN_MISSING", dimension(), CAPABILITY_SECRET_HYGIENE));
 		}
 
-		Optional<DetectedPractice> report = report(reportOutputs, actionMatches);
-		if (report.isPresent()) {
-			score += REPORT_WEIGHT;
-			detected.add(report.get());
-		}
-		else {
-			missing.add(MISSING_REPORT);
-		}
-
-		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, AnalysisSupport.distinct(sastMatches, dependencyMatches, secretMatches, containerIacMatches), reportOutputs);
-		if (automaticTrigger.isPresent()) {
-			score += AUTOMATIC_TRIGGER_WEIGHT;
-			detected.add(automaticTrigger.get());
-		}
-		else {
-			missing.add(MISSING_AUTOMATIC_TRIGGER);
-		}
-
-		double roundedScore = AnalysisSupport.round(score);
-		return new DimensionAnalysis(
-				dimension(),
-				roundedScore,
-				AnalysisSupport.level(roundedScore),
-				AnalysisSupport.status(roundedScore),
-				confidence(automaticTrigger.isPresent(), report.isPresent()),
-				detected,
-				missing);
-	}
-
-	private DimensionAnalysis missingAnalysis() {
-		return new DimensionAnalysis(
-				dimension(),
-				0.0,
-				1,
-				AnalysisStatus.MISSING,
-				Confidence.HIGH,
-				List.of(),
-				List.of(
-						MISSING_SAST,
-						MISSING_DEPENDENCY,
-						MISSING_SECRET,
-						MISSING_CONTAINER_IAC,
-						MISSING_REPORT,
-						MISSING_AUTOMATIC_TRIGGER));
+		return findings;
 	}
 
 	private Optional<DetectedPractice> sast(
@@ -238,15 +173,6 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 						.filter(output -> AnalysisSupport.lower(output.evidence()).contains("container_scanning"))
 						.findFirst())
 				.map(output -> new DetectedPractice(PRACTICE_CONTAINER_IAC_DETECTED, output.evidence(), output.location()));
-	}
-
-	private Optional<DetectedPractice> report(List<DetectedPractice> reportOutputs, List<DetectedPractice> actionMatches) {
-		return reportOutputs.stream()
-				.findFirst()
-				.or(() -> actionMatches.stream()
-						.filter(action -> AnalysisSupport.lower(action.evidence()).contains("upload-sarif"))
-						.findFirst()
-						.map(action -> new DetectedPractice(PRACTICE_REPORT_DETECTED, action.evidence(), action.location())));
 	}
 
 	private List<CommandMatch> securityContext(List<CommandMatch> matches) {
@@ -335,55 +261,5 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 		return step.uses() != null && AnalysisSupport.lower(step.uses()).startsWith("actions/upload-artifact") && securityJob(job);
 	}
 
-	private Optional<DetectedPractice> automaticTrigger(
-			PipelineDocument document,
-			List<CommandMatch> commandMatches,
-			List<DetectedPractice> reportOutputs) {
-		if (document.provider() == PipelineProvider.GITHUB_ACTIONS) {
-			return document.triggers().stream()
-					.filter(PipelineTrigger::automatic)
-					.findFirst()
-					.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()));
-		}
-
-		Optional<PipelineJob> automaticJob = automaticGitLabJob(document, commandMatches, reportOutputs);
-		if (automaticJob.isEmpty()) {
-			return Optional.empty();
-		}
-
-		return document.triggers().stream()
-				.filter(PipelineTrigger::automatic)
-				.findFirst()
-				.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()))
-				.or(() -> automaticJob.map(job -> new DetectedPractice(
-						PRACTICE_AUTOMATIC_TRIGGER_DETECTED,
-						"non-manual GitLab CI security scanning job",
-						job.location())));
-	}
-
-	private Optional<PipelineJob> automaticGitLabJob(
-			PipelineDocument document,
-			List<CommandMatch> commandMatches,
-			List<DetectedPractice> reportOutputs) {
-		for (CommandMatch match : commandMatches) {
-			if (!match.job().manualOnly()) {
-				return Optional.of(match.job());
-			}
-		}
-		for (DetectedPractice output : reportOutputs) {
-			for (PipelineJob job : document.jobs()) {
-				if (!job.manualOnly() && output.location().startsWith(job.location())) {
-					return Optional.of(job);
-				}
-			}
-		}
-		return Optional.empty();
-	}
-
-	private Confidence confidence(boolean automaticTriggerDetected, boolean reportDetected) {
-		if (automaticTriggerDetected || reportDetected) {
-			return Confidence.HIGH;
-		}
-		return Confidence.MEDIUM;
-	}
 }
+

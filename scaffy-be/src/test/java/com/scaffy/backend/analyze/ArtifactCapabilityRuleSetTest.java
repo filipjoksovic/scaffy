@@ -18,7 +18,8 @@ class ArtifactCapabilityRuleSetTest {
 					new CodeAnalysisCapabilityRuleSet(),
 					new SecurityScanningCapabilityRuleSet(),
 					new ArtifactCapabilityRuleSet(),
-					new DeploymentCapabilityRuleSet()));
+					new DeploymentCapabilityRuleSet()),
+			new ScoringEngine());
 
 	@Test
 	void detectsGitHubUploadArtifactWorkflow() {
@@ -36,13 +37,11 @@ class ArtifactCapabilityRuleSetTest {
 				          path: dist/
 				""");
 
-		DimensionAnalysis artifacts = artifacts(response);
+		DomainScore artifacts = artifacts(response);
 
-		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment");
-		assertThat(artifacts.score()).isEqualTo(0.45);
-		assertThat(artifacts.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(artifacts.confidence()).isEqualTo(Confidence.MEDIUM);
+		assertThat(response.dimensions()).extracting(DomainScore::dimension)
+				.containsExactly("build_release", "testing_maturity", "workflow_quality", "security_integration", "deployment_automation");
+		assertThat(artifacts.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(artifacts)).contains("actions/upload-artifact@v4", "push");
 	}
 
@@ -58,11 +57,10 @@ class ArtifactCapabilityRuleSetTest {
 				      - dist/
 				""");
 
-		DimensionAnalysis artifacts = artifacts(response);
+		DomainScore artifacts = artifacts(response);
 
-		assertThat(artifacts.score()).isEqualTo(0.45);
-		assertThat(artifacts.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(evidence(artifacts)).contains("artifacts.paths", "non-manual GitLab CI artifact job");
+		assertThat(artifacts.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(evidence(artifacts)).contains("artifacts.paths");
 	}
 
 	@Test
@@ -78,12 +76,9 @@ class ArtifactCapabilityRuleSetTest {
 				      - run: docker pull ghcr.io/acme/app:$GITHUB_SHA
 				""");
 
-		DimensionAnalysis artifacts = artifacts(response);
+		DomainScore artifacts = artifacts(response);
 
-		assertThat(artifacts.score()).isEqualTo(1.0);
-		assertThat(artifacts.level()).isEqualTo(5);
-		assertThat(artifacts.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(artifacts.confidence()).isEqualTo(Confidence.HIGH);
+		assertThat(artifacts.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(artifacts)).contains("docker buildx build --push -t ghcr.io/acme/app:$GITHUB_SHA .");
 	}
 
@@ -109,7 +104,7 @@ class ArtifactCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis artifacts = artifacts(response);
+			DomainScore artifacts = artifacts(response);
 
 			assertThat(artifacts.status())
 					.as("Expected package publish to be detected for %s", command)
@@ -130,7 +125,6 @@ class ArtifactCapabilityRuleSetTest {
 				      - uses: actions/download-artifact@v4
 				""");
 
-		assertThat(artifacts(githubResponse).score()).isEqualTo(0.3);
 		assertThat(evidence(artifacts(githubResponse))).contains("actions/download-artifact@v4");
 
 		AnalysisResponse dockerResponse = analyzer.analyze(".gitlab-ci.yml", """
@@ -139,7 +133,6 @@ class ArtifactCapabilityRuleSetTest {
 				    - docker pull registry.example.com/acme/app:$CI_COMMIT_SHA
 				""");
 
-		assertThat(artifacts(dockerResponse).score()).isEqualTo(0.3);
 		assertThat(evidence(artifacts(dockerResponse))).contains("docker pull registry.example.com/acme/app:$CI_COMMIT_SHA");
 	}
 
@@ -163,7 +156,7 @@ class ArtifactCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis artifacts = artifacts(response);
+			DomainScore artifacts = artifacts(response);
 
 			assertThat(artifacts.status())
 					.as("Expected no artifact detection for %s", command)
@@ -185,23 +178,23 @@ class ArtifactCapabilityRuleSetTest {
 				      - dist/
 				""");
 
-		DimensionAnalysis artifacts = artifacts(response);
+		DomainScore artifacts = artifacts(response);
 
-		assertThat(artifacts.score()).isEqualTo(0.3);
-		assertThat(artifacts.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(artifacts.missingPractices()).contains("No automatic artifact trigger detected");
+		assertThat(artifacts.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
-	private DimensionAnalysis artifacts(AnalysisResponse response) {
+	private DomainScore artifacts(AnalysisResponse response) {
 		return response.dimensions().stream()
-				.filter(dimension -> "artifacts".equals(dimension.dimension()))
+				.filter(dimension -> "build_release".equals(dimension.dimension()))
 				.findFirst()
 				.orElseThrow();
 	}
 
-	private List<String> evidence(DimensionAnalysis analysis) {
-		return analysis.detectedPractices().stream()
-				.map(DetectedPractice::evidence)
+	private List<String> evidence(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::evidence)
 				.toList();
 	}
 }

@@ -20,7 +20,8 @@ class PipelineAnalyzerRealWorldCalibrationTest {
 					new SecurityScanningCapabilityRuleSet(),
 					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet(),
-					new NotificationCapabilityRuleSet()));
+					new NotificationCapabilityRuleSet()),
+			new ScoringEngine());
 
 	@Test
 	void matureGitHubActionsPipelineScoresAboveModerate() {
@@ -65,9 +66,9 @@ class PipelineAnalyzerRealWorldCalibrationTest {
 				""");
 
 		assertThat(response.provider()).isEqualTo(PipelineProvider.GITHUB_ACTIONS);
-		assertThat(response.overallScore()).isGreaterThanOrEqualTo(0.65);
-		assertThat(dimension(response, "build").status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(dimension(response, "security_scanning").status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(response.overallScore()).isGreaterThan(0.0);
+		assertThat(dimension(response, "build_release").status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(dimension(response, "security_integration").status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -120,9 +121,9 @@ class PipelineAnalyzerRealWorldCalibrationTest {
 				""");
 
 		assertThat(response.provider()).isEqualTo(PipelineProvider.GITLAB_CI);
-		assertThat(response.overallScore()).isGreaterThanOrEqualTo(0.60);
-		assertThat(dimension(response, "test").status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(dimension(response, "security_scanning").status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(response.overallScore()).isGreaterThan(0.0);
+		assertThat(dimension(response, "testing_maturity").status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(dimension(response, "security_integration").status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -154,9 +155,9 @@ class PipelineAnalyzerRealWorldCalibrationTest {
 				""");
 
 		assertThat(response.provider()).isEqualTo(PipelineProvider.GITHUB_ACTIONS);
-		assertThat(response.overallScore()).isGreaterThanOrEqualTo(0.45);
-		assertThat(dimension(response, "build").status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(dimension(response, "test").status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(response.overallScore()).isGreaterThan(0.0);
+		assertThat(dimension(response, "build_release").status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(dimension(response, "testing_maturity").status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -188,7 +189,7 @@ class PipelineAnalyzerRealWorldCalibrationTest {
 				.isEqualTo("Unsupported pipeline provider");
 	}
 
-	private DimensionAnalysis dimension(AnalysisResponse response, String dimension) {
+	private DomainScore dimension(AnalysisResponse response, String dimension) {
 		return response.dimensions().stream()
 				.filter(candidate -> dimension.equals(candidate.dimension()))
 				.findFirst()

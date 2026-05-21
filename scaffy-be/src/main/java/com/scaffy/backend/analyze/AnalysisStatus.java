@@ -5,7 +5,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum AnalysisStatus {
 	MISSING("missing"),
 	PARTIAL("partial"),
-	COMPLETE("complete");
+	COMPLETE("complete"),
+	NOT_EVALUATED("not_evaluated");
 
 	private final String value;
 

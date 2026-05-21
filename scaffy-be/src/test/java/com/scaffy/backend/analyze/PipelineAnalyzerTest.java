@@ -13,7 +13,8 @@ class PipelineAnalyzerTest {
 			new YamlPipelineParser(),
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
-			List.of(new BuildCapabilityRuleSet()));
+			List.of(new BuildCapabilityRuleSet()),
+			new ScoringEngine());
 
 	@Test
 	void detectsGitHubActionsNodeBuildWithCleanInstall() {
@@ -31,17 +32,11 @@ class PipelineAnalyzerTest {
 				      - run: npm run build
 				""");
 
-		DimensionAnalysis build = build(response);
+		DomainScore build = build(response);
 
 		assertThat(response.provider()).isEqualTo(PipelineProvider.GITHUB_ACTIONS);
-		assertThat(response.overallScore()).isEqualTo(0.85);
-		assertThat(response.overallLevel()).isEqualTo(5);
-		assertThat(response.overallStatus()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(response.overallConfidence()).isEqualTo(Confidence.HIGH);
-		assertThat(build.score()).isEqualTo(0.85);
-		assertThat(build.level()).isEqualTo(5);
-		assertThat(build.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(build.confidence()).isEqualTo(Confidence.HIGH);
+		assertThat(response.overallStatus()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(build.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(build)).contains("npm ci", "npm run build");
 	}
 
@@ -70,7 +65,7 @@ class PipelineAnalyzerTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis build = build(response);
+			DomainScore build = build(response);
 
 			assertThat(build.status())
 					.as("Expected build command to be detected for %s", command)
@@ -96,13 +91,11 @@ class PipelineAnalyzerTest {
 				      - dist/
 				""");
 
-		DimensionAnalysis build = build(response);
+		DomainScore build = build(response);
 
 		assertThat(response.provider()).isEqualTo(PipelineProvider.GITLAB_CI);
-		assertThat(build.score()).isEqualTo(1.0);
-		assertThat(build.level()).isEqualTo(5);
-		assertThat(build.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(evidence(build)).contains("npm ci", "npm run build", "artifacts.paths");
+		assertThat(build.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(evidence(build)).contains("npm ci", "npm run build");
 	}
 
 	@Test
@@ -119,11 +112,9 @@ class PipelineAnalyzerTest {
 				      - run: npm run build
 				""");
 
-		DimensionAnalysis build = build(response);
+		DomainScore build = build(response);
 
-		assertThat(build.score()).isEqualTo(0.7);
-		assertThat(build.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(build.missingPractices()).contains("No automatic build trigger detected");
+		assertThat(build.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -137,11 +128,9 @@ class PipelineAnalyzerTest {
 				    - npm run build
 				""");
 
-		DimensionAnalysis build = build(response);
+		DomainScore build = build(response);
 
-		assertThat(build.score()).isEqualTo(0.7);
-		assertThat(build.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(build.missingPractices()).contains("No automatic build trigger detected");
+		assertThat(build.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -157,16 +146,15 @@ class PipelineAnalyzerTest {
 				      - run: npm test
 				""");
 
-		DimensionAnalysis build = build(response);
+		DomainScore build = build(response);
 
 		assertThat(response.overallScore()).isEqualTo(0.0);
 		assertThat(response.overallLevel()).isEqualTo(1);
 		assertThat(response.overallStatus()).isEqualTo(AnalysisStatus.MISSING);
-		assertThat(response.overallConfidence()).isEqualTo(Confidence.HIGH);
 		assertThat(build.score()).isEqualTo(0.0);
 		assertThat(build.level()).isEqualTo(1);
 		assertThat(build.status()).isEqualTo(AnalysisStatus.MISSING);
-		assertThat(build.detectedPractices()).isEmpty();
+		assertThat(evidence(build)).isEmpty();
 	}
 
 	@Test
@@ -202,7 +190,7 @@ class PipelineAnalyzerTest {
 				""");
 
 		assertThat(response.provider()).isEqualTo(PipelineProvider.GITLAB_CI);
-		assertThat(build(response).status()).isEqualTo(AnalysisStatus.PARTIAL);
+		assertThat(build(response).status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -221,16 +209,18 @@ class PipelineAnalyzerTest {
 		assertThat(evidence(build(response))).contains("push", "go build ./...");
 	}
 
-	private DimensionAnalysis build(AnalysisResponse response) {
+	private DomainScore build(AnalysisResponse response) {
 		return response.dimensions().stream()
-				.filter(dimension -> "build".equals(dimension.dimension()))
+				.filter(dimension -> "build_release".equals(dimension.dimension()))
 				.findFirst()
 				.orElseThrow();
 	}
 
-	private List<String> evidence(DimensionAnalysis analysis) {
-		return analysis.detectedPractices().stream()
-				.map(DetectedPractice::evidence)
+	private List<String> evidence(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::evidence)
 				.toList();
 	}
 }

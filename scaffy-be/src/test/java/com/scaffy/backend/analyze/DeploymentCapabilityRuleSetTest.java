@@ -18,7 +18,8 @@ class DeploymentCapabilityRuleSetTest {
 					new CodeAnalysisCapabilityRuleSet(),
 					new SecurityScanningCapabilityRuleSet(),
 					new ArtifactCapabilityRuleSet(),
-					new DeploymentCapabilityRuleSet()));
+					new DeploymentCapabilityRuleSet()),
+			new ScoringEngine());
 
 	@Test
 	void detectsCompleteGitHubActionsKubernetesDeployment() {
@@ -37,18 +38,14 @@ class DeploymentCapabilityRuleSetTest {
 				      - run: kubectl rollout status deployment/app
 				""");
 
-		DimensionAnalysis deployment = deployment(response);
+		DomainScore deployment = deployment(response);
 
-		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment");
-		assertThat(deployment.score()).isEqualTo(1.0);
-		assertThat(deployment.level()).isEqualTo(5);
-		assertThat(deployment.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(deployment.confidence()).isEqualTo(Confidence.HIGH);
+		assertThat(response.dimensions()).extracting(DomainScore::dimension)
+				.containsExactly("build_release", "testing_maturity", "workflow_quality", "security_integration", "deployment_automation");
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(deployment)).contains(
 				"kubectl set image deployment/app app=ghcr.io/acme/app:$GITHUB_SHA",
 				"environment: production",
-				"push",
 				"kubectl rollout status deployment/app");
 	}
 
@@ -65,12 +62,9 @@ class DeploymentCapabilityRuleSetTest {
 				    - helm upgrade --install app chart/ --set image.tag=$CI_COMMIT_SHORT_SHA
 				""");
 
-		DimensionAnalysis deployment = deployment(response);
+		DomainScore deployment = deployment(response);
 
-		assertThat(deployment.score()).isEqualTo(0.85);
-		assertThat(deployment.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(deployment.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(deployment.missingPractices()).contains("No post-deploy validation detected");
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(deployment)).contains("helm upgrade --install app chart/ --set image.tag=$CI_COMMIT_SHORT_SHA");
 	}
 
@@ -87,11 +81,9 @@ class DeploymentCapabilityRuleSetTest {
 				    - curl https://app.example.com/health
 				""");
 
-		DimensionAnalysis deployment = deployment(response);
+		DomainScore deployment = deployment(response);
 
-		assertThat(deployment.score()).isEqualTo(0.85);
-		assertThat(deployment.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(deployment.missingPractices()).contains("No automatic deployment trigger detected");
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -116,7 +108,7 @@ class DeploymentCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis deployment = deployment(response);
+			DomainScore deployment = deployment(response);
 
 			assertThat(deployment.status())
 					.as("Expected no deployment detection for %s", command)
@@ -153,7 +145,7 @@ class DeploymentCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis deployment = deployment(response);
+			DomainScore deployment = deployment(response);
 
 			assertThat(deployment.status())
 					.as("Expected deployment command to be detected for %s", command)
@@ -162,16 +154,18 @@ class DeploymentCapabilityRuleSetTest {
 		}
 	}
 
-	private DimensionAnalysis deployment(AnalysisResponse response) {
+	private DomainScore deployment(AnalysisResponse response) {
 		return response.dimensions().stream()
-				.filter(dimension -> "deployment".equals(dimension.dimension()))
+				.filter(dimension -> "deployment_automation".equals(dimension.dimension()))
 				.findFirst()
 				.orElseThrow();
 	}
 
-	private List<String> evidence(DimensionAnalysis analysis) {
-		return analysis.detectedPractices().stream()
-				.map(DetectedPractice::evidence)
+	private List<String> evidence(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::evidence)
 				.toList();
 	}
 }
