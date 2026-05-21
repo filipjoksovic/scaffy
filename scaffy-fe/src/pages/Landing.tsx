@@ -19,8 +19,8 @@ const analyzerSignals = [
 
 const modelSources = [
   {
-    name: 'DORA / Accelerate',
-    detail: 'Delivery maturity is judged through the same lens as modern DevOps research: fast feedback, repeatable deployment, and recovery-oriented practice.',
+    name: 'CIMMI maturity model',
+    detail: 'Delivery maturity is judged using a CI/CD-specific research model that ranks pipelines by documented practices across build automation, testing, dependency handling, and packaging.',
   },
   {
     name: 'OWASP CI/CD guidance',
@@ -213,7 +213,7 @@ export function Landing() {
               Each detected practice contributes its configured weight to its dimension. Missing evidence
               contributes zero and is returned as an issue. The overall maturity score is the weighted
               average of all dimension scores. Levels are Scaffy's internal evidence coverage bands, not
-              official DORA, OWASP, or SLSA ratings.
+              official CIMMI, OWASP, or SLSA ratings.
             </p>
             <code>overall = sum(dimension score × dimension weight)</code>
           </div>
