@@ -15,7 +15,7 @@ class AnalyzeSamplePipelinesTest {
 			new YamlPipelineParser(),
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
-			List.of(new BuildCapabilityRuleSet()),
+			List.of(new BuildReleaseManagementCapabilityRuleSet()),
 			new ScoringEngine());
 
 	@Test

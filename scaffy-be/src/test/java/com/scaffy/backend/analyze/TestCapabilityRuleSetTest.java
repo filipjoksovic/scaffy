@@ -12,7 +12,7 @@ class TestCapabilityRuleSetTest {
 			new YamlPipelineParser(),
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
-			List.of(new BuildCapabilityRuleSet(), new TestCapabilityRuleSet()),
+			List.of(new BuildReleaseManagementCapabilityRuleSet(), new TestCapabilityRuleSet()),
 			new ScoringEngine());
 
 	@Test

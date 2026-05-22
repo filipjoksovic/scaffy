@@ -13,11 +13,10 @@ class NotificationCapabilityRuleSetTest {
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
 			List.of(
-					new BuildCapabilityRuleSet(),
+					new BuildReleaseManagementCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
 					new SecurityScanningCapabilityRuleSet(),
-					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet(),
 					new NotificationCapabilityRuleSet()),
 				new ScoringEngine());
