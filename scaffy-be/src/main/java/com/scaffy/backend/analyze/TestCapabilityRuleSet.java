@@ -67,6 +67,7 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 			findings.add(CapabilityFinding.missing("PIPELINE_MISSING_TEST_STAGE", dimension(), CAPABILITY_TEST_PRESENCE));
 			findings.add(CapabilityFinding.missing("TESTS_NOT_AUTOMATED", dimension(), CAPABILITY_CI_INTEGRATED_TESTS));
 			findings.add(CapabilityFinding.missing("NO_TEST_REPORT_OUTPUT", dimension(), CAPABILITY_REPORTS_COVERAGE));
+			findings.add(CapabilityFinding.missing("NO_COVERAGE_TOOL", dimension(), CAPABILITY_REPORTS_COVERAGE));
 			return findings;
 		}
 
@@ -84,14 +85,20 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 					primaryTest.evidence(), primaryTest.location()));
 		}
 
+		if (testMatches.stream().allMatch(match -> match.job().manualOnly())) {
+			findings.add(CapabilityFinding.smell("MANUAL_ONLY_TEST_JOB", dimension(), CAPABILITY_CI_INTEGRATED_TESTS,
+					primaryTest.evidence(), primaryTest.job().location()));
+		}
+
 		List<CommandMatch> reportMatches = CommandMatcher.findMatches(document, REPORT_RULES);
 		Optional<DetectedPractice> testOutput = testOutput(testMatches, reportMatches);
+		boolean hasCoverage = reportMatches.stream()
+				.filter(m -> sameTestJob(m, testMatches))
+				.anyMatch(m -> "Coverage".equals(m.rule().ecosystem()) || "Go coverage".equals(m.rule().ecosystem()));
+
 		if (testOutput.isPresent()) {
 			findings.add(CapabilityFinding.positive("TEST_REPORT_OUTPUT_PRESENT", dimension(), CAPABILITY_REPORTS_COVERAGE,
 					testOutput.get().evidence(), testOutput.get().location()));
-			boolean hasCoverage = reportMatches.stream()
-					.filter(m -> sameTestJob(m, testMatches))
-					.anyMatch(m -> "Coverage".equals(m.rule().ecosystem()) || "Go coverage".equals(m.rule().ecosystem()));
 			if (hasCoverage) {
 				findings.add(CapabilityFinding.positive("COVERAGE_TOOL_PRESENT", dimension(), CAPABILITY_REPORTS_COVERAGE,
 						testOutput.get().evidence(), testOutput.get().location()));
@@ -99,6 +106,10 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 		}
 		else {
 			findings.add(CapabilityFinding.missing("NO_TEST_REPORT_OUTPUT", dimension(), CAPABILITY_REPORTS_COVERAGE));
+		}
+
+		if (!hasCoverage) {
+			findings.add(CapabilityFinding.missing("NO_COVERAGE_TOOL", dimension(), CAPABILITY_REPORTS_COVERAGE));
 		}
 
 		Set<String> layers = testLayers(testMatches);
