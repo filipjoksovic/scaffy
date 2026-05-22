@@ -153,6 +153,100 @@ class DeploymentCapabilityRuleSetTest {
 		}
 	}
 
+	@Test
+	void detectsTerraformAsIacTool() {
+		AnalysisResponse response = analyzer.analyze("deploy.yml", """
+				name: Deploy
+				on: [push]
+				jobs:
+				  infra:
+				    runs-on: ubuntu-latest
+				    environment: production
+				    steps:
+				      - run: terraform init
+				      - run: terraform apply -auto-approve
+				""");
+
+		DomainScore deployment = deployment(response);
+
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(positiveRuleIds(deployment)).contains("IAC_PRESENT");
+	}
+
+	@Test
+	void detectsAnsibleAndPulumiAsIacTools() {
+		String[] commands = {
+				"ansible-playbook deploy.yml",
+				"pulumi up --yes"
+		};
+
+		for (String command : commands) {
+			AnalysisResponse response = analyzer.analyze("deploy.yml", """
+					name: Deploy
+					on: [push]
+					jobs:
+					  deploy:
+					    runs-on: ubuntu-latest
+					    environment: production
+					    steps:
+					      - run: %s
+					""".formatted(command));
+
+			DomainScore deployment = deployment(response);
+
+			assertThat(deployment.status())
+					.as("Expected IaC tool detection for %s", command)
+					.isNotEqualTo(AnalysisStatus.MISSING);
+			assertThat(positiveRuleIds(deployment))
+					.as("Expected IAC_PRESENT for %s", command)
+					.contains("IAC_PRESENT");
+		}
+	}
+
+	@Test
+	void multiStageGitLabPipelineEmitsMultiStagePositive() {
+		AnalysisResponse response = analyzer.analyze(".gitlab-ci.yml", """
+				stages:
+				  - build
+				  - deploy
+
+				build:
+				  stage: build
+				  script:
+				    - npm run build
+
+				deploy:
+				  stage: deploy
+				  environment: production
+				  script:
+				    - kubectl apply -f k8s/
+				""");
+
+		DomainScore deployment = deployment(response);
+
+		assertThat(positiveRuleIds(deployment)).contains("MULTI_STAGE_PIPELINE_PRESENT");
+		assertThat(smellRuleIds(deployment)).doesNotContain("MONOLITHIC_BUILD_PIPELINE");
+	}
+
+	@Test
+	void singleJobDeploymentEmitsMonolithicBuildPipelineSmell() {
+		AnalysisResponse response = analyzer.analyze("deploy.yml", """
+				name: Deploy
+				on: [push]
+				jobs:
+				  deploy:
+				    runs-on: ubuntu-latest
+				    environment: production
+				    steps:
+				      - run: kubectl apply -f k8s/
+				""");
+
+		DomainScore deployment = deployment(response);
+
+		assertThat(smellRuleIds(deployment)).contains("MONOLITHIC_BUILD_PIPELINE");
+		assertThat(positiveRuleIds(deployment)).doesNotContain("MULTI_STAGE_PIPELINE_PRESENT");
+	}
+
 	private DomainScore deployment(AnalysisResponse response) {
 		return response.dimensions().stream()
 				.filter(dimension -> "deployment_automation".equals(dimension.dimension()))
@@ -165,6 +259,22 @@ class DeploymentCapabilityRuleSetTest {
 				.flatMap(cs -> cs.findings().stream())
 				.filter(f -> f.type() == FindingType.POSITIVE)
 				.map(CapabilityFinding::evidence)
+				.toList();
+	}
+
+	private List<String> positiveRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::ruleId)
+				.toList();
+	}
+
+	private List<String> smellRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.SMELL)
+				.map(CapabilityFinding::ruleId)
 				.toList();
 	}
 }
