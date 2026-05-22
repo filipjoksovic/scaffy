@@ -189,6 +189,67 @@ class TestCapabilityRuleSetTest {
 		assertThat(evidence(test)).contains("pytest --junitxml=report.xml --cov=app");
 	}
 
+	@Test
+	void manualOnlyGitLabTestJobsProduceManualOnlyTestJobSmell() {
+		AnalysisResponse response = analyzer.analyze(".gitlab-ci.yml", """
+				test:
+				  when: manual
+				  script:
+				    - npm test
+				""");
+
+		DomainScore test = test(response);
+
+		assertThat(smellRuleIds(test)).contains("MANUAL_ONLY_TEST_JOB");
+	}
+
+	@Test
+	void automaticGitLabTestJobDoesNotProduceManualOnlyTestJobSmell() {
+		AnalysisResponse response = analyzer.analyze(".gitlab-ci.yml", """
+				test:
+				  script:
+				    - npm test
+				""");
+
+		DomainScore test = test(response);
+
+		assertThat(smellRuleIds(test)).doesNotContain("MANUAL_ONLY_TEST_JOB");
+	}
+
+	@Test
+	void testsWithoutCoverageProduceNoCoverageToolMissing() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  test:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - run: npm test
+				""");
+
+		DomainScore test = test(response);
+
+		assertThat(missingRuleIds(test)).contains("NO_COVERAGE_TOOL");
+	}
+
+	@Test
+	void testsWithCoverageDoNotProduceNoCoverageToolMissing() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  test:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - run: npm test -- --coverage
+				""");
+
+		DomainScore test = test(response);
+
+		assertThat(missingRuleIds(test)).doesNotContain("NO_COVERAGE_TOOL");
+	}
+
 	private DomainScore test(AnalysisResponse response) {
 		return response.dimensions().stream()
 				.filter(dimension -> "testing_maturity".equals(dimension.dimension()))
@@ -201,6 +262,22 @@ class TestCapabilityRuleSetTest {
 				.flatMap(cs -> cs.findings().stream())
 				.filter(f -> f.type() == FindingType.POSITIVE)
 				.map(CapabilityFinding::evidence)
+				.toList();
+	}
+
+	private List<String> smellRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.SMELL)
+				.map(CapabilityFinding::ruleId)
+				.toList();
+	}
+
+	private List<String> missingRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.MISSING)
+				.map(CapabilityFinding::ruleId)
 				.toList();
 	}
 }
