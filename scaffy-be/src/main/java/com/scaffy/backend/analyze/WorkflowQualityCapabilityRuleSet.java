@@ -30,19 +30,19 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String CAPABILITY_MATRIX_CACHE = "Matrix / cache optimization";
 
 	private static final Pattern PINNED_ACTION_SHA = Pattern.compile("@[0-9a-f]{40}");
-	private static final Pattern UNPINNED_ACTION_TAG = Pattern.compile("@v?\\d+(?:\\.\\d+)*$");
-	private static final Pattern DEFAULT_JOB_NAME = Pattern.compile("^(?:job|step)\\d*$|^(?:build|test|deploy|job1)$",
+	private static final Pattern UNPINNED_ACTION_TAG = Pattern.compile("@v?+\\d++(?:\\.\\d++){0,4}+$");
+	private static final Pattern DEFAULT_JOB_NAME = Pattern.compile("^(?:job|step)\\d*+$|^(?:build|test|deploy|job1)$",
 			Pattern.CASE_INSENSITIVE);
 	private static final Pattern UNPINNED_NPM_INSTALL = Pattern.compile(
-			"\\bnpm\\s+install\\s+[^@\\s]\\S*(?<!@\\d)", Pattern.CASE_INSENSITIVE);
+			"\\bnpm\\s++install\\s++[^@\\s]\\S*+(?<!@\\d)", Pattern.CASE_INSENSITIVE);
 	private static final Pattern UNPINNED_PIP_INSTALL = Pattern.compile(
-			"\\bpip\\s+install\\s+[^=\\s<>]\\S*$", Pattern.CASE_INSENSITIVE);
-	private static final Pattern RUNS_ON_LATEST = Pattern.compile("runs-on[\\s:=]+\\S*-latest",
-			Pattern.CASE_INSENSITIVE);
-	private static final Pattern MULTI_OS_MATRIX = Pattern.compile("\\bos[\\s:=]+\\[[^\\]]*,[^\\]]*]",
-			Pattern.CASE_INSENSITIVE);
+			"\\bpip\\s++install\\s++[^=\\s<>]\\S*+$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern RUNS_ON_LATEST = Pattern.compile(
+			"runs-on[\\s:=]++[a-z0-9]{1,16}-latest\\b", Pattern.CASE_INSENSITIVE);
+	private static final Pattern MULTI_OS_MATRIX = Pattern.compile(
+			"\\bos[\\s:=]++\\[[^\\],]++,", Pattern.CASE_INSENSITIVE);
 	private static final Pattern MULTI_VERSION_MATRIX = Pattern.compile(
-			"\\b(?:node-version|python-version|java-version|go-version|dotnet-version|ruby-version)[\\s:=]+\\[[^\\]]*,[^\\]]*]",
+			"\\b(?:node-version|python-version|java-version|go-version|dotnet-version|ruby-version)[\\s:=]++\\[[^\\],]++,",
 			Pattern.CASE_INSENSITIVE);
 	private static final Set<String> CACHE_ACTION_PREFIXES = Set.of("actions/cache", "actions/setup-node", "actions/setup-java",
 			"actions/setup-python", "actions/setup-go", "actions/setup-dotnet");
