@@ -28,6 +28,8 @@ public class BuildReleaseManagementCapabilityRuleSet implements CapabilityRuleSe
 	private static final String TOOL_MAVEN = "Maven";
 	private static final String TOOL_GRADLE = "Gradle";
 	private static final String ECOSYSTEM_DOCKER_IMAGE = "Docker image";
+	private static final String PRACTICE_AUTOMATIC_TRIGGER = "Automatic trigger detected";
+	private static final String PRACTICE_ARTIFACT_OUTPUT = "Artifact or archive output detected";
 
 	private static final List<CommandRule> BUILD_RULES = List.of(
 			CommandRule.of("Generic", "(?:^|[;&|\\n]\\s*)(?<cmd>build)(?=\\s*$|\\s*[;&|])"),
@@ -56,15 +58,15 @@ public class BuildReleaseManagementCapabilityRuleSet implements CapabilityRuleSe
 			CommandRule.of("Archive", "(?:^|[;&|\\n]\\s*)(?<cmd>tar\\b[^\\n;&|]*)"),
 			CommandRule.of("Java archive", "(?:^|[;&|\\n]\\s*)(?<cmd>jar\\b[^\\n;&|]*(?:\\b-c\\b|\\bcf\\b|\\bcvf\\b)[^\\n;&|]*)"),
 			CommandRule.of(".NET", "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+publish\\b[^\\n;&|]*)"),
-			CommandRule.of("Python", "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+build\\b[^\\n;&|]*)"),
+			CommandRule.of(ECOSYSTEM_PYTHON, "(?:^|[;&|\\n]\\s*)(?<cmd>python3?\\s+-m\\s+build\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_DOCKER_IMAGE, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:buildx\\s+build|build)\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> REGISTRY_PUBLISH_RULES = List.of(
 			CommandRule.of(ECOSYSTEM_DOCKER_IMAGE, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+push\\b[^\\n;&|]*)"),
 			CommandRule.of(ECOSYSTEM_DOCKER_IMAGE, "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+buildx\\s+build\\b[^\\n;&|]*--push[^\\n;&|]*)"),
 			CommandRule.of("npm", "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+publish\\b[^\\n;&|]*)"),
-			CommandRule.of("Maven", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdeploy\\b[^\\n;&|]*)"),
-			CommandRule.of("Gradle", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bpublish\\b[^\\n;&|]*)"),
+			CommandRule.of(TOOL_MAVEN, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?mvnw?\\b[^\\n;&|]*\\bdeploy\\b[^\\n;&|]*)"),
+			CommandRule.of(TOOL_GRADLE, "(?:^|[;&|\\n]\\s*)(?<cmd>(?:gradle|\\./gradlew)\\b[^\\n;&|]*\\bpublish\\b[^\\n;&|]*)"),
 			CommandRule.of(".NET", "(?:^|[;&|\\n]\\s*)(?<cmd>dotnet\\s+nuget\\s+push\\b[^\\n;&|]*)"),
 			CommandRule.of("Python", "(?:^|[;&|\\n]\\s*)(?<cmd>twine\\s+upload\\b[^\\n;&|]*)"));
 
@@ -108,23 +110,7 @@ public class BuildReleaseManagementCapabilityRuleSet implements CapabilityRuleSe
 		}
 
 		List<CommandMatch> dependencyMatches = CommandMatcher.findMatches(document, DEPENDENCY_RULES);
-		Optional<CommandMatch> dependencyBeforeBuild = dependencyBeforeBuild(dependencyMatches, buildMatches);
-		if (dependencyBeforeBuild.isPresent()) {
-			CommandMatch dependency = dependencyBeforeBuild.get();
-			if (deterministicInstall(dependency.evidence())) {
-				findings.add(CapabilityFinding.positive("DETERMINISTIC_INSTALL_PRESENT", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING,
-						dependency.evidence(), dependency.location()));
-			}
-			else {
-				findings.add(CapabilityFinding.positive("DEPENDENCY_INSTALL_PRESENT", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING,
-						dependency.evidence(), dependency.location()));
-				findings.add(CapabilityFinding.smell("NON_DETERMINISTIC_INSTALL", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING,
-						dependency.evidence(), dependency.location()));
-			}
-		}
-		else {
-			findings.add(CapabilityFinding.missing("MISSING_PACKAGE_MANAGEMENT", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING));
-		}
+		detectDependencyHandling(findings, dependencyMatches, buildMatches);
 
 		Optional<DetectedPractice> artifactOutput = artifactOutput(document);
 		boolean hasArtifact = artifactOutput.isPresent();
@@ -172,6 +158,27 @@ public class BuildReleaseManagementCapabilityRuleSet implements CapabilityRuleSe
 		}
 
 		return findings;
+	}
+
+	private void detectDependencyHandling(List<CapabilityFinding> findings, List<CommandMatch> dependencyMatches,
+			List<CommandMatch> buildMatches) {
+		Optional<CommandMatch> dependencyBeforeBuild = dependencyBeforeBuild(dependencyMatches, buildMatches);
+		if (dependencyBeforeBuild.isPresent()) {
+			CommandMatch dependency = dependencyBeforeBuild.get();
+			if (deterministicInstall(dependency.evidence())) {
+				findings.add(CapabilityFinding.positive("DETERMINISTIC_INSTALL_PRESENT", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING,
+						dependency.evidence(), dependency.location()));
+			}
+			else {
+				findings.add(CapabilityFinding.positive("DEPENDENCY_INSTALL_PRESENT", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING,
+						dependency.evidence(), dependency.location()));
+				findings.add(CapabilityFinding.smell("NON_DETERMINISTIC_INSTALL", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING,
+						dependency.evidence(), dependency.location()));
+			}
+		}
+		else {
+			findings.add(CapabilityFinding.missing("MISSING_PACKAGE_MANAGEMENT", DIMENSION, CAPABILITY_DEPENDENCY_HANDLING));
+		}
 	}
 
 	private Optional<CommandMatch> dependencyBeforeBuild(List<CommandMatch> dependencies, List<CommandMatch> builds) {
@@ -222,7 +229,7 @@ public class BuildReleaseManagementCapabilityRuleSet implements CapabilityRuleSe
 			return document.triggers().stream()
 					.filter(PipelineTrigger::automatic)
 					.findFirst()
-					.map(trigger -> new DetectedPractice("Automatic trigger detected", trigger.name(), trigger.location()));
+					.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER, trigger.name(), trigger.location()));
 		}
 
 		boolean automaticBuildJob = buildMatches.stream().anyMatch(match -> !match.job().manualOnly());
@@ -233,12 +240,12 @@ public class BuildReleaseManagementCapabilityRuleSet implements CapabilityRuleSe
 		return document.triggers().stream()
 				.filter(PipelineTrigger::automatic)
 				.findFirst()
-				.map(trigger -> new DetectedPractice("Automatic trigger detected", trigger.name(), trigger.location()))
+				.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER, trigger.name(), trigger.location()))
 				.or(() -> buildMatches.stream()
 						.filter(match -> !match.job().manualOnly())
 						.findFirst()
 						.map(match -> new DetectedPractice(
-								"Automatic trigger detected",
+									PRACTICE_AUTOMATIC_TRIGGER,
 								"non-manual GitLab CI build job",
 								match.job().location())));
 	}
@@ -247,15 +254,15 @@ public class BuildReleaseManagementCapabilityRuleSet implements CapabilityRuleSe
 		for (PipelineJob job : document.jobs()) {
 			if (!job.outputs().isEmpty()) {
 				PipelineOutput output = job.outputs().getFirst();
-				return Optional.of(new DetectedPractice("Artifact or archive output detected", output.evidence(), output.location()));
+				return Optional.of(new DetectedPractice(PRACTICE_ARTIFACT_OUTPUT, output.evidence(), output.location()));
 			}
 			for (PipelineStep step : job.steps()) {
 				if (uploadArtifactAction(step) || dockerBuildAction(step)) {
-					return Optional.of(new DetectedPractice("Artifact or archive output detected", step.uses(), step.location()));
+					return Optional.of(new DetectedPractice(PRACTICE_ARTIFACT_OUTPUT, step.uses(), step.location()));
 				}
 			}
 		}
-		return firstPractice(CommandMatcher.findMatches(document, ARTIFACT_OUTPUT_RULES), "Artifact or archive output detected");
+		return firstPractice(CommandMatcher.findMatches(document, ARTIFACT_OUTPUT_RULES), PRACTICE_ARTIFACT_OUTPUT);
 	}
 
 	private Optional<DetectedPractice> artifactReuse(PipelineDocument document) {
