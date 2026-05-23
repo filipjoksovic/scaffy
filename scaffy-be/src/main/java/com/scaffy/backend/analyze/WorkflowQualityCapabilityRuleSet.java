@@ -184,17 +184,20 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 
 		boolean anyLatestRunner = document.jobs().stream()
 				.anyMatch(job -> hasText(job.details())
-						&& job.details().toLowerCase(Locale.ROOT).matches("(?s).*runs-on:\\s*[^\\n]*-latest.*"));
+						&& job.details().toLowerCase(Locale.ROOT).matches("(?s).*runs-on[\\s:=]+\\S*-latest.*"));
+		boolean anyRunsOn = document.jobs().stream()
+				.anyMatch(job -> hasText(job.details())
+						&& job.details().toLowerCase(Locale.ROOT).contains("runs-on"));
 		if (anyLatestRunner) {
 			PipelineJob job = document.jobs().stream()
 					.filter(j -> hasText(j.details())
-							&& j.details().toLowerCase(Locale.ROOT).matches("(?s).*runs-on:\\s*[^\\n]*-latest.*"))
+							&& j.details().toLowerCase(Locale.ROOT).matches("(?s).*runs-on[\\s:=]+\\S*-latest.*"))
 					.findFirst()
 					.orElseThrow();
 			findings.add(CapabilityFinding.smell("RUNS_ON_LATEST", DIMENSION, CAPABILITY_REPRODUCIBILITY,
 					"runs-on uses a -latest tag", job.location()));
 		}
-		else if (document.provider() == PipelineProvider.GITHUB_ACTIONS && !document.jobs().isEmpty()) {
+		else if (anyRunsOn) {
 			findings.add(CapabilityFinding.positive("PINNED_RUNNER_PRESENT", DIMENSION, CAPABILITY_REPRODUCIBILITY,
 					"runs-on pinned to a specific version", document.jobs().get(0).location()));
 		}
@@ -242,7 +245,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 
 		boolean hasMultiOs = document.jobs().stream()
 				.anyMatch(job -> hasText(job.details())
-						&& job.details().toLowerCase(Locale.ROOT).matches("(?s).*os:\\s*\\[.+,.+].*"));
+						&& job.details().toLowerCase(Locale.ROOT).matches("(?s).*\\bos[\\s:=]+\\[[^]]*,[^]]*].*"));
 		if (hasMultiOs) {
 			findings.add(CapabilityFinding.positive("MULTI_OS_TEST_PRESENT", DIMENSION, CAPABILITY_MATRIX_CACHE,
 					"matrix.os spans multiple values", anyLocation));
@@ -255,7 +258,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 		boolean hasMultiVersion = document.jobs().stream()
 				.anyMatch(job -> hasText(job.details())
 						&& job.details().toLowerCase(Locale.ROOT)
-								.matches("(?s).*(?:node-version|python-version|java-version|go-version|dotnet-version|ruby-version):\\s*\\[.+,.+].*"));
+								.matches("(?s).*\\b(?:node-version|python-version|java-version|go-version|dotnet-version|ruby-version)[\\s:=]+\\[[^]]*,[^]]*].*"));
 		if (hasMultiVersion) {
 			findings.add(CapabilityFinding.positive("MULTI_VERSION_TEST_PRESENT", DIMENSION, CAPABILITY_MATRIX_CACHE,
 					"matrix language-version spans multiple values", anyLocation));
@@ -270,7 +273,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 				.anyMatch(step -> isCacheStep(step))
 				|| document.jobs().stream()
 						.anyMatch(job -> hasText(job.details())
-								&& job.details().toLowerCase(Locale.ROOT).matches("(?s).*\\bcache:\\s*\\S.*"));
+								&& job.details().toLowerCase(Locale.ROOT).contains("cache"));
 		if (cachePresent) {
 			findings.add(CapabilityFinding.positive("CACHE_SIGNAL_PRESENT", DIMENSION, CAPABILITY_MATRIX_CACHE,
 					"cache action or cache: key detected", anyLocation));
