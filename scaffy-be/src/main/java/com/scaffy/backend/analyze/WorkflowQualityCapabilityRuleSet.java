@@ -34,9 +34,16 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 	private static final Pattern DEFAULT_JOB_NAME = Pattern.compile("^(?:job|step)\\d*$|^(?:build|test|deploy|job1)$",
 			Pattern.CASE_INSENSITIVE);
 	private static final Pattern UNPINNED_NPM_INSTALL = Pattern.compile(
-			"\\bnpm\\s+install\\s+[^@\\s][^\\s]*(?<!@\\d)", Pattern.CASE_INSENSITIVE);
+			"\\bnpm\\s+install\\s+[^@\\s]\\S*(?<!@\\d)", Pattern.CASE_INSENSITIVE);
 	private static final Pattern UNPINNED_PIP_INSTALL = Pattern.compile(
-			"\\bpip\\s+install\\s+[^=\\s<>][^\\s]*$", Pattern.CASE_INSENSITIVE);
+			"\\bpip\\s+install\\s+[^=\\s<>]\\S*$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern RUNS_ON_LATEST = Pattern.compile("runs-on[\\s:=]+\\S*-latest",
+			Pattern.CASE_INSENSITIVE);
+	private static final Pattern MULTI_OS_MATRIX = Pattern.compile("\\bos[\\s:=]+\\[[^\\]]*,[^\\]]*]",
+			Pattern.CASE_INSENSITIVE);
+	private static final Pattern MULTI_VERSION_MATRIX = Pattern.compile(
+			"\\b(?:node-version|python-version|java-version|go-version|dotnet-version|ruby-version)[\\s:=]+\\[[^\\]]*,[^\\]]*]",
+			Pattern.CASE_INSENSITIVE);
 	private static final Set<String> CACHE_ACTION_PREFIXES = Set.of("actions/cache", "actions/setup-node", "actions/setup-java",
 			"actions/setup-python", "actions/setup-go", "actions/setup-dotnet");
 
@@ -183,15 +190,13 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 		List<CapabilityFinding> findings = new ArrayList<>();
 
 		boolean anyLatestRunner = document.jobs().stream()
-				.anyMatch(job -> hasText(job.details())
-						&& job.details().toLowerCase(Locale.ROOT).matches("(?s).*runs-on[\\s:=]+\\S*-latest.*"));
+				.anyMatch(job -> hasText(job.details()) && RUNS_ON_LATEST.matcher(job.details()).find());
 		boolean anyRunsOn = document.jobs().stream()
 				.anyMatch(job -> hasText(job.details())
 						&& job.details().toLowerCase(Locale.ROOT).contains("runs-on"));
 		if (anyLatestRunner) {
 			PipelineJob job = document.jobs().stream()
-					.filter(j -> hasText(j.details())
-							&& j.details().toLowerCase(Locale.ROOT).matches("(?s).*runs-on[\\s:=]+\\S*-latest.*"))
+					.filter(j -> hasText(j.details()) && RUNS_ON_LATEST.matcher(j.details()).find())
 					.findFirst()
 					.orElseThrow();
 			findings.add(CapabilityFinding.smell("RUNS_ON_LATEST", DIMENSION, CAPABILITY_REPRODUCIBILITY,
@@ -244,8 +249,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 		String anyLocation = firstJob != null ? firstJob.location() : "workflow";
 
 		boolean hasMultiOs = document.jobs().stream()
-				.anyMatch(job -> hasText(job.details())
-						&& job.details().toLowerCase(Locale.ROOT).matches("(?s).*\\bos[\\s:=]+\\[[^]]*,[^]]*].*"));
+				.anyMatch(job -> hasText(job.details()) && MULTI_OS_MATRIX.matcher(job.details()).find());
 		if (hasMultiOs) {
 			findings.add(CapabilityFinding.positive("MULTI_OS_TEST_PRESENT", DIMENSION, CAPABILITY_MATRIX_CACHE,
 					"matrix.os spans multiple values", anyLocation));
@@ -256,9 +260,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 		}
 
 		boolean hasMultiVersion = document.jobs().stream()
-				.anyMatch(job -> hasText(job.details())
-						&& job.details().toLowerCase(Locale.ROOT)
-								.matches("(?s).*\\b(?:node-version|python-version|java-version|go-version|dotnet-version|ruby-version)[\\s:=]+\\[[^]]*,[^]]*].*"));
+				.anyMatch(job -> hasText(job.details()) && MULTI_VERSION_MATRIX.matcher(job.details()).find());
 		if (hasMultiVersion) {
 			findings.add(CapabilityFinding.positive("MULTI_VERSION_TEST_PRESENT", DIMENSION, CAPABILITY_MATRIX_CACHE,
 					"matrix language-version spans multiple values", anyLocation));
@@ -270,7 +272,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 
 		boolean cachePresent = document.jobs().stream()
 				.flatMap(job -> job.steps().stream())
-				.anyMatch(step -> isCacheStep(step))
+				.anyMatch(this::isCacheStep)
 				|| document.jobs().stream()
 						.anyMatch(job -> hasText(job.details())
 								&& job.details().toLowerCase(Locale.ROOT).contains("cache"));
@@ -291,7 +293,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 			return false;
 		}
 		String uses = step.uses().toLowerCase(Locale.ROOT);
-		return CACHE_ACTION_PREFIXES.stream().anyMatch(prefix -> uses.startsWith(prefix));
+		return CACHE_ACTION_PREFIXES.stream().anyMatch(uses::startsWith);
 	}
 
 	private boolean hasText(String value) {
