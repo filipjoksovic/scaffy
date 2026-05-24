@@ -4,12 +4,22 @@ import {
   analyzePipeline,
   type AnalysisResponse,
   type CapabilityFinding,
-  type CapabilityScore,
   type DimensionAnalysis,
 } from '../api/analyze'
 import { AppFrame, Badge, Button, Card, Eyebrow, StateRow } from '../components'
-
-const ACCEPTED_EXTENSIONS = ['.yml', '.yaml']
+import {
+  collectFindings,
+  countIssues,
+  dimensionSummary,
+  findingKey,
+  formatDimension,
+  formatFileSize,
+  formatLabel,
+  formatProvider,
+  formatScore,
+  statusBadgeClassName,
+  validateFile,
+} from '../lib/analyzer'
 
 type AnalyzeStatus =
   | { kind: 'idle' }
@@ -134,7 +144,12 @@ export function Analyzer() {
   )
 }
 
-function ReportPanel({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
+type ReportPanelProps = Readonly<{
+  issueCount: number
+  report: AnalysisResponse
+}>
+
+function ReportPanel({ issueCount, report }: ReportPanelProps) {
   const [openSection, setOpenSection] = useState<string | null>('overall')
   const issueSuffix = issueCount === 1 ? '' : 's'
 
@@ -187,15 +202,13 @@ function ReportPanel({ issueCount, report }: { issueCount: number; report: Analy
   )
 }
 
-function DimensionAccordion({
-  dimension,
-  onToggle,
-  open,
-}: {
+type DimensionAccordionProps = Readonly<{
   dimension: DimensionAnalysis
   onToggle: () => void
   open: boolean
-}) {
+}>
+
+function DimensionAccordion({ dimension, onToggle, open }: DimensionAccordionProps) {
   const contentId = `${dimension.dimension}-details`
   const notEvaluated = dimension.status === 'not_evaluated'
   const positives = collectFindings(dimension, 'POSITIVE')
@@ -255,7 +268,12 @@ function DimensionAccordion({
   )
 }
 
-function OverallDetail({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
+type OverallDetailProps = Readonly<{
+  issueCount: number
+  report: AnalysisResponse
+}>
+
+function OverallDetail({ issueCount, report }: OverallDetailProps) {
   const radarData = report.dimensions
     .filter((dimension) => dimension.status !== 'not_evaluated')
     .map((dimension) => ({
@@ -298,11 +316,7 @@ function OverallDetail({ issueCount, report }: { issueCount: number; report: Ana
             <div className="overview-row" key={dimension.dimension}>
               <span>{formatDimension(dimension.dimension)}</span>
               <strong>{dimension.status === 'not_evaluated' ? '—' : formatScore(dimension.score)}</strong>
-              <small>
-                {dimension.status === 'not_evaluated'
-                  ? 'Not evaluated'
-                  : `${countIssues(dimension)} issue${countIssues(dimension) === 1 ? '' : 's'}`}
-              </small>
+              <small>{dimensionSummary(dimension)}</small>
             </div>
           ))}
         </div>
@@ -311,17 +325,14 @@ function OverallDetail({ issueCount, report }: { issueCount: number; report: Ana
   )
 }
 
-function DimensionDetail({
-  dimension,
-  missing,
-  positives,
-  smells,
-}: {
+type DimensionDetailProps = Readonly<{
   dimension: DimensionAnalysis
   missing: CapabilityFinding[]
   positives: CapabilityFinding[]
   smells: CapabilityFinding[]
-}) {
+}>
+
+function DimensionDetail({ dimension, missing, positives, smells }: DimensionDetailProps) {
   return (
     <div className="detail-columns">
       <div className="detected-group">
@@ -393,62 +404,8 @@ function DimensionDetail({
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const className = status === 'not_evaluated' ? 'badge badge--not-evaluated' : undefined
-  return <Badge className={className}>{formatLabel(status)}</Badge>
-}
+type StatusBadgeProps = Readonly<{ status: string }>
 
-function collectFindings(dimension: DimensionAnalysis, type: CapabilityFinding['type']): CapabilityFinding[] {
-  return dimension.capabilityScores.flatMap((capability: CapabilityScore) =>
-    capability.findings.filter((finding) => finding.type === type),
-  )
-}
-
-function countIssues(dimension: DimensionAnalysis): number {
-  return collectFindings(dimension, 'SMELL').length + collectFindings(dimension, 'MISSING').length
-}
-
-function findingKey(finding: CapabilityFinding): string {
-  return `${finding.ruleId}-${finding.location ?? ''}-${finding.evidence ?? ''}`
-}
-
-function validateFile(file: File | null): string | null {
-  if (!file) return null
-  const normalizedName = file.name.toLowerCase()
-  if (!ACCEPTED_EXTENSIONS.some((extension) => normalizedName.endsWith(extension))) {
-    return 'Upload a .yml or .yaml pipeline file.'
-  }
-  return null
-}
-
-function formatScore(score: number): string {
-  return `${Math.round(score * 100)}%`
-}
-
-function formatFileSize(size: number): string {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
-}
-
-function formatProvider(provider: string): string {
-  if (provider === 'github-actions') return 'GitHub Actions'
-  if (provider === 'gitlab-ci') return 'GitLab CI'
-  return formatLabel(provider)
-}
-
-function formatDimension(dimension: string): string {
-  return dimension
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
-function formatLabel(value: string): string {
-  return value
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
+function StatusBadge({ status }: StatusBadgeProps) {
+  return <Badge className={statusBadgeClassName(status)}>{formatLabel(status)}</Badge>
 }
