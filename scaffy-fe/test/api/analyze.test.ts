@@ -6,22 +6,35 @@ const report: AnalysisResponse = {
   overallScore: 0.74,
   overallLevel: 4,
   overallStatus: 'partial',
-  overallConfidence: 'high',
   dimensions: [
     {
-      dimension: 'build',
+      dimension: 'build_release',
       score: 0.85,
       level: 5,
       status: 'complete',
-      confidence: 'high',
-      detectedPractices: [
+      capabilityScores: [
         {
-          practice: 'Build command',
-          evidence: 'npm run build',
-          location: 'jobs.build.steps[2].run',
+          capability: 'Build scripting',
+          points: 4,
+          findings: [
+            {
+              ruleId: 'BUILD_STAGE_PRESENT',
+              dimension: 'build_release',
+              capability: 'Build scripting',
+              type: 'POSITIVE',
+              evidence: 'npm run build',
+              location: 'jobs.build.steps[2].run',
+            },
+          ],
         },
       ],
-      missingPractices: [],
+    },
+    {
+      dimension: 'security_integration',
+      score: 0.0,
+      level: 0,
+      status: 'not_evaluated',
+      capabilityScores: [],
     },
   ],
 }
