@@ -185,6 +185,120 @@ class SecurityScanningCapabilityRuleSetTest {
 		assertThat(security.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
+	@Test
+	void detectsHardcodedSecretInEnv() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - name: Deploy
+				        run: ./deploy.sh
+				        env:
+				          PASSWORD: plaintext123
+				          DB_URL: ${{ secrets.DATABASE_URL }}
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(smellRuleIds(security)).contains("HARDCODED_SECRET_IN_ENV");
+	}
+
+	@Test
+	void detectsMissingPermissionsInGitHubActions() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - uses: actions/checkout@v4
+				      - run: npm run build
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(missingRuleIds(security)).contains("MISSING_PERMISSIONS");
+	}
+
+	@Test
+	void detectsUnpinnedActionVersion() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: Security
+				on: [push]
+				jobs:
+				  security:
+				    runs-on: ubuntu-latest
+				    permissions:
+				      contents: read
+				    steps:
+				      - uses: actions/checkout@v4
+				      - run: semgrep --config p/security-audit .
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(smellRuleIds(security)).contains("UNPINNED_ACTION_VERSION");
+	}
+
+	@Test
+	void detectsOverpermissiveGitHubToken() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    permissions: write-all
+				    steps:
+				      - run: semgrep --config p/security-audit .
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(smellRuleIds(security)).contains("GITHUB_TOKEN_OVERPERMISSIVE");
+	}
+
+	@Test
+	void detectsPolicyAsCodeTool() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: Policy
+				on: [push]
+				jobs:
+				  policy:
+				    runs-on: ubuntu-latest
+				    permissions:
+				      contents: read
+				    steps:
+				      - run: checkov -d infra/ --framework terraform
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(positiveRuleIds(security)).contains("POLICY_TOOL_PRESENT");
+	}
+
+	@Test
+	void emitsMissingCheckovOrOpaWhenNoPolicyTool() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - run: npm run build
+				      - run: npm test
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(missingRuleIds(security)).contains("CHECKOV_OR_OPA_MISSING");
+	}
+
 	private DomainScore security(AnalysisResponse response) {
 		return response.dimensions().stream()
 				.filter(dimension -> "security_integration".equals(dimension.dimension()))
@@ -197,6 +311,30 @@ class SecurityScanningCapabilityRuleSetTest {
 				.flatMap(cs -> cs.findings().stream())
 				.filter(f -> f.type() == FindingType.POSITIVE)
 				.map(CapabilityFinding::evidence)
+				.toList();
+	}
+
+	private List<String> smellRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.SMELL)
+				.map(CapabilityFinding::ruleId)
+				.toList();
+	}
+
+	private List<String> missingRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.MISSING)
+				.map(CapabilityFinding::ruleId)
+				.toList();
+	}
+
+	private List<String> positiveRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::ruleId)
 				.toList();
 	}
 }
