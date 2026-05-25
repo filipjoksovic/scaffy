@@ -58,7 +58,7 @@ public class PipelineAnalyzer {
 				provider,
 				overallScore,
 				overallLevel,
-				AnalysisSupport.status(overallScore),
+				scoringEngine.overallStatus(overallScore, domainScores),
 				domainScores);
 	}
 

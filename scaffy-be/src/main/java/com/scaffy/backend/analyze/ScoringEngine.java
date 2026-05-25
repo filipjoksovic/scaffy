@@ -12,6 +12,10 @@ import org.springframework.stereotype.Component;
 public class ScoringEngine {
 
 	public DomainScore score(String dimension, List<CapabilityFinding> findings) {
+		if (findings.isEmpty()) {
+			return new DomainScore(dimension, List.of(), 0.0, 0, AnalysisStatus.NOT_EVALUATED);
+		}
+
 		Map<String, List<CapabilityFinding>> byCapability = findings.stream()
 				.collect(Collectors.groupingBy(CapabilityFinding::capability, LinkedHashMap::new, Collectors.toList()));
 
@@ -37,6 +41,13 @@ public class ScoringEngine {
 		}
 		double sum = evaluated.stream().mapToDouble(DomainScore::score).sum();
 		return AnalysisSupport.round(sum / evaluated.size());
+	}
+
+	public AnalysisStatus overallStatus(double overallScore, List<DomainScore> domainScores) {
+		if (!domainScores.isEmpty() && domainScores.stream().allMatch(d -> d.status() == AnalysisStatus.NOT_EVALUATED)) {
+			return AnalysisStatus.NOT_EVALUATED;
+		}
+		return AnalysisSupport.status(overallScore);
 	}
 
 	public int maturityLevel(double overallScore, List<DomainScore> domainScores, List<CapabilityFinding> allFindings) {
