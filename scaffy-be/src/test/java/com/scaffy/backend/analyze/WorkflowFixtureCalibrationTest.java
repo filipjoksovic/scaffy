@@ -38,7 +38,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
 		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
 		assertStatus(response, "testing_maturity", AnalysisStatus.MISSING);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
@@ -49,7 +49,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
 		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
 		assertStatus(response, "testing_maturity", AnalysisStatus.MISSING);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
@@ -60,7 +60,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
 		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
 		assertStatus(response, "testing_maturity", AnalysisStatus.MISSING);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
@@ -71,7 +71,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
 		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
 		assertStatus(response, "testing_maturity", AnalysisStatus.PARTIAL);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
@@ -82,7 +82,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
 		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
 		assertStatus(response, "testing_maturity", AnalysisStatus.MISSING);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
@@ -91,9 +91,9 @@ class WorkflowFixtureCalibrationTest {
 	void workflow06HardcodedSecret() throws IOException {
 		AnalysisResponse response = analyze("workflow-06-hardcoded-secret.yml");
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
-		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
+		assertStatus(response, "build_release", AnalysisStatus.MISSING);
 		assertStatus(response, "testing_maturity", AnalysisStatus.MISSING);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
@@ -104,7 +104,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
 		assertStatus(response, "build_release", AnalysisStatus.MISSING);
 		assertStatus(response, "testing_maturity", AnalysisStatus.MISSING);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.PARTIAL);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
@@ -115,7 +115,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITLAB_CI);
 		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
 		assertStatus(response, "testing_maturity", AnalysisStatus.MISSING);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.PARTIAL);
 	}
@@ -126,7 +126,7 @@ class WorkflowFixtureCalibrationTest {
 		assertProvider(response, PipelineProvider.GITHUB_ACTIONS);
 		assertStatus(response, "build_release", AnalysisStatus.PARTIAL);
 		assertStatus(response, "testing_maturity", AnalysisStatus.PARTIAL);
-		assertStatus(response, "workflow_quality", AnalysisStatus.PARTIAL);
+		assertStatus(response, "workflow_quality", AnalysisStatus.MISSING);
 		assertStatus(response, "security_integration", AnalysisStatus.MISSING);
 		assertStatus(response, "deployment_automation", AnalysisStatus.MISSING);
 	}
