@@ -3,6 +3,8 @@ package com.scaffy.backend.analyze;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,8 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String CAPABILITY_STATIC_ANALYSIS = "Static analysis";
 	private static final String CAPABILITY_DEP_CONTAINER_SCAN = "Dependency / container scanning";
 	private static final String CAPABILITY_SECRET_HYGIENE = "Secret hygiene";
+	private static final String CAPABILITY_SAFE_ACTION_TOKEN = "Safe action/token usage";
+	private static final String CAPABILITY_POLICY_AS_CODE = "Policy as code";
 
 	private static final String PRACTICE_SAST_DETECTED = "SAST or static security scanning detected";
 	private static final String PRACTICE_DEPENDENCY_DETECTED = "Dependency or SCA scanning detected";
@@ -21,10 +25,20 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String PRACTICE_CONTAINER_IAC_DETECTED = "Container image or IaC scanning detected";
 	private static final String PRACTICE_REPORT_DETECTED = "Security report or artifact detected";
 
+	private static final String PRACTICE_HARDCODED_SECRET = "Potential hardcoded secret in env";
+	private static final String PRACTICE_PERMISSIONS_DECLARED = "GitHub Actions permissions declared";
+	private static final String PRACTICE_UNPINNED_ACTION = "Action not pinned to commit SHA";
+	private static final String PRACTICE_POLICY_TOOL_DETECTED = "Policy-as-code tool detected";
+
 	private static final String TOOL_SEMGREP = "semgrep";
 	private static final String KEYWORD_VULNERABILITY = "vulnerability";
 	private static final String KEYWORD_SECRET = "secret";
 	private static final String KEYWORD_SECURITY = "security";
+
+	private static final Pattern HARDCODED_SECRET_PATTERN = Pattern.compile(
+			"(?i)(?:password|secret|token|api[_\\-]?key|private[_\\-]?key|access[_\\-]?key|authtoken|credentials?)[=:]\\s*(\\S+)");
+
+	private static final Pattern PINNED_SHA_PATTERN = Pattern.compile("@[a-f0-9]{40}(?:[^a-zA-Z0-9]|$)");
 
 	private static final List<CommandRule> SAST_RULES = List.of(
 			CommandRule.of("Semgrep", "(?:^|[;&|\\n]\\s*)(?<cmd>semgrep\\b[^\\n;&|]*)"),
@@ -56,6 +70,14 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of("tfsec", "(?:^|[;&|\\n]\\s*)(?<cmd>tfsec\\b[^\\n;&|]*)"),
 			CommandRule.of("Terrascan", "(?:^|[;&|\\n]\\s*)(?<cmd>terrascan\\b[^\\n;&|]*)"),
 			CommandRule.of("KICS", "(?:^|[;&|\\n]\\s*)(?<cmd>kics\\b[^\\n;&|]*)"));
+
+	private static final List<CommandRule> POLICY_AS_CODE_RULES = List.of(
+			CommandRule.of("Checkov", "(?:^|[;&|\\n]\\s*)(?<cmd>checkov\\b[^\\n;&|]*)"),
+			CommandRule.of("OPA", "(?:^|[;&|\\n]\\s*)(?<cmd>opa\\s+(?:eval|run|test)\\b[^\\n;&|]*)"),
+			CommandRule.of("Conftest", "(?:^|[;&|\\n]\\s*)(?<cmd>conftest\\b[^\\n;&|]*)"),
+			CommandRule.of("tfsec", "(?:^|[;&|\\n]\\s*)(?<cmd>tfsec\\b[^\\n;&|]*)"),
+			CommandRule.of("KICS", "(?:^|[;&|\\n]\\s*)(?<cmd>kics\\b[^\\n;&|]*)"),
+			CommandRule.of("Terrascan", "(?:^|[;&|\\n]\\s*)(?<cmd>terrascan\\b[^\\n;&|]*)"));
 
 	@Override
 	public String dimension() {
@@ -110,7 +132,124 @@ public class SecurityScanningCapabilityRuleSet implements CapabilityRuleSet {
 			findings.add(CapabilityFinding.missing("SECRET_SCAN_MISSING", dimension(), CAPABILITY_SECRET_HYGIENE));
 		}
 
+		Optional<DetectedPractice> hardcoded = hardcodedSecretSignal(document);
+		if (hardcoded.isPresent()) {
+			findings.add(CapabilityFinding.smell("HARDCODED_SECRET_IN_ENV", dimension(), CAPABILITY_SECRET_HYGIENE,
+					hardcoded.get().evidence(), hardcoded.get().location()));
+		}
+
+		// Safe action / token usage (GitHub Actions only)
+		if (document.provider() == PipelineProvider.GITHUB_ACTIONS) {
+			detectSafeActionTokenUsage(findings, document);
+		}
+
+		// Policy as code
+		List<CommandMatch> policyMatches = CommandMatcher.findMatches(document, POLICY_AS_CODE_RULES);
+		Optional<DetectedPractice> policyAction = policyAction(document);
+		if (!policyMatches.isEmpty()) {
+			CommandMatch match = policyMatches.getFirst();
+			findings.add(CapabilityFinding.positive("POLICY_TOOL_PRESENT", dimension(), CAPABILITY_POLICY_AS_CODE,
+					match.evidence(), match.location()));
+		}
+		else if (policyAction.isPresent()) {
+			findings.add(CapabilityFinding.positive("POLICY_TOOL_PRESENT", dimension(), CAPABILITY_POLICY_AS_CODE,
+					policyAction.get().evidence(), policyAction.get().location()));
+		}
+		else {
+			findings.add(CapabilityFinding.missing("CHECKOV_OR_OPA_MISSING", dimension(), CAPABILITY_POLICY_AS_CODE));
+		}
+
 		return findings;
+	}
+
+	private void detectSafeActionTokenUsage(List<CapabilityFinding> findings, PipelineDocument document) {
+		boolean hasPermissions = document.jobs().stream()
+				.anyMatch(job -> AnalysisSupport.hasText(job.details())
+						&& AnalysisSupport.lower(job.details()).contains("permissions:"));
+		if (hasPermissions) {
+			findings.add(CapabilityFinding.positive("PERMISSIONS_DECLARED", dimension(), CAPABILITY_SAFE_ACTION_TOKEN,
+					PRACTICE_PERMISSIONS_DECLARED, "jobs"));
+		}
+		else {
+			findings.add(CapabilityFinding.missing("MISSING_PERMISSIONS", dimension(), CAPABILITY_SAFE_ACTION_TOKEN));
+		}
+
+		boolean hasWriteAll = document.jobs().stream()
+				.anyMatch(job -> AnalysisSupport.hasText(job.details())
+						&& AnalysisSupport.lower(job.details()).contains("write-all"));
+		if (hasWriteAll) {
+			findings.add(CapabilityFinding.smell("GITHUB_TOKEN_OVERPERMISSIVE", dimension(), CAPABILITY_SAFE_ACTION_TOKEN,
+					"permissions: write-all detected", "jobs"));
+		}
+
+		Optional<DetectedPractice> unpinned = unpinnedAction(document);
+		if (unpinned.isPresent()) {
+			findings.add(CapabilityFinding.smell("UNPINNED_ACTION_VERSION", dimension(), CAPABILITY_SAFE_ACTION_TOKEN,
+					unpinned.get().evidence(), unpinned.get().location()));
+		}
+	}
+
+	private Optional<DetectedPractice> policyAction(PipelineDocument document) {
+		for (PipelineJob job : document.jobs()) {
+			for (PipelineStep step : job.steps()) {
+				String uses = AnalysisSupport.lower(step.uses());
+				if (uses.contains("bridgecrewio/checkov-action")
+						|| uses.contains("open-policy-agent/conftest-action")
+						|| uses.contains("aquasecurity/tfsec-action")
+						|| uses.contains("checkmarx/kics-github-action")) {
+					return Optional.of(new DetectedPractice(PRACTICE_POLICY_TOOL_DETECTED, step.uses(), step.location()));
+				}
+			}
+		}
+		return Optional.empty();
+	}
+
+	private Optional<DetectedPractice> unpinnedAction(PipelineDocument document) {
+		for (PipelineJob job : document.jobs()) {
+			for (PipelineStep step : job.steps()) {
+				String uses = step.uses();
+				if (uses != null && !uses.isBlank() && uses.contains("@")) {
+					if (!PINNED_SHA_PATTERN.matcher(uses).find()) {
+						return Optional.of(new DetectedPractice(PRACTICE_UNPINNED_ACTION, uses, step.location()));
+					}
+				}
+			}
+		}
+		return Optional.empty();
+	}
+
+	private Optional<DetectedPractice> hardcodedSecretSignal(PipelineDocument document) {
+		for (PipelineJob job : document.jobs()) {
+			Optional<DetectedPractice> found = hardcodedInDetails(job.details(), job.location());
+			if (found.isPresent()) {
+				return found;
+			}
+			for (PipelineStep step : job.steps()) {
+				found = hardcodedInDetails(step.details(), step.location());
+				if (found.isPresent()) {
+					return found;
+				}
+			}
+		}
+		return Optional.empty();
+	}
+
+	private Optional<DetectedPractice> hardcodedInDetails(String details, String location) {
+		if (details == null) {
+			return Optional.empty();
+		}
+		Matcher matcher = HARDCODED_SECRET_PATTERN.matcher(details);
+		while (matcher.find()) {
+			String value = matcher.group(1);
+			if (!isSecretReference(value)) {
+				return Optional.of(new DetectedPractice(PRACTICE_HARDCODED_SECRET, matcher.group(), location));
+			}
+		}
+		return Optional.empty();
+	}
+
+	private boolean isSecretReference(String value) {
+		return value.startsWith("$") || value.equals("\"\"") || value.equals("''") || value.isBlank();
 	}
 
 	private Optional<DetectedPractice> sast(
