@@ -79,6 +79,36 @@
   gap: var(--space-xs);
 }
 
+.auth-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.auth-menu img {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+}
+
+.auth-menu span,
+.auth-status {
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--color-body);
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
 .menu-button {
   display: none;
   width: 40px;

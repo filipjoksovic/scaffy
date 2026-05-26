@@ -1,11 +1,16 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { oauthLoginUrl } from '../api/auth'
+import { useAuth } from '../lib/auth'
 
 type AppFrameProps = {
   children: ReactNode
 }
 
 export function AppFrame({ children }: AppFrameProps) {
+  const { user, loading, logout } = useAuth()
+  const name = user?.displayName || user?.email || 'Account'
+
   return (
     <main className="app-shell">
       <nav aria-label="Primary" className="top-nav">
@@ -24,9 +29,26 @@ export function AppFrame({ children }: AppFrameProps) {
           <NavLink to="/design">Design Language</NavLink>
         </div>
         <div className="nav-actions">
-          <a className="text-link" href="https://github.com/filipjoksovic/scaffy" rel="noreferrer" target="_blank">
-            GitHub
-          </a>
+          {loading ? (
+            <span className="auth-status">Checking session</span>
+          ) : user ? (
+            <div className="auth-menu">
+              {user.avatarUrl && <img alt="" src={user.avatarUrl} />}
+              <span>{name}</span>
+              <button className="text-link" onClick={() => void logout()} type="button">
+                Log out
+              </button>
+            </div>
+          ) : (
+            <div className="auth-menu">
+              <a className="text-link" href={oauthLoginUrl.google}>
+                Google login
+              </a>
+              <a className="text-link" href={oauthLoginUrl.github}>
+                GitHub login
+              </a>
+            </div>
+          )}
         </div>
         <button aria-label="Open menu" className="menu-button" type="button">
           <span />

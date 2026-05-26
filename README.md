@@ -18,7 +18,39 @@ This repository hosts the monorepo: backend, frontend, ops, and docs.
 
 ## Run locally
 
-The simplest path is the Compose stack — it builds both services and routes them behind Traefik on port `80`:
+For day-to-day development, run Postgres in Docker and run the apps from source:
+
+```sh
+cd scaffy-ops
+cp .env.local.example .env.local
+docker compose --env-file .env.local -f compose.local.yml up -d
+```
+
+In a second terminal, start the backend with the local profile:
+
+```sh
+cd scaffy-be
+SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
+```
+
+In a third terminal, start the frontend:
+
+```sh
+cd scaffy-fe
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The frontend development config points API calls at `http://localhost:8080`, and the backend `local` profile uses non-secure `SameSite=Lax` auth cookies for plain localhost.
+
+To test OAuth locally, add provider credentials to your backend environment or IDE run config and register these callback URLs:
+
+```txt
+http://localhost:8080/login/oauth2/code/google
+http://localhost:8080/login/oauth2/code/github
+```
+
+The full Compose stack still exists for production-like runs; it builds both services and routes them behind Traefik on port `80`:
 
 ```sh
 cd scaffy-ops

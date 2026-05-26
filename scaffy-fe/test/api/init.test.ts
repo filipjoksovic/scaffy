@@ -26,6 +26,7 @@ describe('initProject', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/init$/), {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     })

@@ -2,6 +2,49 @@
 
 Docker Compose setup for deploying Scaffy frontend and backend together behind Traefik on a VPS.
 
+## Local development
+
+Use the local Compose file when you want only PostgreSQL from Docker and want to run Spring Boot/Vite directly from source:
+
+```sh
+cd scaffy-ops
+cp .env.local.example .env.local
+docker compose --env-file .env.local -f compose.local.yml up -d
+```
+
+Then start the backend from the repository root or `scaffy-be/` with the local Spring profile:
+
+```sh
+cd ../scaffy-be
+SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
+```
+
+Start the frontend separately:
+
+```sh
+cd ../scaffy-fe
+npm install
+npm run dev
+```
+
+Local URLs:
+
+```txt
+Frontend: http://localhost:5173
+Backend:  http://localhost:8080
+Health:   http://localhost:8080/api/health
+Postgres: localhost:5432/scaffy
+```
+
+For local OAuth apps, configure callback URLs:
+
+```txt
+http://localhost:8080/login/oauth2/code/google
+http://localhost:8080/login/oauth2/code/github
+```
+
+Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_ID`, and `GITHUB_OAUTH_CLIENT_SECRET` in your shell or IDE run configuration before starting the backend. The `local` Spring profile uses `SCAFFY_AUTH_COOKIE_SECURE=false` and `SCAFFY_AUTH_COOKIE_SAME_SITE=Lax`, which is appropriate for plain `http://localhost` development.
+
 ## Services
 
 - `traefik`: public edge router on ports `80` and `443`, with Let's Encrypt TLS.
@@ -29,6 +72,9 @@ Edit `.env`:
 SCAFFY_DOMAIN=api.scaffy.fijol.io
 LETSENCRYPT_EMAIL=admin@example.com
 SCAFFY_CORS_ALLOWED_ORIGINS=https://scaffy.fijol.io
+SCAFFY_APP_FRONTEND_URL=https://scaffy.fijol.io
+SCAFFY_JWT_SECRET=<at-least-32-random-bytes>
+POSTGRES_PASSWORD=<strong-database-password>
 SCAFFY_HTTP_PORT=80
 SCAFFY_HTTPS_PORT=443
 ```
@@ -59,6 +105,12 @@ HETZNER_HOST=<your-vps-ip-or-hostname>
 HETZNER_USER=<ssh-user>
 HETZNER_SSH_KEY=<private-ssh-key>
 LETSENCRYPT_EMAIL=<your-email>
+POSTGRES_PASSWORD=<strong-database-password>
+SCAFFY_JWT_SECRET=<at-least-32-random-bytes>
+GOOGLE_OAUTH_CLIENT_ID=<google-oauth-client-id>
+GOOGLE_OAUTH_CLIENT_SECRET=<google-oauth-client-secret>
+OAUTH_GITHUB_CLIENT_ID=<github-oauth-client-id>
+OAUTH_GITHUB_CLIENT_SECRET=<github-oauth-client-secret>
 ```
 
 Add these repository variables under `Settings -> Secrets and variables -> Actions -> Variables`:
@@ -66,6 +118,7 @@ Add these repository variables under `Settings -> Secrets and variables -> Actio
 ```txt
 SCAFFY_DOMAIN=api.scaffy.fijol.io
 SCAFFY_CORS_ALLOWED_ORIGINS=https://scaffy.fijol.io
+SCAFFY_APP_FRONTEND_URL=https://scaffy.fijol.io
 ```
 
 Optional variables:
@@ -75,7 +128,27 @@ DEPLOY_PATH=/opt/scaffy
 HETZNER_PORT=22
 SCAFFY_HTTP_PORT=80
 SCAFFY_HTTPS_PORT=443
+POSTGRES_DB=scaffy
+POSTGRES_USER=scaffy
 ```
+
+## OAuth callbacks
+
+Configure OAuth applications with backend callback URLs:
+
+```txt
+https://api.scaffy.fijol.io/login/oauth2/code/google
+https://api.scaffy.fijol.io/login/oauth2/code/github
+```
+
+For local development, use:
+
+```txt
+http://localhost:8080/login/oauth2/code/google
+http://localhost:8080/login/oauth2/code/github
+```
+
+Google should request `openid profile email`. GitHub should request identity scopes only: `read:user` and `user:email`. Repository scopes are intentionally excluded until repository analysis is implemented.
 
 The VPS user must be able to run Docker Compose in `DEPLOY_PATH`. If the user is not `root`, add it to the `docker` group or configure passwordless Docker access for deployments.
 

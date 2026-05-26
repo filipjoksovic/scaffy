@@ -29,10 +29,25 @@ services:
       dockerfile: ../scaffy-ops/docker/scaffy-be.Dockerfile
     image: scaffy/scaffy-be:latest
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-scaffy}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-scaffy}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-scaffy}
       SCAFFY_CORS_ALLOWED_ORIGINS: ${SCAFFY_CORS_ALLOWED_ORIGINS:-}
+      SCAFFY_APP_FRONTEND_URL: ${SCAFFY_APP_FRONTEND_URL:-https://${SCAFFY_DOMAIN}}
+      SCAFFY_JWT_SECRET: ${SCAFFY_JWT_SECRET:?Set SCAFFY_JWT_SECRET}
+      SCAFFY_AUTH_COOKIE_SECURE: ${SCAFFY_AUTH_COOKIE_SECURE:-true}
+      SCAFFY_AUTH_COOKIE_SAME_SITE: ${SCAFFY_AUTH_COOKIE_SAME_SITE:-None}
+      SCAFFY_AUTH_COOKIE_DOMAIN: ${SCAFFY_AUTH_COOKIE_DOMAIN:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
     expose:
       - "8080"
     labels:
@@ -48,6 +63,23 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    networks:
+      - scaffy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-scaffy}
+      POSTGRES_USER: ${POSTGRES_USER:-scaffy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scaffy}
+    volumes:
+      - scaffy-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scaffy} -d ${POSTGRES_DB:-scaffy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - scaffy
 
@@ -84,3 +116,4 @@ networks:
 
 volumes:
   traefik-letsencrypt:
+  scaffy-postgres:

@@ -60,6 +60,7 @@ describe('analyzePipeline', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toMatch(/\/api\/analyze$/)
     expect(init.method).toBe('POST')
+    expect(init.credentials).toBe('include')
     expect(init.body).toBeInstanceOf(FormData)
     expect(init.body.get('file')).toBe(file)
     expect(init.headers).toBeUndefined()

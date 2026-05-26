@@ -10,6 +10,13 @@ export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`
 }
 
+export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(apiUrl(path), {
+    ...init,
+    credentials: 'include',
+  })
+}
+
 export async function throwApiError(response: Response): Promise<never> {
   let body: ApiErrorResponse | undefined
   try {

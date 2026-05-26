@@ -1,4 +1,4 @@
-import { apiUrl, throwApiError } from './client'
+import { apiFetch, throwApiError } from './client'
 
 export type AnalysisStatus = 'missing' | 'partial' | 'complete' | 'not_evaluated' | (string & {})
 export type PipelineProvider = 'github-actions' | 'gitlab-ci' | (string & {})
@@ -39,7 +39,7 @@ export async function analyzePipeline(file: File): Promise<AnalysisResponse> {
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch(apiUrl('/api/analyze'), {
+  const response = await apiFetch('/api/analyze', {
     method: 'POST',
     body: formData,
   })

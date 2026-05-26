@@ -1,4 +1,4 @@
-import { apiUrl, throwApiError } from './client'
+import { apiFetch, throwApiError } from './client'
 
 export type InitRequest = {
   projectName: string
@@ -9,7 +9,7 @@ export type InitRequest = {
 }
 
 export async function initProject(request: InitRequest): Promise<Blob> {
-  const response = await fetch(apiUrl('/api/init'), {
+  const response = await apiFetch('/api/init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
