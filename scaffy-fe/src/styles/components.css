@@ -1,4 +1,7 @@
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 40px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -6,6 +9,7 @@
   font-size: 14px;
   font-weight: 500;
   line-height: 1;
+  text-decoration: none;
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -412,12 +416,20 @@
 }
 
 .state-row--error > span:first-child {
-  border-color: color-mix(in srgb, var(--color-error) 40%, var(--color-hairline));
+  border-color: color-mix(
+    in srgb,
+    var(--color-error) 40%,
+    var(--color-hairline)
+  );
   color: var(--color-error);
 }
 
 .state-row--success > span:first-child {
-  border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-hairline));
+  border-color: color-mix(
+    in srgb,
+    var(--color-success) 40%,
+    var(--color-hairline)
+  );
   color: var(--color-success);
 }
 
