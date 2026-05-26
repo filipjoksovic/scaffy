@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Initializer } from './pages/Initializer'
 import { DesignSystem } from './pages/DesignSystem'
 import { Analyzer } from './pages/Analyzer'
+import { Dashboard } from './pages/Dashboard'
 import { Landing } from './pages/Landing'
 import { AuthProvider } from './lib/auth'
 import './App.css'
@@ -12,6 +13,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/init" element={<Initializer />} />
           <Route path="/analyze" element={<Analyzer />} />
           <Route path="/design" element={<DesignSystem />} />

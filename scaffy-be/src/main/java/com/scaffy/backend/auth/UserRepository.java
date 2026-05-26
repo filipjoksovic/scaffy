@@ -2,7 +2,11 @@ package com.scaffy.backend.auth;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,6 +44,39 @@ public class UserRepository {
 				FROM users
 				WHERE id = ?
 				""", this::mapUser, id).stream().findFirst();
+	}
+
+	public int updateOAuthAccessToken(
+			UUID userId,
+			String provider,
+			String providerUserId,
+			String encryptedAccessToken,
+			Instant expiresAt,
+			Set<String> scopes) {
+		return jdbcTemplate.update("""
+				UPDATE oauth_accounts
+				SET access_token_encrypted = ?,
+					access_token_expires_at = ?,
+					scopes = ?,
+					updated_at = CURRENT_TIMESTAMP
+				WHERE user_id = ? AND provider = ? AND provider_user_id = ?
+				""",
+				encryptedAccessToken,
+				expiresAt == null ? null : OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC),
+				scopes == null ? null : String.join(" ", scopes),
+				userId,
+				provider,
+				providerUserId);
+	}
+
+	public Optional<OAuthAccessTokenRecord> findOAuthAccessToken(UUID userId, String provider) {
+		return jdbcTemplate.query("""
+				SELECT access_token_encrypted, access_token_expires_at, scopes
+				FROM oauth_accounts
+				WHERE user_id = ? AND provider = ? AND access_token_encrypted IS NOT NULL
+				ORDER BY updated_at DESC
+				LIMIT 1
+				""", this::mapToken, userId, provider).stream().findFirst();
 	}
 
 	private Optional<AppUser> findByOAuthAccount(String provider, String providerUserId) {
@@ -112,5 +149,12 @@ public class UserRepository {
 				rs.getString("email"),
 				rs.getString("display_name"),
 				rs.getString("avatar_url"));
+	}
+
+	private OAuthAccessTokenRecord mapToken(ResultSet rs, int rowNum) throws SQLException {
+		return new OAuthAccessTokenRecord(
+				rs.getString("access_token_encrypted"),
+				rs.getObject("access_token_expires_at", OffsetDateTime.class),
+				rs.getString("scopes"));
 	}
 }

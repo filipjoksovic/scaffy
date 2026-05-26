@@ -17,8 +17,12 @@ class AuthSchemaTest {
 	void flywayCreatesAuthTables() {
 		Integer userCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
 		Integer oauthAccountCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM oauth_accounts", Integer.class);
+		Integer repositoryConnectionCount = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM repository_connections",
+				Integer.class);
 
-		assertThat(userCount).isZero();
-		assertThat(oauthAccountCount).isZero();
+		assertThat(userCount).isNotNull();
+		assertThat(oauthAccountCount).isNotNull();
+		assertThat(repositoryConnectionCount).isNotNull();
 	}
 }

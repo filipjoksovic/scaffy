@@ -10,6 +10,7 @@ public record AuthProperties(
 		boolean cookieSecure,
 		String cookieSameSite,
 		String cookieDomain,
+		String providerTokenEncryptionSecret,
 		long accessTokenTtlSeconds) {
 
 	public static final String ACCESS_COOKIE = "scaffy_access";

@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -27,6 +28,9 @@ class AuthControllerTest {
 
 	@Autowired
 	private JwtService jwtService;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	private MockMvc mockMvc() {
 		return MockMvcBuilders.webAppContextSetup(context)
@@ -47,6 +51,7 @@ class AuthControllerTest {
 				"dev@example.com",
 				"Dev User",
 				"https://example.com/avatar.png");
+		insertUser(user);
 		String token = jwtService.createAccessToken(user);
 
 		mockMvc().perform(get("/api/auth/me").cookie(new Cookie(AuthProperties.ACCESS_COOKIE, token)))
@@ -58,6 +63,19 @@ class AuthControllerTest {
 	}
 
 	@Test
+	void meRejectsJwtCookieForMissingUser() throws Exception {
+		AppUser user = new AppUser(
+				UUID.fromString("3d60ec46-0399-49db-9145-a065f5f3a1d0"),
+				"stale@example.com",
+				"Stale User",
+				null);
+		String token = jwtService.createAccessToken(user);
+
+		mockMvc().perform(get("/api/auth/me").cookie(new Cookie(AuthProperties.ACCESS_COOKIE, token)))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void logoutClearsAccessCookie() throws Exception {
 		mockMvc().perform(post("/api/auth/logout"))
 				.andExpect(status().isOk())
@@ -65,5 +83,15 @@ class AuthControllerTest {
 				.andExpect(header().string("Set-Cookie", containsString(AuthProperties.ACCESS_COOKIE + "=")))
 				.andExpect(header().string("Set-Cookie", containsString("Max-Age=0")))
 				.andExpect(header().string("Set-Cookie", containsString("HttpOnly")));
+	}
+
+	private void insertUser(AppUser user) {
+		Integer existing = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users WHERE id = ?", Integer.class, user.id());
+		if (existing == null || existing == 0) {
+			jdbcTemplate.update("""
+					INSERT INTO users (id, email, display_name, avatar_url)
+					VALUES (?, ?, ?, ?)
+					""", user.id(), user.email(), user.displayName(), user.avatarUrl());
+		}
 	}
 }
