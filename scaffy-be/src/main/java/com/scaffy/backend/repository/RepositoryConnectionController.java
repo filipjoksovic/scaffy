@@ -26,14 +26,17 @@ import jakarta.validation.Valid;
 public class RepositoryConnectionController {
 
 	private final RepositoryConnectionRepository repository;
+	private final RepositoryAnalysisService repositoryAnalysisService;
 	private final GitHubRepositoryClient gitHubRepositoryClient;
 	private final GitHubRepositoryRefParser parser;
 
 	public RepositoryConnectionController(
 			RepositoryConnectionRepository repository,
+			RepositoryAnalysisService repositoryAnalysisService,
 			GitHubRepositoryClient gitHubRepositoryClient,
 			GitHubRepositoryRefParser parser) {
 		this.repository = repository;
+		this.repositoryAnalysisService = repositoryAnalysisService;
 		this.gitHubRepositoryClient = gitHubRepositoryClient;
 		this.parser = parser;
 	}
@@ -61,6 +64,13 @@ public class RepositoryConnectionController {
 			@Valid @RequestBody ConnectRepositoryRequest request) {
 		GitHubRepositoryRef ref = parser.parse(request.repository());
 		return RepositoryConnectionResponse.from(repository.connectGitHub(principal.userId(), ref));
+	}
+
+	@PostMapping(path = "/{id}/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
+	public RepositoryAnalysisResponse analyzeRepository(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@PathVariable UUID id) {
+		return repositoryAnalysisService.analyze(principal.userId(), id);
 	}
 
 	@DeleteMapping("/{id}")

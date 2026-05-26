@@ -116,6 +116,27 @@ class RepositoryConnectionControllerTest {
 				.andExpect(jsonPath("$.message").value("Reconnect with GitHub before fetching repositories."));
 	}
 
+	@Test
+	void analyzingRepositoryRequiresGitHubToken() throws Exception {
+		Cookie cookie = authCookie("a1ec1bfe-40b7-4fc3-9425-ad111b423126");
+
+		MvcResult created = mockMvc().perform(post("/api/repositories")
+						.cookie(cookie)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"repository":"scaffy-labs/demo-app"}
+								"""))
+				.andExpect(status().isCreated())
+				.andReturn();
+
+		JsonNode body = objectMapper.readTree(created.getResponse().getContentAsByteArray());
+		String id = body.get("id").asString();
+
+		mockMvc().perform(post("/api/repositories/" + id + "/analyze").cookie(cookie))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("Reconnect with GitHub before analyzing repositories."));
+	}
+
 	private Cookie authCookie(String userId) {
 		AppUser user = new AppUser(
 				UUID.fromString(userId),

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  analyzeRepository,
   connectRepository,
   disconnectRepository,
   listGitHubRepositories,
@@ -90,6 +91,32 @@ describe('repository connections API', () => {
     await expect(disconnectRepository('repo-id')).resolves.toBeUndefined()
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-id$/), {
       method: 'DELETE',
+      credentials: 'include',
+    })
+  })
+
+  it('analyzes a repository with credentials', async () => {
+    const analysis = {
+      repositoryId: 'repo-id',
+      repository: 'scaffy-labs/demo-app',
+      workflowPath: '.github/workflows/ci.yml',
+      analysis: {
+        provider: 'github-actions',
+        overallScore: 0.4,
+        overallLevel: 2,
+        overallStatus: 'partial',
+        dimensions: [],
+      },
+    }
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(analysis),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(analyzeRepository('repo-id')).resolves.toEqual(analysis)
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-id\/analyze$/), {
+      method: 'POST',
       credentials: 'include',
     })
   })

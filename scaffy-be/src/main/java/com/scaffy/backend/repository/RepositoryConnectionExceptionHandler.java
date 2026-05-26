@@ -8,8 +8,15 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.scaffy.backend.analyze.PipelineAnalysisException;
+
 @RestControllerAdvice(assignableTypes = RepositoryConnectionController.class)
 public class RepositoryConnectionExceptionHandler {
+
+	@ExceptionHandler(PipelineAnalysisException.class)
+	public ResponseEntity<Map<String, Object>> handlePipelineAnalysis(PipelineAnalysisException ex) {
+		return ResponseEntity.badRequest().body(body(ex.error(), ex.getMessage()));
+	}
 
 	@ExceptionHandler(ResponseStatusException.class)
 	public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException ex) {

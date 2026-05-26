@@ -291,6 +291,116 @@
   justify-content: flex-end;
 }
 
+.analysis-panel {
+  gap: var(--space-base);
+}
+
+.analysis-panel--empty p {
+  color: var(--color-body);
+}
+
+.analysis-panel__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-base);
+}
+
+.analysis-panel__header > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-xs);
+}
+
+.analysis-panel__header p {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.analysis-panel__header code {
+  color: var(--color-ink);
+}
+
+.analysis-score {
+  display: grid;
+  min-width: calc(var(--space-section) + var(--space-xl));
+  gap: var(--space-xxs);
+  padding-left: var(--space-base);
+  border-left: 1px solid var(--color-hairline);
+  text-align: right;
+}
+
+.analysis-score strong {
+  color: var(--color-ink);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.analysis-score span {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.analysis-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.analysis-dimensions {
+  display: grid;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.analysis-dimension {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-base);
+  padding: var(--space-base) 0;
+  border-bottom: 1px solid var(--color-hairline-soft);
+}
+
+.analysis-dimension:last-child {
+  border-bottom: 0;
+}
+
+.analysis-dimension > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-xxs);
+}
+
+.analysis-dimension strong {
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.analysis-dimension span,
+.analysis-dimension__findings {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.analysis-dimension__score {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.analysis-dimension__findings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
 .quick-connect {
   display: grid;
   gap: var(--space-sm);
@@ -474,6 +584,21 @@
   .repo-table tbody td {
     padding: var(--space-xxs) 0;
     border: 0;
+  }
+
+  .analysis-panel__header,
+  .analysis-dimension {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-score {
+    padding-left: 0;
+    border-left: 0;
+    text-align: left;
+  }
+
+  .analysis-dimension__findings {
+    justify-content: flex-start;
   }
 
   .row-actions {

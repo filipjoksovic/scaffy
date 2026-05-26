@@ -2,15 +2,25 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { oauthLoginUrl } from '../api/auth'
 import {
+  analyzeRepository,
   connectRepository,
   disconnectRepository,
   listGitHubRepositories,
   listRepositoryConnections,
   type GitHubRepository,
+  type RepositoryAnalysis,
   type RepositoryConnection,
 } from '../api/repositories'
 import { AppFrame, Badge, Button, Card, Eyebrow, StateRow, TextInput } from '../components'
 import { useAuth } from '../lib/auth'
+import {
+  collectFindings,
+  countIssues,
+  formatDimension,
+  formatProvider,
+  formatScore,
+  statusBadgeClassName,
+} from '../lib/analyzer'
 
 type GitHubAccessState = 'connected' | 'needs-reconnect' | 'unknown'
 
@@ -26,6 +36,9 @@ export function Dashboard() {
   const [filter, setFilter] = useState('')
   const [githubFilter, setGithubFilter] = useState('')
   const [githubAccess, setGithubAccess] = useState<GitHubAccessState>('unknown')
+  const [analysis, setAnalysis] = useState<RepositoryAnalysis | null>(null)
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) {
@@ -102,11 +115,26 @@ export function Dashboard() {
 
   async function handleDisconnect(id: string) {
     setError(null)
+    setAnalysisError(null)
     try {
       await disconnectRepository(id)
       setConnections((current) => current.filter((item) => item.id !== id))
+      setAnalysis((current) => (current?.repositoryId === id ? null : current))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not remove repository.')
+    }
+  }
+
+  async function handleAnalyzeRepository(connection: RepositoryConnection) {
+    setAnalyzingId(connection.id)
+    setAnalysisError(null)
+    setAnalysis(null)
+    try {
+      setAnalysis(await analyzeRepository(connection.id))
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : 'Could not analyze repository.')
+    } finally {
+      setAnalyzingId(null)
     }
   }
 
@@ -305,6 +333,14 @@ export function Dashboard() {
                           </td>
                           <td>
                             <div className="row-actions">
+                              <Button
+                                className="button--small"
+                                disabled={analyzingId === connection.id}
+                                onClick={() => void handleAnalyzeRepository(connection)}
+                                variant="secondary"
+                              >
+                                {analyzingId === connection.id ? 'Analyzing' : 'Analyze'}
+                              </Button>
                               <a
                                 aria-label={`Open ${connection.owner}/${connection.name} on GitHub`}
                                 className="icon-button"
@@ -333,6 +369,8 @@ export function Dashboard() {
                 </div>
               )}
             </Card>
+
+            <RepositoryAnalysisPanel analysis={analysis} error={analysisError} loading={analyzingId !== null} />
           </div>
 
           <aside className="dashboard-rail" aria-label="Connect repository">
@@ -462,6 +500,99 @@ export function Dashboard() {
         </div>
       </section>
     </AppFrame>
+  )
+}
+
+type RepositoryAnalysisPanelProps = Readonly<{
+  analysis: RepositoryAnalysis | null
+  error: string | null
+  loading: boolean
+}>
+
+function RepositoryAnalysisPanel({ analysis, error, loading }: RepositoryAnalysisPanelProps) {
+  if (loading) {
+    return (
+      <Card as="section" className="analysis-panel">
+        <StateRow
+          detail="Finding GitHub Actions workflows and running the Scaffy capability analyzer."
+          label="Analyzing repository"
+          tone="loading"
+        />
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card as="section" className="analysis-panel">
+        <StateRow detail={error} icon="!" label="Repository analysis failed" tone="error" />
+      </Card>
+    )
+  }
+
+  if (!analysis) {
+    return (
+      <Card as="section" className="analysis-panel analysis-panel--empty">
+        <Eyebrow>Analysis</Eyebrow>
+        <h3>No repository analysis yet</h3>
+        <p>Select Analyze on a connected project to scrape its GitHub Actions workflow and score it.</p>
+      </Card>
+    )
+  }
+
+  const issueCount = analysis.analysis.dimensions.reduce(
+    (total, dimension) => total + countIssues(dimension),
+    0,
+  )
+
+  return (
+    <Card as="section" className="analysis-panel">
+      <div className="analysis-panel__header">
+        <div>
+          <Eyebrow>Analysis result</Eyebrow>
+          <h3>{analysis.repository}</h3>
+          <p>
+            {formatProvider(analysis.analysis.provider)} · <code>{analysis.workflowPath}</code>
+          </p>
+        </div>
+        <div className="analysis-score">
+          <strong>{formatScore(analysis.analysis.overallScore)}</strong>
+          <span>Level {analysis.analysis.overallLevel}</span>
+        </div>
+      </div>
+
+      <div className="analysis-meta">
+        <Badge>{formatProvider(analysis.analysis.provider)}</Badge>
+        <Badge className={statusBadgeClassName(analysis.analysis.overallStatus)}>
+          {analysis.analysis.overallStatus}
+        </Badge>
+        <span>{issueCount} open {issueCount === 1 ? 'issue' : 'issues'}</span>
+      </div>
+
+      <div className="analysis-dimensions">
+        {analysis.analysis.dimensions.map((dimension) => {
+          const positives = collectFindings(dimension, 'POSITIVE')
+          const smells = collectFindings(dimension, 'SMELL')
+          const missing = collectFindings(dimension, 'MISSING')
+          return (
+            <div className="analysis-dimension" key={dimension.dimension}>
+              <div>
+                <strong>{formatDimension(dimension.dimension)}</strong>
+                <span>{dimension.status === 'not_evaluated' ? 'Not evaluated' : `Level ${dimension.level}`}</span>
+              </div>
+              <div className="analysis-dimension__score">
+                {dimension.status === 'not_evaluated' ? '—' : formatScore(dimension.score)}
+              </div>
+              <div className="analysis-dimension__findings">
+                <span>{positives.length} positive</span>
+                <span>{smells.length} smells</span>
+                <span>{missing.length} missing</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
   )
 }
 

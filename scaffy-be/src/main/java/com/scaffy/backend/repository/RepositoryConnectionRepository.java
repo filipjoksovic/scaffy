@@ -66,6 +66,14 @@ public class RepositoryConnectionRepository {
 				""", id, userId) > 0;
 	}
 
+	public Optional<RepositoryConnection> findByIdForUser(UUID userId, UUID id) {
+		return jdbcTemplate.query("""
+				SELECT id, user_id, provider, repository_owner, repository_name, repository_url, connected_at
+				FROM repository_connections
+				WHERE user_id = ? AND id = ?
+				""", this::mapConnection, userId, id).stream().findFirst();
+	}
+
 	private Optional<RepositoryConnection> findByUserAndRepository(
 			UUID userId,
 			String provider,
@@ -76,14 +84,6 @@ public class RepositoryConnectionRepository {
 				FROM repository_connections
 				WHERE user_id = ? AND provider = ? AND repository_owner = ? AND repository_name = ?
 				""", this::mapConnection, userId, provider, owner, name).stream().findFirst();
-	}
-
-	private Optional<RepositoryConnection> findByIdForUser(UUID userId, UUID id) {
-		return jdbcTemplate.query("""
-				SELECT id, user_id, provider, repository_owner, repository_name, repository_url, connected_at
-				FROM repository_connections
-				WHERE user_id = ? AND id = ?
-				""", this::mapConnection, userId, id).stream().findFirst();
 	}
 
 	private RepositoryConnection mapConnection(ResultSet rs, int rowNum) throws SQLException {

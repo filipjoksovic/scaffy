@@ -1,4 +1,5 @@
 import { apiFetch, throwApiError } from './client'
+import type { AnalysisResponse } from './analyze'
 
 export type RepositoryConnection = {
   id: string
@@ -15,6 +16,13 @@ export type GitHubRepository = {
   name: string
   url: string
   privateRepository: boolean
+}
+
+export type RepositoryAnalysis = {
+  repositoryId: string
+  repository: string
+  workflowPath: string
+  analysis: AnalysisResponse
 }
 
 export async function listRepositoryConnections(): Promise<RepositoryConnection[]> {
@@ -54,4 +62,14 @@ export async function disconnectRepository(id: string): Promise<void> {
   if (!response.ok) {
     await throwApiError(response)
   }
+}
+
+export async function analyzeRepository(id: string): Promise<RepositoryAnalysis> {
+  const response = await apiFetch(`/api/repositories/${id}/analyze`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return (await response.json()) as RepositoryAnalysis
 }
