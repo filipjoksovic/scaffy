@@ -8,6 +8,17 @@ export type RepositoryConnection = {
   name: string
   url: string
   connectedAt: string
+  analysisSummary: RepositoryAnalysisSummary | null
+}
+
+export type RepositoryAnalysisSummary = {
+  analyzedAt: string
+  workflowPath: string
+  overallScore: number
+  overallLevel: number
+  overallStatus: string
+  analysisSchemaVersion: number
+  analyzerModelVersion: string
 }
 
 export type GitHubRepository = {
@@ -22,6 +33,9 @@ export type RepositoryAnalysis = {
   repositoryId: string
   repository: string
   workflowPath: string
+  analyzedAt: string
+  analysisSchemaVersion: number
+  analyzerModelVersion: string
   analysis: AnalysisResponse
 }
 
@@ -68,6 +82,14 @@ export async function analyzeRepository(id: string): Promise<RepositoryAnalysis>
   const response = await apiFetch(`/api/repositories/${id}/analyze`, {
     method: 'POST',
   })
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return (await response.json()) as RepositoryAnalysis
+}
+
+export async function getRepositoryAnalysis(id: string): Promise<RepositoryAnalysis> {
+  const response = await apiFetch(`/api/repositories/${id}/analysis`)
   if (!response.ok) {
     await throwApiError(response)
   }

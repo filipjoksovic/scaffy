@@ -2,6 +2,7 @@ package com.scaffy.backend.repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -27,25 +28,31 @@ public class RepositoryConnectionController {
 
 	private final RepositoryConnectionRepository repository;
 	private final RepositoryAnalysisService repositoryAnalysisService;
+	private final RepositoryAnalysisRepository repositoryAnalysisRepository;
 	private final GitHubRepositoryClient gitHubRepositoryClient;
 	private final GitHubRepositoryRefParser parser;
 
 	public RepositoryConnectionController(
 			RepositoryConnectionRepository repository,
 			RepositoryAnalysisService repositoryAnalysisService,
+			RepositoryAnalysisRepository repositoryAnalysisRepository,
 			GitHubRepositoryClient gitHubRepositoryClient,
 			GitHubRepositoryRefParser parser) {
 		this.repository = repository;
 		this.repositoryAnalysisService = repositoryAnalysisService;
+		this.repositoryAnalysisRepository = repositoryAnalysisRepository;
 		this.gitHubRepositoryClient = gitHubRepositoryClient;
 		this.parser = parser;
 	}
 
 	@GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
 	public List<RepositoryConnectionResponse> list(@AuthenticationPrincipal ScaffyPrincipal principal) {
-		return repository.findByUserId(principal.userId())
+		List<RepositoryConnection> connections = repository.findByUserId(principal.userId());
+		Map<UUID, RepositoryAnalysisSummary> summaries = repositoryAnalysisRepository.findSummariesByRepositoryConnectionIds(
+				connections.stream().map(RepositoryConnection::id).toList());
+		return connections
 				.stream()
-				.map(RepositoryConnectionResponse::from)
+				.map(connection -> RepositoryConnectionResponse.from(connection, summaries.get(connection.id())))
 				.toList();
 	}
 
@@ -63,7 +70,7 @@ public class RepositoryConnectionController {
 			@AuthenticationPrincipal ScaffyPrincipal principal,
 			@Valid @RequestBody ConnectRepositoryRequest request) {
 		GitHubRepositoryRef ref = parser.parse(request.repository());
-		return RepositoryConnectionResponse.from(repository.connectGitHub(principal.userId(), ref));
+		return RepositoryConnectionResponse.from(repository.connectGitHub(principal.userId(), ref), null);
 	}
 
 	@PostMapping(path = "/{id}/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -71,6 +78,13 @@ public class RepositoryConnectionController {
 			@AuthenticationPrincipal ScaffyPrincipal principal,
 			@PathVariable UUID id) {
 		return repositoryAnalysisService.analyze(principal.userId(), id);
+	}
+
+	@GetMapping(path = "/{id}/analysis", produces = MediaType.APPLICATION_JSON_VALUE)
+	public RepositoryAnalysisResponse getRepositoryAnalysis(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@PathVariable UUID id) {
+		return repositoryAnalysisService.getStoredAnalysis(principal.userId(), id);
 	}
 
 	@DeleteMapping("/{id}")
@@ -87,16 +101,42 @@ public class RepositoryConnectionController {
 			String owner,
 			String name,
 			String url,
-			OffsetDateTime connectedAt) {
+			OffsetDateTime connectedAt,
+			RepositoryAnalysisSummaryResponse analysisSummary) {
 
-		static RepositoryConnectionResponse from(RepositoryConnection connection) {
+		static RepositoryConnectionResponse from(RepositoryConnection connection, RepositoryAnalysisSummary summary) {
 			return new RepositoryConnectionResponse(
 					connection.id().toString(),
 					connection.provider(),
 					connection.owner(),
 					connection.name(),
 					connection.url(),
-					connection.connectedAt());
+					connection.connectedAt(),
+					RepositoryAnalysisSummaryResponse.from(summary));
+		}
+	}
+
+	public record RepositoryAnalysisSummaryResponse(
+			OffsetDateTime analyzedAt,
+			String workflowPath,
+			double overallScore,
+			int overallLevel,
+			String overallStatus,
+			int analysisSchemaVersion,
+			String analyzerModelVersion) {
+
+		static RepositoryAnalysisSummaryResponse from(RepositoryAnalysisSummary summary) {
+			if (summary == null) {
+				return null;
+			}
+			return new RepositoryAnalysisSummaryResponse(
+					summary.analyzedAt(),
+					summary.workflowPath(),
+					summary.overallScore(),
+					summary.overallLevel(),
+					summary.overallStatus(),
+					summary.analysisSchemaVersion(),
+					summary.analyzerModelVersion());
 		}
 	}
 

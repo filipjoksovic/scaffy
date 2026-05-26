@@ -10,10 +10,12 @@ import {
   analyzeRepository,
   connectRepository,
   disconnectRepository,
+  getRepositoryAnalysis,
   listGitHubRepositories,
   listRepositoryConnections,
   type GitHubRepository,
   type RepositoryAnalysis,
+  type RepositoryAnalysisSummary,
   type RepositoryConnection,
 } from "../api/repositories";
 import {
@@ -64,6 +66,9 @@ export function Dashboard() {
     Record<string, RepositoryAnalysis>
   >({});
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [loadingAnalysisId, setLoadingAnalysisId] = useState<string | null>(
+    null,
+  );
   const [analysisErrorByRepository, setAnalysisErrorByRepository] = useState<
     Record<string, string>
   >({});
@@ -74,6 +79,7 @@ export function Dashboard() {
       setGitHubRepositories([]);
       setSelectedRepositoryId(null);
       setAnalysisByRepository({});
+      setLoadingAnalysisId(null);
       setAnalysisErrorByRepository({});
       return;
     }
@@ -149,8 +155,58 @@ export function Dashboard() {
     ? (analysisErrorByRepository[selectedConnection.id] ?? null)
     : null;
   const analyzedCount = connections.filter(
-    (connection) => analysisByRepository[connection.id],
+    (connection) =>
+      connection.analysisSummary || analysisByRepository[connection.id],
   ).length;
+
+  useEffect(() => {
+    if (
+      !selectedConnection?.analysisSummary ||
+      analysisByRepository[selectedConnection.id]
+    ) {
+      return undefined;
+    }
+
+    let mounted = true;
+    setLoadingAnalysisId(selectedConnection.id);
+    setAnalysisErrorByRepository((current) => {
+      const next = { ...current };
+      delete next[selectedConnection.id];
+      return next;
+    });
+
+    getRepositoryAnalysis(selectedConnection.id)
+      .then((storedAnalysis) => {
+        if (mounted) {
+          setAnalysisByRepository((current) => ({
+            ...current,
+            [selectedConnection.id]: storedAnalysis,
+          }));
+        }
+      })
+      .catch((err: unknown) => {
+        if (mounted) {
+          setAnalysisErrorByRepository((current) => ({
+            ...current,
+            [selectedConnection.id]:
+              err instanceof Error
+                ? err.message
+                : "Could not load repository analysis.",
+          }));
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoadingAnalysisId((current) =>
+            current === selectedConnection.id ? null : current,
+          );
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [analysisByRepository, selectedConnection]);
 
   const accessState: GitHubAccessState = needsGitHubReconnect
     ? "needs-reconnect"
@@ -230,6 +286,13 @@ export function Dashboard() {
         ...current,
         [connection.id]: nextAnalysis,
       }));
+      setConnections((current) =>
+        current.map((item) =>
+          item.id === connection.id
+            ? { ...item, analysisSummary: summaryFromAnalysis(nextAnalysis) }
+            : item,
+        ),
+      );
     } catch (err) {
       setAnalysisErrorByRepository((current) => ({
         ...current,
@@ -405,6 +468,11 @@ export function Dashboard() {
                   ? analyzingId === selectedConnection.id
                   : false
               }
+              loadingStored={
+                selectedConnection
+                  ? loadingAnalysisId === selectedConnection.id
+                  : false
+              }
               onAnalyze={handleAnalyzeRepository}
               onDisconnect={handleDisconnect}
             />
@@ -492,7 +560,9 @@ function ProjectSidebar({
         <ul className="project-list">
           {filteredConnections.map((connection) => {
             const selected = selectedRepositoryId === connection.id;
-            const analyzed = Boolean(analysisByRepository[connection.id]);
+            const analyzed = Boolean(
+              connection.analysisSummary || analysisByRepository[connection.id],
+            );
             return (
               <li key={connection.id}>
                 <button
@@ -527,6 +597,7 @@ type ProjectDetailProps = Readonly<{
   connection: RepositoryConnection | null;
   error: string | null;
   loading: boolean;
+  loadingStored: boolean;
   onAnalyze: (connection: RepositoryConnection) => void;
   onDisconnect: (id: string) => void;
 }>;
@@ -536,6 +607,7 @@ function ProjectDetail({
   connection,
   error,
   loading,
+  loadingStored,
   onAnalyze,
   onDisconnect,
 }: ProjectDetailProps) {
@@ -555,7 +627,7 @@ function ProjectDetail({
     );
   }
 
-  if (loading) {
+  if (loading || loadingStored) {
     return (
       <Card as="section" className="project-detail">
         <ProjectDetailHeader
@@ -565,8 +637,12 @@ function ProjectDetail({
           onDisconnect={onDisconnect}
         />
         <StateRow
-          detail="Finding .github/workflows files and running the Scaffy capability analyzer."
-          label="Analyzing repository"
+          detail={
+            loadingStored
+              ? "Loading the saved repository analysis from Scaffy."
+              : "Finding .github/workflows files and running the Scaffy capability analyzer."
+          }
+          label={loadingStored ? "Loading saved analysis" : "Analyzing repository"}
           tone="loading"
         />
       </Card>
@@ -1023,6 +1099,20 @@ function SearchInput({ onChange, placeholder, value }: SearchInputProps) {
       />
     </label>
   );
+}
+
+function summaryFromAnalysis(
+  analysis: RepositoryAnalysis,
+): RepositoryAnalysisSummary {
+  return {
+    analyzedAt: analysis.analyzedAt,
+    workflowPath: analysis.workflowPath,
+    overallScore: analysis.analysis.overallScore,
+    overallLevel: analysis.analysis.overallLevel,
+    overallStatus: analysis.analysis.overallStatus,
+    analysisSchemaVersion: analysis.analysisSchemaVersion,
+    analyzerModelVersion: analysis.analyzerModelVersion,
+  };
 }
 
 function IconSearch() {

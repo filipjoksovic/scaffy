@@ -3,6 +3,7 @@ import {
   analyzeRepository,
   connectRepository,
   disconnectRepository,
+  getRepositoryAnalysis,
   listGitHubRepositories,
   listRepositoryConnections,
 } from '../../src/api/repositories'
@@ -22,6 +23,7 @@ describe('repository connections API', () => {
         name: 'demo-app',
         url: 'https://github.com/scaffy-labs/demo-app',
         connectedAt: '2026-05-26T12:00:00Z',
+        analysisSummary: null,
       },
     ]
     const fetchMock = vi.fn().mockResolvedValue({
@@ -44,6 +46,7 @@ describe('repository connections API', () => {
       name: 'demo-app',
       url: 'https://github.com/scaffy-labs/demo-app',
       connectedAt: '2026-05-26T12:00:00Z',
+      analysisSummary: null,
     }
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -100,6 +103,9 @@ describe('repository connections API', () => {
       repositoryId: 'repo-id',
       repository: 'scaffy-labs/demo-app',
       workflowPath: '.github/workflows/ci.yml',
+      analyzedAt: '2026-05-26T12:00:00Z',
+      analysisSchemaVersion: 1,
+      analyzerModelVersion: 'capability-analyzer-v1',
       analysis: {
         provider: 'github-actions',
         overallScore: 0.4,
@@ -117,6 +123,34 @@ describe('repository connections API', () => {
     await expect(analyzeRepository('repo-id')).resolves.toEqual(analysis)
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-id\/analyze$/), {
       method: 'POST',
+      credentials: 'include',
+    })
+  })
+
+  it('fetches persisted repository analysis with credentials', async () => {
+    const analysis = {
+      repositoryId: 'repo-id',
+      repository: 'scaffy-labs/demo-app',
+      workflowPath: '.github/workflows/ci.yml',
+      analyzedAt: '2026-05-26T12:00:00Z',
+      analysisSchemaVersion: 1,
+      analyzerModelVersion: 'capability-analyzer-v1',
+      analysis: {
+        provider: 'github-actions',
+        overallScore: 0.4,
+        overallLevel: 2,
+        overallStatus: 'partial',
+        dimensions: [],
+      },
+    }
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(analysis),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getRepositoryAnalysis('repo-id')).resolves.toEqual(analysis)
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-id\/analysis$/), {
       credentials: 'include',
     })
   })

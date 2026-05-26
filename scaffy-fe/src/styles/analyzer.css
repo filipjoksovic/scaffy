@@ -61,7 +61,11 @@
 }
 
 .file-drop--error {
-  border-color: color-mix(in srgb, var(--color-error) 55%, var(--color-hairline-strong));
+  border-color: color-mix(
+    in srgb,
+    var(--color-error) 55%,
+    var(--color-hairline-strong)
+  );
 }
 
 .file-drop span {
@@ -173,7 +177,10 @@
 }
 
 .dimension-card {
-  grid-template-columns: minmax(180px, 0.9fr) minmax(160px, 1fr) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(160px, 1fr) minmax(
+      220px,
+      1fr
+    ) auto;
   align-items: center;
   gap: var(--space-base);
   padding: var(--space-base);
@@ -251,6 +258,13 @@
   padding-top: var(--space-sm);
   color: var(--color-body);
   font-size: 13px;
+}
+
+.detected-group li small,
+.issue-group li small {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .detected-details code,
