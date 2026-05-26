@@ -38,6 +38,44 @@
   color: var(--color-canvas);
 }
 
+.button--small {
+  min-height: var(--space-xl);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 12px;
+}
+
+.icon-button {
+  display: inline-grid;
+  width: var(--space-xl);
+  height: var(--space-xl);
+  place-items: center;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-card);
+  color: var(--color-body);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.icon-button:hover {
+  border-color: var(--color-ink);
+  color: var(--color-ink);
+  transform: translateY(-1px);
+}
+
+.icon-button--danger:hover {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.icon-button svg {
+  width: var(--space-base);
+  height: var(--space-base);
+}
+
 .badge,
 .eyebrow,
 .timeline-pill {

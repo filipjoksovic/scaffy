@@ -9,8 +9,10 @@ import {
   type GitHubRepository,
   type RepositoryConnection,
 } from '../api/repositories'
-import { Badge, Button, Card, TextInput } from '../components'
+import { AppFrame, Badge, Button, Card, Eyebrow, StateRow, TextInput } from '../components'
 import { useAuth } from '../lib/auth'
+
+type GitHubAccessState = 'connected' | 'needs-reconnect' | 'unknown'
 
 export function Dashboard() {
   const { user, loading } = useAuth()
@@ -21,6 +23,9 @@ export function Dashboard() {
   const [githubLoading, setGitHubLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
+  const [githubFilter, setGithubFilter] = useState('')
+  const [githubAccess, setGithubAccess] = useState<GitHubAccessState>('unknown')
 
   useEffect(() => {
     if (!user) {
@@ -53,8 +58,28 @@ export function Dashboard() {
     }
   }, [user])
 
-  const connectedCount = useMemo(() => connections.length, [connections])
+  const connectedCount = connections.length
   const needsGitHubReconnect = error?.toLowerCase().includes('reconnect with github') ?? false
+
+  const filteredConnections = useMemo(() => {
+    if (!filter.trim()) return connections
+    const query = filter.trim().toLowerCase()
+    return connections.filter((connection) =>
+      `${connection.owner}/${connection.name}`.toLowerCase().includes(query),
+    )
+  }, [connections, filter])
+
+  const filteredGithubRepositories = useMemo(() => {
+    if (!githubFilter.trim()) return githubRepositories
+    const query = githubFilter.trim().toLowerCase()
+    return githubRepositories.filter((repo) => repo.fullName.toLowerCase().includes(query))
+  }, [githubFilter, githubRepositories])
+
+  const accessState: GitHubAccessState = needsGitHubReconnect ? 'needs-reconnect' : githubAccess
+  const githubAccessLabel =
+    accessState === 'needs-reconnect' ? 'Reconnect needed' : accessState === 'connected' ? 'Connected' : 'Not checked'
+  const githubAccessDot =
+    accessState === 'needs-reconnect' ? 'error' : accessState === 'connected' ? 'success' : 'warn'
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -90,7 +115,9 @@ export function Dashboard() {
     setError(null)
     try {
       setGitHubRepositories(await listGitHubRepositories())
+      setGithubAccess('connected')
     } catch (err) {
+      setGithubAccess('needs-reconnect')
       setError(err instanceof Error ? err.message : 'Could not fetch GitHub repositories.')
     } finally {
       setGitHubLoading(false)
@@ -112,144 +139,412 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <section className="dashboard-band">
-        <Card as="section">
-          <Badge>Dashboard</Badge>
-          <h1>Loading session</h1>
-          <p>Checking the current browser session.</p>
-        </Card>
-      </section>
+      <AppFrame>
+        <section className="dashboard-signin">
+          <Card className="dashboard-signin__card">
+            <Eyebrow>Workspace</Eyebrow>
+            <h2>Checking session</h2>
+            <p>Verifying the current browser session before loading the workspace.</p>
+          </Card>
+        </section>
+      </AppFrame>
     )
   }
 
   if (!user) {
     return (
-      <section className="dashboard-band">
-        <Card as="section">
-          <Badge>Dashboard</Badge>
-          <h1>Connect a GitHub project</h1>
-          <p>Sign in with GitHub before connecting projects to this workspace.</p>
-          <div className="dashboard-actions">
-            <a className="button button--primary" href={oauthLoginUrl.github}>
-              GitHub login
-            </a>
-            <a className="button button--secondary" href={oauthLoginUrl.google}>
-              Google login
-            </a>
-          </div>
-        </Card>
-      </section>
+      <AppFrame>
+        <section className="dashboard-signin">
+          <Card className="dashboard-signin__card">
+            <Eyebrow>Workspace</Eyebrow>
+            <h2>Sign in to view your projects</h2>
+            <p>Connect a GitHub account to discover repositories and queue them for analysis.</p>
+            <div className="dashboard-signin__actions">
+              <a className="button button--primary" href={oauthLoginUrl.github}>
+                Continue with GitHub
+              </a>
+              <a className="button button--secondary" href={oauthLoginUrl.google}>
+                Continue with Google
+              </a>
+            </div>
+          </Card>
+        </section>
+      </AppFrame>
     )
   }
 
   return (
-    <section className="dashboard-band">
-      <div className="dashboard-heading">
-        <div>
-          <Badge>Dashboard</Badge>
-          <h1>Connected projects</h1>
-          <p>Connect GitHub repositories now; pipeline discovery and scoring will use these entries later.</p>
-        </div>
-        <div className="dashboard-metric" aria-label={`${connectedCount} connected projects`}>
-          <strong>{connectedCount}</strong>
-          <span>{connectedCount === 1 ? 'project' : 'projects'}</span>
-        </div>
-      </div>
-
-      <form className="card repository-form" onSubmit={handleSubmit}>
-        <label htmlFor="repository">GitHub repository</label>
-        <div className="input-row">
-          <TextInput
-            id="repository"
-            onChange={(event) => setRepository(event.target.value)}
-            placeholder="owner/repo or https://github.com/owner/repo"
-            value={repository}
-          />
-          <Button disabled={submitting} type="submit">
-            {submitting ? 'Connecting' : 'Connect'}
-          </Button>
-        </div>
-        {error && (
-          <div className="form-error-block">
-            <p className="form-error">{error}</p>
-            {needsGitHubReconnect && (
-              <a className="button button--secondary" href={oauthLoginUrl.github}>
-                Reconnect GitHub
-              </a>
-            )}
+    <AppFrame>
+      <section className="dashboard-band" aria-labelledby="dashboard-title">
+        <header className="dashboard-header">
+          <div className="dashboard-header__copy">
+            <Eyebrow>Workspace</Eyebrow>
+            <h2 id="dashboard-title">Connected projects</h2>
+            <p>
+              Manage the GitHub repositories Scaffy can analyze. Connect new projects, audit access,
+              and queue them for the pipeline grader.
+            </p>
           </div>
-        )}
-      </form>
+          <div className="dashboard-header__actions">
+            <Button
+              disabled={githubLoading}
+              onClick={() => void handleFetchGitHubRepositories()}
+              variant="secondary"
+            >
+              {githubLoading ? 'Syncing' : 'Sync GitHub'}
+            </Button>
+            <a className="button button--primary" href="#quick-connect">
+              Connect repository
+            </a>
+          </div>
+        </header>
 
-      <Card as="section" className="github-fetch-panel">
-        <div>
-          <h2>Fetch from GitHub</h2>
-          <p>Load repositories from your GitHub account and connect one without pasting its URL.</p>
+        <div className="dashboard-summary" aria-label="Repository workspace status">
+          <div className="dashboard-summary__item">
+            <span>Connected</span>
+            <strong>{connectedCount}</strong>
+          </div>
+          <div className="dashboard-summary__item">
+            <span>GitHub access</span>
+            <strong>
+              <span aria-hidden="true" className={`dot dot--${githubAccessDot}`} />
+              {githubAccessLabel}
+            </strong>
+          </div>
+          <div className="dashboard-summary__item">
+            <span>Fetched</span>
+            <strong>{githubRepositories.length}</strong>
+          </div>
+          <div className="dashboard-summary__item dashboard-summary__item--wide">
+            <span>Next step</span>
+            <strong>{connectedCount === 0 ? 'Connect a repository' : 'Analysis will be enabled later'}</strong>
+          </div>
         </div>
-        <Button disabled={githubLoading} onClick={() => void handleFetchGitHubRepositories()} variant="secondary">
-          {githubLoading ? 'Fetching' : 'Fetch GitHub projects'}
-        </Button>
-      </Card>
 
-      {githubRepositories.length > 0 && (
-        <div className="repository-list">
-          {githubRepositories.map((repo) => {
-            const connected = connections.some(
-              (connection) => `${connection.owner}/${connection.name}` === repo.fullName.toLowerCase(),
-            )
-            return (
-              <Card as="article" className="repository-card" key={repo.fullName}>
-                <div>
-                  <Badge>{repo.privateRepository ? 'private' : 'public'}</Badge>
-                  <h2>{repo.fullName}</h2>
-                  <a href={repo.url} rel="noreferrer" target="_blank">
-                    {repo.url}
-                  </a>
+        <div className="dashboard-grid">
+          <div className="dashboard-main">
+            <Card as="section" className="panel">
+              <div className="panel__header">
+                <div className="panel__heading">
+                  <Eyebrow>Repositories</Eyebrow>
+                  <h3>
+                    {connectedCount} connected {connectedCount === 1 ? 'project' : 'projects'}
+                  </h3>
                 </div>
-                <Button
-                  disabled={connected || submitting}
-                  onClick={() => void handleConnectGitHubRepository(repo)}
-                  variant={connected ? 'secondary' : 'primary'}
-                >
-                  {connected ? 'Connected' : 'Connect'}
-                </Button>
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
-      <div className="repository-list" aria-live="polite">
-        {connectionsLoading ? (
-          <Card as="section">
-            <p>Loading connected projects.</p>
-          </Card>
-        ) : connections.length === 0 ? (
-          <Card as="section">
-            <h2>No connected projects</h2>
-            <p>Add a GitHub repository to make it available for the next analysis milestone.</p>
-          </Card>
-        ) : (
-          connections.map((connection) => (
-            <Card as="article" className="repository-card" key={connection.id}>
-              <div>
-                <Badge>{connection.provider}</Badge>
-                <h2>{connection.owner}/{connection.name}</h2>
-                <a href={connection.url} rel="noreferrer" target="_blank">
-                  {connection.url}
-                </a>
+                <div className="panel__actions">
+                  <SearchInput
+                    onChange={setFilter}
+                    placeholder="Filter by owner or name"
+                    value={filter}
+                  />
+                </div>
               </div>
-              <Button
-                aria-label={`Disconnect ${connection.owner}/${connection.name}`}
-                onClick={() => void handleDisconnect(connection.id)}
-                variant="secondary"
-              >
-                Disconnect
-              </Button>
+
+              {connectionsLoading ? (
+                <div className="panel__body">
+                  <StateRow
+                    detail="Loading repositories from /api/repositories."
+                    label="Loading connected projects"
+                    tone="loading"
+                  />
+                </div>
+              ) : connections.length === 0 ? (
+                <div className="empty-state">
+                  <h4>No projects connected</h4>
+                  <p>
+                    Paste a repository URL on the right or sync your GitHub account to add the first
+                    one.
+                  </p>
+                </div>
+              ) : filteredConnections.length === 0 ? (
+                <div className="empty-state">
+                  <h4>No matches</h4>
+                  <p>No connected project matches “{filter}”.</p>
+                </div>
+              ) : (
+                <div className="panel__body panel__body--flush">
+                  <table className="repo-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Project</th>
+                        <th scope="col">Provider</th>
+                        <th scope="col">Connected</th>
+                        <th className="repo-table__actions-heading" scope="col">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredConnections.map((connection) => (
+                        <tr key={connection.id}>
+                          <td>
+                            <div className="repo-cell">
+                              <span aria-hidden="true" className="repo-cell__avatar">
+                                {connection.owner.charAt(0).toUpperCase()}
+                              </span>
+                              <div className="repo-cell__text">
+                                <span className="repo-cell__name">
+                                  {connection.owner}/{connection.name}
+                                </span>
+                                <span className="repo-cell__url">
+                                  <a href={connection.url} rel="noreferrer" target="_blank">
+                                    {connection.url}
+                                  </a>
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <Badge>{connection.provider}</Badge>
+                          </td>
+                          <td>
+                            <span className="row-status">
+                              <span aria-hidden="true" className="dot dot--success" />
+                              {formatRelative(connection.connectedAt)}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="row-actions">
+                              <a
+                                aria-label={`Open ${connection.owner}/${connection.name} on GitHub`}
+                                className="icon-button"
+                                href={connection.url}
+                                rel="noreferrer"
+                                target="_blank"
+                                title="Open on GitHub"
+                              >
+                                <IconExternal />
+                              </a>
+                              <button
+                                aria-label={`Disconnect ${connection.owner}/${connection.name}`}
+                                className="icon-button icon-button--danger"
+                                onClick={() => void handleDisconnect(connection.id)}
+                                title="Disconnect"
+                                type="button"
+                              >
+                                <IconTrash />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Card>
-          ))
-        )}
-      </div>
-    </section>
+          </div>
+
+          <aside className="dashboard-rail" aria-label="Connect repository">
+            <Card as="section" className="panel" id="quick-connect">
+              <div className="panel__header">
+                <div className="panel__heading">
+                  <Eyebrow>Quick connect</Eyebrow>
+                  <h3>Add by URL</h3>
+                  <p>Paste a GitHub repository to register it without syncing the account.</p>
+                </div>
+              </div>
+              <div className="panel__body">
+                <form className="quick-connect" onSubmit={handleSubmit}>
+                  <label htmlFor="repository">Repository</label>
+                  <div className="input-row">
+                    <TextInput
+                      id="repository"
+                      onChange={(event) => setRepository(event.target.value)}
+                      placeholder="owner/repo"
+                      value={repository}
+                    />
+                    <Button disabled={submitting} type="submit">
+                      {submitting ? 'Connecting' : 'Connect'}
+                    </Button>
+                  </div>
+                  <span className="quick-connect__hint">
+                    owner/repo · https://github.com/owner/repo
+                  </span>
+                  {error && (
+                    <div>
+                      <p className="form-error">{error}</p>
+                      {needsGitHubReconnect && (
+                        <div className="form-error__actions">
+                          <a className="button button--secondary button--small" href={oauthLoginUrl.github}>
+                            Reconnect GitHub
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </form>
+              </div>
+            </Card>
+
+            <Card as="section" className="panel">
+              <div className="panel__header">
+                <div className="panel__heading">
+                  <Eyebrow>From GitHub</Eyebrow>
+                  <h3>Your repositories</h3>
+                  <p>
+                    {githubRepositories.length === 0
+                      ? 'Sync to load repositories from the connected GitHub account.'
+                      : `${githubRepositories.length} repositories available`}
+                  </p>
+                </div>
+                <div className="panel__actions">
+                  <Button
+                    className="button--small"
+                    disabled={githubLoading}
+                    onClick={() => void handleFetchGitHubRepositories()}
+                    variant="secondary"
+                  >
+                    {githubLoading ? 'Syncing' : githubRepositories.length === 0 ? 'Sync' : 'Refresh'}
+                  </Button>
+                </div>
+              </div>
+
+              {githubRepositories.length > 0 && (
+                <div className="panel__body panel__body--search">
+                  <SearchInput
+                    onChange={setGithubFilter}
+                    placeholder="Filter repositories"
+                    value={githubFilter}
+                  />
+                </div>
+              )}
+
+              <div className={githubRepositories.length > 0 ? 'panel__body panel__body--compact' : 'panel__body'}>
+                {githubLoading ? (
+                  <StateRow
+                    detail="Calling /api/repositories/github."
+                    label="Syncing GitHub repositories"
+                    tone="loading"
+                  />
+                ) : githubRepositories.length === 0 ? (
+                  <div className="empty-state empty-state--compact">
+                    <p>
+                      Press <strong>Sync</strong> to fetch repositories from your GitHub account.
+                    </p>
+                  </div>
+                ) : filteredGithubRepositories.length === 0 ? (
+                  <div className="empty-state empty-state--compact">
+                    <p>No repositories match “{githubFilter}”.</p>
+                  </div>
+                ) : (
+                  <ul className="gh-list">
+                    {filteredGithubRepositories.map((repo) => {
+                      const connected = connections.some(
+                        (connection) =>
+                          `${connection.owner}/${connection.name}` === repo.fullName.toLowerCase(),
+                      )
+                      return (
+                        <li className="gh-list__item" key={repo.fullName}>
+                          <div className="gh-list__info">
+                            <span className="gh-list__name">{repo.fullName}</span>
+                            <span className="gh-list__meta">
+                              <span aria-hidden="true" className="dot" />
+                              {repo.privateRepository ? 'Private' : 'Public'}
+                            </span>
+                          </div>
+                          <Button
+                            className="button--small"
+                            disabled={connected || submitting}
+                            onClick={() => void handleConnectGitHubRepository(repo)}
+                            variant={connected ? 'secondary' : 'primary'}
+                          >
+                            {connected ? 'Connected' : 'Connect'}
+                          </Button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            </Card>
+          </aside>
+        </div>
+      </section>
+    </AppFrame>
   )
+}
+
+type SearchInputProps = Readonly<{
+  onChange: (value: string) => void
+  placeholder: string
+  value: string
+}>
+
+function SearchInput({ onChange, placeholder, value }: SearchInputProps) {
+  return (
+    <label className="search-input">
+      <IconSearch />
+      <input
+        aria-label={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        type="search"
+        value={value}
+      />
+    </label>
+  )
+}
+
+function IconSearch() {
+  return (
+    <svg aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 16 16">
+      <circle cx="7" cy="7" r="5" />
+      <path d="m11 11 3.5 3.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconExternal() {
+  return (
+    <svg aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 16 16">
+      <path d="M9 3h4v4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 3 7.5 8.5" strokeLinecap="round" />
+      <path
+        d="M12.5 9.5V12a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12V5A1.5 1.5 0 0 1 4 3.5h2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function IconTrash() {
+  return (
+    <svg aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 16 16">
+      <path d="M3 4.5h10" strokeLinecap="round" />
+      <path d="M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5" strokeLinecap="round" />
+      <path
+        d="M4.5 4.5 5 13a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function formatRelative(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '—'
+  const diffMs = date.getTime() - Date.now()
+  const diffSec = Math.round(diffMs / 1000)
+  const abs = Math.abs(diffSec)
+
+  if (abs < 60) return 'just now'
+  const minutes = Math.round(diffSec / 60)
+  if (Math.abs(minutes) < 60) return formatChunk(minutes, 'minute')
+  const hours = Math.round(minutes / 60)
+  if (Math.abs(hours) < 24) return formatChunk(hours, 'hour')
+  const days = Math.round(hours / 24)
+  if (Math.abs(days) < 30) return formatChunk(days, 'day')
+  const months = Math.round(days / 30)
+  if (Math.abs(months) < 12) return formatChunk(months, 'month')
+  const years = Math.round(days / 365)
+  return formatChunk(years, 'year')
+}
+
+function formatChunk(value: number, unit: string): string {
+  const n = Math.abs(value)
+  const plural = n === 1 ? unit : `${unit}s`
+  return value < 0 ? `${n} ${plural} ago` : `in ${n} ${plural}`
 }
