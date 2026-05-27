@@ -910,6 +910,325 @@
   gap: var(--space-base);
 }
 
+.scanner-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-canvas-soft);
+}
+
+.scanner-summary > div {
+  display: grid;
+  gap: var(--space-xxs);
+  padding: var(--space-base);
+  border-right: 1px solid var(--color-hairline-soft);
+}
+
+.scanner-summary > div:last-child {
+  border-right: 0;
+}
+
+.scanner-summary span,
+.quality-area-row__main span,
+.quality-area-row__score span,
+.quality-area-row__counts,
+.finding-row__description,
+.finding-row__meta,
+.finding-row__details p {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.scanner-summary strong {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.scanner-section-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-base);
+}
+
+.scanner-section-header > div:first-child {
+  display: grid;
+  gap: var(--space-xxs);
+}
+
+.scanner-section-header h4 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.scanner-section-header > span {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.quality-area-panel,
+.findings-panel {
+  display: grid;
+  gap: var(--space-base);
+  border-top: 1px solid var(--color-hairline);
+  padding-top: var(--space-base);
+}
+
+.quality-area-table {
+  display: grid;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  overflow: hidden;
+}
+
+.quality-area-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.4fr) minmax(0, 0.55fr);
+  align-items: center;
+  gap: var(--space-base);
+  padding: var(--space-base);
+  border-bottom: 1px solid var(--color-hairline-soft);
+}
+
+.quality-area-row:last-child {
+  border-bottom: 0;
+}
+
+.quality-area-row__main,
+.quality-area-row__score,
+.quality-area-row__counts {
+  display: grid;
+  gap: var(--space-xxs);
+}
+
+.quality-area-row__main strong,
+.finding-row__details strong {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.quality-area-row__score {
+  justify-items: end;
+}
+
+.quality-area-row__score strong {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.quality-area-row__counts {
+  justify-items: end;
+  font-family: var(--font-mono);
+}
+
+.findings-filter {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+  padding: var(--space-xxs);
+}
+
+.findings-filter button {
+  min-height: var(--space-xl);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.findings-filter button:hover,
+.findings-filter__item--active {
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+}
+
+.findings-filter button:focus-visible,
+.finding-row__summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.findings-empty {
+  display: grid;
+  gap: var(--space-xs);
+  border: 1px dashed var(--color-hairline-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-canvas-soft);
+  padding: var(--space-lg);
+}
+
+.findings-empty h4,
+.findings-empty p {
+  margin: 0;
+}
+
+.findings-empty h4 {
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.findings-empty p {
+  color: var(--color-body);
+  font-size: 13px;
+}
+
+.findings-list {
+  display: grid;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  overflow: hidden;
+}
+
+.finding-row {
+  position: relative;
+  border-bottom: 1px solid var(--color-hairline-soft);
+}
+
+.finding-row:last-child {
+  border-bottom: 0;
+}
+
+.finding-row::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--space-xxs);
+  background: var(--color-hairline-strong);
+  content: "";
+}
+
+.finding-row--positive::before {
+  background: var(--color-success);
+}
+
+.finding-row--smell::before {
+  background: var(--color-error);
+}
+
+.finding-row__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-base);
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-base) var(--space-base) var(--space-base)
+    var(--space-lg);
+  transition: background-color 160ms ease;
+}
+
+.finding-row__summary::-webkit-details-marker {
+  display: none;
+}
+
+.finding-row__summary:hover {
+  background: var(--color-canvas-soft);
+}
+
+.finding-row[open] .finding-row__summary {
+  background: var(--color-canvas-soft);
+}
+
+.finding-row__main {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-xs);
+}
+
+.finding-row__heading,
+.finding-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.finding-row__heading strong {
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.finding-row__description {
+  display: block;
+  max-width: calc(var(--container-max) / 1.5);
+}
+
+.finding-row__meta {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+}
+
+.finding-row__meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.finding-row__meta > span:not(:last-child)::after {
+  width: var(--space-xxs);
+  height: var(--space-xxs);
+  border-radius: var(--radius-pill);
+  background: var(--color-muted-soft);
+  content: "";
+}
+
+.finding-row__meta code,
+.finding-row__details code {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas-soft);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: var(--space-xxs) var(--space-xs);
+}
+
+.finding-row__details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-lg);
+  padding: 0 var(--space-base) var(--space-base) var(--space-lg);
+  background: var(--color-canvas-soft);
+}
+
+.finding-row__details > div {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+}
+
+.finding-row__details p {
+  margin: 0;
+}
+
 .analysis-dimension {
   display: grid;
   grid-template-columns: 1fr;
@@ -1057,11 +1376,11 @@
 .finding-badge {
   border: 1px solid var(--color-hairline-strong);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-card);
+  background: var(--color-canvas-soft);
   padding: var(--space-xxs) var(--space-xs);
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 500;
   letter-spacing: 0;
   line-height: 1;
   text-transform: uppercase;
@@ -1274,6 +1593,23 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .scanner-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scanner-summary > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-hairline-soft);
+  }
+
+  .scanner-summary > div:nth-child(odd) {
+    border-right: 1px solid var(--color-hairline-soft);
+  }
+
+  .scanner-summary > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
   .repository-dialog {
     width: min(calc(100vw - var(--space-base)), calc(var(--space-section) * 10));
     max-height: calc(100svh - var(--space-base));
@@ -1344,7 +1680,27 @@
   .analysis-dimension__summary,
   .analysis-empty,
   .github-picker__header,
+  .quality-area-row,
+  .finding-row__details,
   .project-detail__header {
+    grid-template-columns: 1fr;
+  }
+
+  .scanner-section-header {
+    display: grid;
+  }
+
+  .quality-area-row__score,
+  .quality-area-row__counts {
+    justify-items: start;
+  }
+
+  .findings-filter {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .finding-row__summary {
     grid-template-columns: 1fr;
   }
 

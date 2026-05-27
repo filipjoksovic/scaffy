@@ -33,10 +33,7 @@ import {
 import { useAuth } from "../lib/auth";
 import {
   capabilityMeta,
-  collectFindings,
-  countIssues,
   dimensionMeta,
-  findingKey,
   findingTypeMeta,
   formatProvider,
   formatScore,
@@ -893,9 +890,16 @@ type AnalysisBreakdownProps = Readonly<{
 }>;
 
 function AnalysisBreakdown({ analysis, delta }: AnalysisBreakdownProps) {
-  const issueCount = analysis.analysis.dimensions.reduce(
-    (total, dimension) => total + countIssues(dimension),
-    0,
+  const findings = flattenAnalysisFindings(analysis.analysis.dimensions);
+  const openFindings = findings.filter(
+    (finding) => finding.finding.type !== "POSITIVE",
+  );
+  const passedFindings = findings.filter(
+    (finding) => finding.finding.type === "POSITIVE",
+  );
+  const smells = findings.filter((finding) => finding.finding.type === "SMELL");
+  const missing = findings.filter(
+    (finding) => finding.finding.type === "MISSING",
   );
 
   return (
@@ -923,18 +927,38 @@ function AnalysisBreakdown({ analysis, delta }: AnalysisBreakdownProps) {
           {statusMeta(analysis.analysis.overallStatus).label}
         </Badge>
         <span>
-          {issueCount} open {issueCount === 1 ? "issue" : "issues"}
+          {openFindings.length} open{" "}
+          {openFindings.length === 1 ? "issue" : "issues"}
         </span>
         <span>Analyzed {formatRelative(analysis.analyzedAt)}</span>
       </div>
 
       <AnalysisDeltaPanel delta={delta} />
 
-      <div className="analysis-dimensions">
-        {analysis.analysis.dimensions.map((dimension) => (
-          <DimensionBreakdown dimension={dimension} key={dimension.dimension} />
-        ))}
+      <div className="scanner-summary" aria-label="Analysis finding summary">
+        <div>
+          <span>Open issues</span>
+          <strong>{openFindings.length}</strong>
+        </div>
+        <div>
+          <span>Missing controls</span>
+          <strong>{missing.length}</strong>
+        </div>
+        <div>
+          <span>Smells</span>
+          <strong>{smells.length}</strong>
+        </div>
+        <div>
+          <span>Detected checks</span>
+          <strong>{passedFindings.length}</strong>
+        </div>
       </div>
+
+      <QualityAreaTable
+        dimensions={analysis.analysis.dimensions}
+        findings={findings}
+      />
+      <FindingsTable findings={findings} />
     </div>
   );
 }
@@ -1065,114 +1089,198 @@ function AnalysisDeltaPanel({ delta }: AnalysisDeltaPanelProps) {
   );
 }
 
-type DimensionBreakdownProps = Readonly<{
+type FlattenedAnalysisFinding = Readonly<{
+  capability: CapabilityScore;
+  capabilityDescription: string;
+  capabilityLabel: string;
   dimension: DimensionAnalysis;
+  dimensionDescription: string;
+  dimensionLabel: string;
+  finding: CapabilityFinding;
+  ruleDescription: string;
+  ruleLabel: string;
+  typeDescription: string;
+  typeLabel: string;
 }>;
 
-function DimensionBreakdown({ dimension }: DimensionBreakdownProps) {
-  const positives = collectFindings(dimension, "POSITIVE");
-  const smells = collectFindings(dimension, "SMELL");
-  const missing = collectFindings(dimension, "MISSING");
-  const status = statusMeta(dimension.status);
-  const dimensionInfo = dimensionMeta(dimension.dimension);
+type QualityAreaTableProps = Readonly<{
+  dimensions: DimensionAnalysis[];
+  findings: FlattenedAnalysisFinding[];
+}>;
 
+function QualityAreaTable({ dimensions, findings }: QualityAreaTableProps) {
   return (
-    <section className="analysis-dimension">
-      <header className="analysis-dimension__summary">
+    <section className="quality-area-panel">
+      <header className="scanner-section-header">
         <div>
-          <strong>{dimensionInfo.label}</strong>
-          <span>
-            {dimension.status === "not_evaluated"
-              ? status.label
-              : `Level ${dimension.level}`}
-          </span>
-          <p>{dimensionInfo.description}</p>
+          <Eyebrow>Quality areas</Eyebrow>
+          <h4>Capability coverage</h4>
         </div>
-        <div className="analysis-dimension__score">
-          {dimension.status === "not_evaluated"
-            ? "—"
-            : formatScore(dimension.score)}
-        </div>
-        <div className="analysis-dimension__findings">
-          <span>{positives.length} positive</span>
-          <span>{smells.length} smells</span>
-          <span>{missing.length} missing</span>
-        </div>
+        <span>{dimensions.length} areas</span>
       </header>
-
-      <div className="capability-list">
-        {dimension.capabilityScores.map((capability) => (
-          <CapabilityBreakdown
-            capability={capability}
-            key={capability.capability}
-          />
-        ))}
+      <div className="quality-area-table">
+        {dimensions.map((dimension) => {
+          const info = dimensionMeta(dimension.dimension);
+          const areaFindings = findings.filter(
+            (finding) => finding.dimension.dimension === dimension.dimension,
+          );
+          const open = areaFindings.filter(
+            (finding) => finding.finding.type !== "POSITIVE",
+          ).length;
+          const passed = areaFindings.length - open;
+          const status = statusMeta(dimension.status);
+          return (
+            <article className="quality-area-row" key={dimension.dimension}>
+              <div className="quality-area-row__main">
+                <strong>{info.label}</strong>
+                <span>{info.description}</span>
+              </div>
+              <div className="quality-area-row__score">
+                <strong>
+                  {dimension.status === "not_evaluated"
+                    ? "—"
+                    : formatScore(dimension.score)}
+                </strong>
+                <span>
+                  {dimension.status === "not_evaluated"
+                    ? status.label
+                    : `Level ${dimension.level}`}
+                </span>
+              </div>
+              <div className="quality-area-row__counts">
+                <span>{open} open</span>
+                <span>{passed} detected</span>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-type CapabilityBreakdownProps = Readonly<{
-  capability: CapabilityScore;
+type FindingFilter = "open" | "passed" | "all";
+
+type FindingsTableProps = Readonly<{
+  findings: FlattenedAnalysisFinding[];
 }>;
 
-function CapabilityBreakdown({ capability }: CapabilityBreakdownProps) {
-  const meta = capabilityMeta(capability.capability);
+function FindingsTable({ findings }: FindingsTableProps) {
+  const [filter, setFilter] = useState<FindingFilter>("open");
+  const filteredFindings = findings.filter((finding) => {
+    if (filter === "open") {
+      return finding.finding.type !== "POSITIVE";
+    }
+    if (filter === "passed") {
+      return finding.finding.type === "POSITIVE";
+    }
+    return true;
+  });
+  const openCount = findings.filter(
+    (finding) => finding.finding.type !== "POSITIVE",
+  ).length;
+  const passedCount = findings.length - openCount;
 
   return (
-    <article className="capability-row">
-      <header className="capability-row__header">
+    <section className="findings-panel">
+      <header className="scanner-section-header">
         <div>
-          <strong>{meta.label}</strong>
-          <span>{meta.description}</span>
+          <Eyebrow>Findings</Eyebrow>
+          <h4>Issue list</h4>
         </div>
-        <div className="capability-row__score">
-          <strong>{capability.points} pts</strong>
-          <span>
-            {capability.findings.length}{" "}
-            {capability.findings.length === 1 ? "finding" : "findings"}
-          </span>
+        <div className="findings-filter" aria-label="Finding filter">
+          <button
+            className={filter === "open" ? "findings-filter__item--active" : ""}
+            onClick={() => setFilter("open")}
+            type="button"
+          >
+            Open {openCount}
+          </button>
+          <button
+            className={
+              filter === "passed" ? "findings-filter__item--active" : ""
+            }
+            onClick={() => setFilter("passed")}
+            type="button"
+          >
+            Detected {passedCount}
+          </button>
+          <button
+            className={filter === "all" ? "findings-filter__item--active" : ""}
+            onClick={() => setFilter("all")}
+            type="button"
+          >
+            All {findings.length}
+          </button>
         </div>
       </header>
 
-      {capability.findings.length > 0 ? (
-        <ul className="finding-list">
-          {capability.findings.map((finding) => (
-            <FindingItem finding={finding} key={findingKey(finding)} />
-          ))}
-        </ul>
+      {filteredFindings.length === 0 ? (
+        <div className="findings-empty">
+          <h4>No findings in this view</h4>
+          <p>Switch filters to inspect detected checks or all analyzer output.</p>
+        </div>
       ) : (
-        <p className="capability-row__empty">
-          No evidence was emitted for this capability.
-        </p>
+        <div className="findings-list" aria-label="Findings">
+          {filteredFindings.map((finding) => (
+            <FindingRow
+              finding={finding}
+              key={`${finding.finding.ruleId}-${finding.finding.dimension}-${finding.finding.capability}-${finding.finding.type}`}
+            />
+          ))}
+        </div>
       )}
-    </article>
+    </section>
   );
 }
 
-type FindingItemProps = Readonly<{
-  finding: CapabilityFinding;
+type FindingRowProps = Readonly<{
+  finding: FlattenedAnalysisFinding;
 }>;
 
-function FindingItem({ finding }: FindingItemProps) {
-  const type = findingTypeMeta(finding.type);
-  const rule = ruleMeta(finding.ruleId);
-
+function FindingRow({ finding }: FindingRowProps) {
   return (
-    <li className="finding-item">
-      <div className="finding-item__meta">
-        <Badge
-          className={`finding-badge finding-badge--${finding.type.toLowerCase()}`}
-          title={type.description}
-        >
-          {type.label}
-        </Badge>
-        <strong className="finding-item__rule">{rule.label}</strong>
+    <details
+      className={`finding-row finding-row--${finding.finding.type.toLowerCase()}`}
+    >
+      <summary className="finding-row__summary">
+        <span className="finding-row__main">
+          <span className="finding-row__heading">
+            <Badge
+              className={`finding-badge finding-badge--${finding.finding.type.toLowerCase()}`}
+              title={finding.typeDescription}
+            >
+              {finding.typeLabel}
+            </Badge>
+            <strong>{finding.ruleLabel}</strong>
+          </span>
+          <span className="finding-row__description">
+            {finding.ruleDescription}
+          </span>
+          <span className="finding-row__meta">
+            <span>{finding.dimensionLabel}</span>
+            <span>{finding.capabilityLabel}</span>
+            {finding.finding.location ? (
+              <code>{finding.finding.location}</code>
+            ) : (
+              <span>No location</span>
+            )}
+          </span>
+        </span>
+      </summary>
+      <div className="finding-row__details">
+        <div>
+          <strong>Area</strong>
+          <p>{finding.dimensionDescription}</p>
+          <p>{finding.capabilityDescription}</p>
+        </div>
+        <div>
+          <strong>Evidence</strong>
+          <p>{finding.finding.evidence ?? "No evidence was emitted."}</p>
+          {finding.finding.location && <code>{finding.finding.location}</code>}
+        </div>
       </div>
-      <span className="finding-item__description">{rule.description}</span>
-      {finding.evidence && <p>{finding.evidence}</p>}
-      {finding.location && <code>{finding.location}</code>}
-    </li>
+    </details>
   );
 }
 
@@ -1409,6 +1517,34 @@ function summaryFromAnalysis(
     analysisSchemaVersion: analysis.analysisSchemaVersion,
     analyzerModelVersion: analysis.analyzerModelVersion,
   };
+}
+
+function flattenAnalysisFindings(
+  dimensions: DimensionAnalysis[],
+): FlattenedAnalysisFinding[] {
+  return dimensions.flatMap((dimension) => {
+    const dimensionInfo = dimensionMeta(dimension.dimension);
+    return dimension.capabilityScores.flatMap((capability) => {
+      const capabilityInfo = capabilityMeta(capability.capability);
+      return capability.findings.map((finding) => {
+        const rule = ruleMeta(finding.ruleId);
+        const type = findingTypeMeta(finding.type);
+        return {
+          capability,
+          capabilityDescription: capabilityInfo.description,
+          capabilityLabel: capabilityInfo.label,
+          dimension,
+          dimensionDescription: dimensionInfo.description,
+          dimensionLabel: dimensionInfo.label,
+          finding,
+          ruleDescription: rule.description,
+          ruleLabel: rule.label,
+          typeDescription: type.description,
+          typeLabel: type.label,
+        };
+      });
+    });
+  });
 }
 
 function formatSignedNumber(value: number): string {
