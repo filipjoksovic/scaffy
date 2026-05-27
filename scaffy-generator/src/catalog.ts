@@ -26,6 +26,14 @@ type PipelineOption = {
   name: string
 }
 
+type MaturityPreset = {
+  id: string
+  label: string
+  description: string
+  level: number
+  dockerRequired: boolean
+}
+
 const node = (version: string): RuntimePreset => ({
   id: `node-${version}`,
   label: `Node ${version}`,
@@ -119,17 +127,51 @@ const pipelines: PipelineOption[] = [
   { id: 'gitlab-ci', name: 'GitLab CI' },
 ]
 
+const maturityPresets: MaturityPreset[] = [
+  {
+    id: 'l1',
+    label: 'L1 Minimal',
+    description: 'Build validation for prototypes.',
+    level: 1,
+    dockerRequired: false,
+  },
+  {
+    id: 'l2',
+    label: 'L2 Basic CI',
+    description: 'Build, test, deterministic installs, and artifacts.',
+    level: 2,
+    dockerRequired: false,
+  },
+  {
+    id: 'l3',
+    label: 'L3 Structured Delivery',
+    description: 'Adds Docker, compose, cache, image validation, and versioned artifacts.',
+    level: 3,
+    dockerRequired: true,
+  },
+  {
+    id: 'l4',
+    label: 'L4 Governed Automation',
+    description: 'Adds security scanning and gated deployment placeholders.',
+    level: 4,
+    dockerRequired: true,
+  },
+]
+
 export function validateSelection(request: InitJobRequest): InitSelection {
   const frontend = selectedStack(frontends, request.frontend, request.frontendVersion, request.frontendRuntime)
   const backend = selectedStack(backends, request.backend, request.backendVersion, request.backendRuntime)
   const pipeline = pipelines.find((item) => item.id === request.pipeline)
   if (!pipeline) throw new Error(`Unsupported pipeline preset: ${request.pipeline}`)
+  const pipelineMaturity = maturityPresets.find((item) => item.id === (request.pipelineMaturity ?? 'l2'))
+  if (!pipelineMaturity) throw new Error(`Unsupported pipeline maturity preset: ${request.pipelineMaturity}`)
 
   return {
     frontend,
     backend,
     pipeline,
-    includeDocker: Boolean(request.includeDocker),
+    pipelineMaturity,
+    includeDocker: Boolean(request.includeDocker) || pipelineMaturity.dockerRequired,
   }
 }
 

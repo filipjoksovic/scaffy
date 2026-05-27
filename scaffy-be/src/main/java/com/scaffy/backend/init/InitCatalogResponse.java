@@ -5,7 +5,8 @@ import java.util.List;
 public record InitCatalogResponse(
 		List<StackOption> frontends,
 		List<StackOption> backends,
-		List<PipelineOption> pipelines) {
+		List<PipelineOption> pipelines,
+		List<MaturityPreset> maturityPresets) {
 
 	public record StackOption(
 			String id,
@@ -35,5 +36,13 @@ public record InitCatalogResponse(
 			String id,
 			String name,
 			String description) {
+	}
+
+	public record MaturityPreset(
+			String id,
+			String label,
+			String description,
+			int level,
+			boolean dockerRequired) {
 	}
 }

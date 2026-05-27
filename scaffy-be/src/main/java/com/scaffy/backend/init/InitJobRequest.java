@@ -33,5 +33,7 @@ public record InitJobRequest(
 		@NotBlank(message = "Pipeline is required")
 		String pipeline,
 
+		String pipelineMaturity,
+
 		boolean includeDocker) {
 }

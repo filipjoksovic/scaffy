@@ -20,10 +20,15 @@ public class StackCatalog {
 	public static final String BACKEND_NESTJS = "nestjs";
 	public static final String PIPELINE_GITHUB_ACTIONS = "github-actions";
 	public static final String PIPELINE_GITLAB_CI = "gitlab-ci";
+	public static final String MATURITY_L1 = "l1";
+	public static final String MATURITY_L2 = "l2";
+	public static final String MATURITY_L3 = "l3";
+	public static final String MATURITY_L4 = "l4";
 
 	private static final Set<String> FRONTENDS = Set.of(FRONTEND_ANGULAR, FRONTEND_VUE, FRONTEND_REACT);
 	private static final Set<String> BACKENDS = Set.of(BACKEND_SPRING_BOOT, BACKEND_DOTNET, BACKEND_NESTJS);
 	private static final Set<String> PIPELINES = Set.of(PIPELINE_GITHUB_ACTIONS, PIPELINE_GITLAB_CI);
+	private static final Set<String> MATURITY_LEVELS = Set.of(MATURITY_L1, MATURITY_L2, MATURITY_L3, MATURITY_L4);
 	private static final Set<String> NODE_LTS = Set.of("20", "22", "24");
 	private static final Set<String> JAVA_LTS = Set.of("17", "21", "25");
 	private static final InitCatalogResponse CATALOG = new InitCatalogResponse(
@@ -80,16 +85,43 @@ public class StackCatalog {
 					new InitCatalogResponse.PipelineOption(
 							PIPELINE_GITLAB_CI,
 							"GitLab CI",
-							"Creates a GitLab pipeline using the selected runtime versions.")));
+							"Creates a GitLab pipeline using the selected runtime versions.")),
+			List.of(
+					maturity(
+							MATURITY_L1,
+							"L1 Minimal",
+							"Small CI surface for prototypes: build validation and selected runtimes.",
+							1,
+							false),
+					maturity(
+							MATURITY_L2,
+							"L2 Basic CI",
+							"Build, test, deterministic installs, named steps, and artifact output.",
+							2,
+							false),
+					maturity(
+							MATURITY_L3,
+							"L3 Structured Delivery",
+							"Adds Dockerfiles, docker-compose, image build validation, cache, and versioned artifacts.",
+							3,
+							true),
+					maturity(
+							MATURITY_L4,
+							"L4 Governed Automation",
+							"Adds security scanning and deployment placeholders gated for real environments.",
+							4,
+							true)));
 
 	public Set<String> frontends() { return FRONTENDS; }
 	public Set<String> backends() { return BACKENDS; }
 	public Set<String> pipelines() { return PIPELINES; }
+	public Set<String> maturityLevels() { return MATURITY_LEVELS; }
 	public InitCatalogResponse response() { return CATALOG; }
 
 	public boolean supportsFrontend(String value) { return FRONTENDS.contains(value); }
 	public boolean supportsBackend(String value) { return BACKENDS.contains(value); }
 	public boolean supportsPipeline(String value) { return PIPELINES.contains(value); }
+	public boolean supportsMaturityLevel(String value) { return MATURITY_LEVELS.contains(value); }
 
 	public InitSelection selectionFor(InitJobRequest request) {
 		InitCatalogResponse.StackOption frontend = findStack(CATALOG.frontends(), request.frontend(), "Frontend");
@@ -118,6 +150,13 @@ public class StackCatalog {
 				.orElseThrow(() -> new UnsupportedStackException(
 						"Pipeline '" + request.pipeline() + "' is not supported."));
 
+		InitCatalogResponse.MaturityPreset maturity = CATALOG.maturityPresets().stream()
+				.filter(option -> option.id().equals(normalizeMaturity(request.pipelineMaturity())))
+				.findFirst()
+				.orElseThrow(() -> new UnsupportedStackException(
+						"Pipeline maturity '" + request.pipelineMaturity() + "' is not supported."));
+		boolean includeDocker = request.includeDocker() || maturity.dockerRequired();
+
 		return new InitSelection(
 				new InitSelection.SelectedStack(
 						frontend.id(),
@@ -140,7 +179,20 @@ public class StackCatalog {
 						backendRuntime.runtime(),
 						backendRuntime.version()),
 				new InitSelection.SelectedPipeline(pipeline.id(), pipeline.name()),
-				request.includeDocker());
+				new InitSelection.SelectedMaturity(
+						maturity.id(),
+						maturity.label(),
+						maturity.description(),
+						maturity.level(),
+						maturity.dockerRequired()),
+				includeDocker);
+	}
+
+	private static String normalizeMaturity(String value) {
+		if (value == null || value.isBlank()) {
+			return MATURITY_L2;
+		}
+		return value;
 	}
 
 	private static InitCatalogResponse.StackOption findStack(
@@ -228,6 +280,15 @@ public class StackCatalog {
 				"dotnet",
 				version,
 				isDotnetLts(version));
+	}
+
+	private static InitCatalogResponse.MaturityPreset maturity(
+			String id,
+			String label,
+			String description,
+			int level,
+			boolean dockerRequired) {
+		return new InitCatalogResponse.MaturityPreset(id, label, description, level, dockerRequired);
 	}
 
 	private static boolean isDotnetLts(String version) {

@@ -11,6 +11,47 @@ import org.springframework.stereotype.Component;
 @Component
 public class ScoringEngine {
 
+	private static final Map<String, Integer> POSITIVE_RULE_POINTS = Map.ofEntries(
+			Map.entry("BUILD_STAGE_PRESENT", 1),
+			Map.entry("BUILD_AUTOMATIC_TRIGGER", 1),
+			Map.entry("DEPENDENCY_INSTALL_PRESENT", 1),
+			Map.entry("DETERMINISTIC_INSTALL_PRESENT", 4),
+			Map.entry("ARTIFACT_OUTPUT_PRESENT", 4),
+			Map.entry("REGISTRY_PUBLISH_PRESENT", 4),
+			Map.entry("ARTIFACT_REUSE_PRESENT", 2),
+			Map.entry("VERSIONED_ARTIFACT", 4),
+			Map.entry("TESTS_PRESENT", 4),
+			Map.entry("CI_INTEGRATED_TESTS", 4),
+			Map.entry("TEST_REPORT_OUTPUT_PRESENT", 2),
+			Map.entry("COVERAGE_TOOL_PRESENT", 2),
+			Map.entry("MULTI_LAYER_TEST_SIGNAL", 4),
+			Map.entry("TIMEOUT_PRESENT", 2),
+			Map.entry("CONCURRENCY_CONTROL_PRESENT", 2),
+			Map.entry("PATH_FILTERS_PRESENT", 4),
+			Map.entry("NAMED_RUN_STEPS_PRESENT", 4),
+			Map.entry("PINNED_RUNNER_PRESENT", 2),
+			Map.entry("PINNED_ACTION_VERSIONS", 2),
+			Map.entry("MULTI_OS_TEST_PRESENT", 1),
+			Map.entry("MULTI_VERSION_TEST_PRESENT", 1),
+			Map.entry("CACHE_SIGNAL_PRESENT", 2),
+			Map.entry("LINT_STATIC_PRESENT", 4),
+			Map.entry("FORMATTER_PRESENT", 4),
+			Map.entry("TYPE_CHECK_PRESENT", 4),
+			Map.entry("NOTIFICATION_CHANNEL_PRESENT", 4),
+			Map.entry("STATUS_CONDITION_PRESENT", 4),
+			Map.entry("SAST_PRESENT", 4),
+			Map.entry("DEPENDENCY_SCAN_PRESENT", 4),
+			Map.entry("CONTAINER_SCAN_PRESENT", 4),
+			Map.entry("SECRET_SCAN_PRESENT", 4),
+			Map.entry("PERMISSIONS_DECLARED", 4),
+			Map.entry("POLICY_TOOL_PRESENT", 4),
+			Map.entry("DEPLOYMENT_STAGE_PRESENT", 4),
+			Map.entry("ENVIRONMENT_DECLARED", 4),
+			Map.entry("IAC_PRESENT", 4),
+			Map.entry("ARTIFACT_IMAGE_USED", 4),
+			Map.entry("MULTI_STAGE_PIPELINE_PRESENT", 4),
+			Map.entry("ROLLBACK_SIGNAL_PRESENT", 4));
+
 	public DomainScore score(String dimension, List<CapabilityFinding> findings) {
 		if (findings.isEmpty()) {
 			return new DomainScore(dimension, List.of(), 0.0, 0, AnalysisStatus.NOT_EVALUATED);
@@ -65,10 +106,16 @@ public class ScoringEngine {
 	}
 
 	private int capabilityPoints(List<CapabilityFinding> findings) {
-		long positives = findings.stream().filter(f -> f.type() == FindingType.POSITIVE).count();
+		int positives = findings.stream()
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.mapToInt(this::positivePoints)
+				.sum();
 		long smells = findings.stream().filter(f -> f.type() == FindingType.SMELL).count();
-		int points = (int) Math.min(positives, 4);
-		return (int) Math.max(0, points - smells);
+		return (int) Math.max(0, Math.min(positives, 4) - smells);
+	}
+
+	private int positivePoints(CapabilityFinding finding) {
+		return POSITIVE_RULE_POINTS.getOrDefault(finding.ruleId(), 1);
 	}
 
 	private double domainScore(List<CapabilityScore> capabilityScores) {

@@ -32,6 +32,21 @@ class ScoringEngineTest {
 	}
 
 	@Test
+	void scoreUsesRuleLevelCalibrationAndSmellsAsDeductions() {
+		List<CapabilityFinding> findings = List.of(
+				CapabilityFinding.positive("PERMISSIONS_DECLARED", "security_integration", "Safe action/token usage",
+						"permissions: contents read", "jobs.build.permissions"),
+				CapabilityFinding.smell("UNPINNED_ACTION_VERSION", "security_integration", "Safe action/token usage",
+						"actions/checkout@v4", "jobs.build.steps[0].uses"));
+
+		DomainScore result = scoringEngine.score("security_integration", findings);
+
+		assertThat(result.capabilityScores().getFirst().points()).isEqualTo(3);
+		assertThat(result.score()).isEqualTo(0.75);
+		assertThat(result.level()).isEqualTo(4);
+	}
+
+	@Test
 	void overallStatusIsNotEvaluatedWhenAllDimensionsAreNotEvaluated() {
 		List<DomainScore> domainScores = List.of(
 				new DomainScore("build_release", List.of(), 0.0, 0, AnalysisStatus.NOT_EVALUATED),

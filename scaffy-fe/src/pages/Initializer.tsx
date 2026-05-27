@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AppFrame, Button, StateRow, TextInput } from '../components'
+import { AppFrame, Button, StateRow, TextInput, Tooltip } from '../components'
 import { StackIcon } from '../components/wizard/StackIcon'
 import {
   createInitJob,
@@ -9,6 +9,7 @@ import {
   getInitJob,
   type InitCatalog,
   type InitJob,
+  type MaturityPreset,
   type PipelineCatalogOption,
   type StackCatalogOption,
 } from '../api/init'
@@ -23,6 +24,7 @@ type WizardState = {
   frontendRuntime: string
   frontendVersion: string
   pipeline: string
+  pipelineMaturity: string
   projectName: string
   includeDocker: boolean
 }
@@ -41,6 +43,7 @@ const initialState: WizardState = {
   frontendRuntime: '',
   frontendVersion: '',
   pipeline: '',
+  pipelineMaturity: '',
   projectName: '',
   includeDocker: false,
 }
@@ -83,6 +86,7 @@ export function Initializer() {
         state.backendVersion &&
         state.backendRuntime &&
         state.pipeline &&
+        state.pipelineMaturity &&
         state.projectName &&
         projectNameError === null,
     )
@@ -98,6 +102,10 @@ export function Initializer() {
       if (key === 'frontendVersion') return withRuntimeDefault(next, catalog.frontends, 'frontend')
       if (key === 'backend') return withStackDefaults(next, catalog.backends, 'backend')
       if (key === 'backendVersion') return withRuntimeDefault(next, catalog.backends, 'backend')
+      if (key === 'pipelineMaturity') {
+        const maturity = catalog.maturityPresets.find((preset) => preset.id === value)
+        if (maturity?.dockerRequired) return { ...next, includeDocker: true }
+      }
       return next
     })
   }
@@ -120,6 +128,7 @@ export function Initializer() {
         backendVersion: state.backendVersion,
         backendRuntime: state.backendRuntime,
         pipeline: state.pipeline,
+        pipelineMaturity: state.pipelineMaturity,
         includeDocker: state.includeDocker,
       })
       setStatus({ kind: 'loading', job: created })
@@ -194,7 +203,12 @@ export function Initializer() {
                 title="Project details"
                 hint="What should we call your repository?"
               >
-                <ProjectDetailsStep error={projectNameError} state={state} update={update} />
+                <ProjectDetailsStep
+                  catalog={catalog}
+                  error={projectNameError}
+                  state={state}
+                  update={update}
+                />
               </WizardStep>
 
               <WizardStep
@@ -234,7 +248,7 @@ export function Initializer() {
               <WizardStep
                 index={4}
                 title="CI / CD pipeline"
-                hint="We'll wire up a starter workflow that builds and tests both apps."
+                hint="Choose the provider and how much delivery discipline Scaffy should generate."
               >
                 <PipelineStep catalog={catalog} state={state} update={update} />
               </WizardStep>
@@ -425,38 +439,154 @@ function ChipRow({ label, options, selectedId, onSelect, ariaLabel }: ChipRowPro
 
 function PipelineStep({ catalog, state, update }: CatalogStepProps) {
   return (
-    <div className="pipeline-cards" role="radiogroup" aria-label="Pipeline provider">
-      {catalog.pipelines.map((option) => {
-        const isSelected = state.pipeline === option.id
-        return (
-          <button
-            aria-checked={isSelected}
-            className={`pipeline-card${isSelected ? ' pipeline-card--selected' : ''}`}
-            key={option.id}
-            onClick={() => update('pipeline', option.id)}
-            role="radio"
-            type="button"
-          >
-            <span className="pipeline-card__icon" aria-hidden="true">
-              <StackIcon id={option.id} />
-            </span>
-            <span className="pipeline-card__body">
-              <span className="pipeline-card__name">{option.name}</span>
-              <span className="pipeline-card__desc">{option.description}</span>
-            </span>
-            <span className="pipeline-card__mark" aria-hidden="true">
-              {isSelected ? <CheckIcon /> : null}
-            </span>
-          </button>
-        )
-      })}
+    <div className="pipeline-step">
+      <div className="pipeline-cards" role="radiogroup" aria-label="Pipeline provider">
+        {catalog.pipelines.map((option) => {
+          const isSelected = state.pipeline === option.id
+          return (
+            <button
+              aria-checked={isSelected}
+              className={`pipeline-card${isSelected ? ' pipeline-card--selected' : ''}`}
+              key={option.id}
+              onClick={() => update('pipeline', option.id)}
+              role="radio"
+              type="button"
+            >
+              <span className="pipeline-card__icon" aria-hidden="true">
+                <StackIcon id={option.id} />
+              </span>
+              <span className="pipeline-card__body">
+                <span className="pipeline-card__name">{option.name}</span>
+                <span className="pipeline-card__desc">{option.description}</span>
+              </span>
+              <span className="pipeline-card__mark" aria-hidden="true">
+                {isSelected ? <CheckIcon /> : null}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="maturity-section">
+        <div className="maturity-section__head">
+          <span className="maturity-section__label">Maturity level</span>
+          <span className="maturity-section__hint">
+            How much delivery discipline Scaffy should generate.
+          </span>
+        </div>
+
+        <div className="maturity-picker" role="radiogroup" aria-label="Pipeline maturity level">
+          {catalog.maturityPresets.map((preset) => {
+            const isSelected = state.pipelineMaturity === preset.id
+            const name = preset.label.replace(/^L\d\s+/, '')
+            return (
+              <button
+                aria-checked={isSelected}
+                className={`maturity-card${isSelected ? ' maturity-card--selected' : ''}`}
+                key={preset.id}
+                onClick={() => update('pipelineMaturity', preset.id)}
+                role="radio"
+                type="button"
+              >
+                <span className="maturity-card__bars" aria-hidden="true">
+                  {[1, 2, 3, 4].map((i) => (
+                    <span
+                      className={`maturity-card__bar${i <= preset.level ? ' maturity-card__bar--on' : ''}`}
+                      key={i}
+                    />
+                  ))}
+                </span>
+                <span className="maturity-card__body">
+                  <span className="maturity-card__title-row">
+                    <span className="maturity-card__name">
+                      <span className="maturity-card__level">L{preset.level}</span>
+                      {name}
+                    </span>
+                    {preset.dockerRequired && (
+                      <span className="maturity-card__badge" title="Requires Docker">
+                        Docker
+                      </span>
+                    )}
+                  </span>
+                  <span className="maturity-card__desc">{preset.description}</span>
+                </span>
+                <span className="maturity-card__mark" aria-hidden="true">
+                  {isSelected ? <CheckIcon /> : null}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <MaturityLockedCard />
+      </div>
     </div>
   )
 }
 
-type ProjectDetailsProps = StepProps & { error: string | null }
+function MaturityLockedCard() {
+  return (
+    <Tooltip
+      side="top"
+      align="start"
+      content={
+        <div className="tooltip__body">
+          <strong>Why no L5 yet?</strong>
+          <p>
+            Honest L5 needs choices Scaffy doesn&apos;t ask for: deployment target
+            (Kubernetes, Vercel, ECS…), registry, IaC tool (Terraform, Pulumi,
+            Helm), rollout strategy (canary, blue-green, rolling), secrets model,
+            and shared reusable workflows.
+          </p>
+          <p>
+            Generating it without those would produce YAML that &quot;looks mature&quot;
+            but doesn&apos;t actually run. It will land as a separate advanced flow.
+          </p>
+        </div>
+      }
+    >
+      <div
+        aria-disabled="true"
+        className="maturity-locked"
+        role="note"
+        tabIndex={0}
+      >
+        <span className="maturity-locked__bars" aria-hidden="true">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <span
+              className={`maturity-card__bar${i <= 5 ? ' maturity-card__bar--on' : ''}`}
+              key={i}
+            />
+          ))}
+        </span>
+        <div className="maturity-locked__body">
+          <div className="maturity-locked__title-row">
+            <span className="maturity-card__name">
+              <span className="maturity-card__level">L5</span>
+              Advanced delivery
+            </span>
+            <span className="maturity-locked__chip">Coming later</span>
+          </div>
+          <p className="maturity-locked__desc">
+            Canary / blue-green rollouts, policy-as-code, IaC, and reusable org
+            workflows — hover for why this isn&apos;t available yet.
+          </p>
+        </div>
+      </div>
+    </Tooltip>
+  )
+}
 
-function ProjectDetailsStep({ error, state, update }: ProjectDetailsProps) {
+type ProjectDetailsProps = StepProps & { catalog: InitCatalog; error: string | null }
+
+function ProjectDetailsStep({ catalog, error, state, update }: ProjectDetailsProps) {
+  const maturity = catalog.maturityPresets.find((preset) => preset.id === state.pipelineMaturity)
+  const dockerLocked = Boolean(maturity?.dockerRequired)
+  const dockerChecked = dockerLocked || state.includeDocker
+  const dockerHint = dockerLocked
+    ? `${maturity?.label ?? 'This maturity level'} requires Docker, so it's enabled automatically.`
+    : 'Adds Dockerfiles and docker-compose. L3 and L4 include this automatically.'
+
   return (
     <div className="project-details">
       <div className="project-details__field">
@@ -479,15 +609,20 @@ function ProjectDetailsStep({ error, state, update }: ProjectDetailsProps) {
         </p>
       </div>
 
-      <label className="docker-toggle" htmlFor="include-docker">
+      <label
+        className={`docker-toggle${dockerLocked ? ' docker-toggle--locked' : ''}`}
+        htmlFor="include-docker"
+      >
         <span className="docker-toggle__copy">
-          <span className="docker-toggle__title">Include Docker support</span>
-          <span className="docker-toggle__desc">
-            Adds a Dockerfile per service and a docker-compose.yml at the root.
+          <span className="docker-toggle__title">
+            Include Docker support
+            {dockerLocked && <span className="docker-toggle__lock">Locked by {maturity?.label}</span>}
           </span>
+          <span className="docker-toggle__desc">{dockerHint}</span>
         </span>
         <input
-          checked={state.includeDocker}
+          checked={dockerChecked}
+          disabled={dockerLocked}
           id="include-docker"
           onChange={(event) => update('includeDocker', event.target.checked)}
           type="checkbox"
@@ -526,6 +661,8 @@ function ReviewPanel({
   const backendVersion = findById(backend?.versions ?? [], state.backendVersion)
   const backendRuntime = findById(backendVersion?.runtimes ?? [], state.backendRuntime)
   const pipeline = findById<PipelineCatalogOption>(catalog.pipelines, state.pipeline)
+  const maturity = findById<MaturityPreset>(catalog.maturityPresets, state.pipelineMaturity)
+  const dockerIncluded = state.includeDocker || Boolean(maturity?.dockerRequired)
 
   return (
     <div className="review">
@@ -566,9 +703,16 @@ function ReviewPanel({
         </ReviewRow>
 
         <li className="review__row review__row--inline">
+          <span className="review__label">Maturity</span>
+          <span className="review__pill review__pill--on">
+            {maturity?.label ?? 'L2 Basic CI'}
+          </span>
+        </li>
+
+        <li className="review__row review__row--inline">
           <span className="review__label">Docker</span>
-          <span className={`review__pill${state.includeDocker ? ' review__pill--on' : ''}`}>
-            {state.includeDocker ? 'Included' : 'Off'}
+          <span className={`review__pill${dockerIncluded ? ' review__pill--on' : ''}`}>
+            {dockerIncluded ? 'Included' : 'Off'}
           </span>
         </li>
       </ul>
@@ -772,11 +916,13 @@ function withCatalogDefaults(state: WizardState, catalog: InitCatalog): WizardSt
   const frontend = catalog.frontends[0]
   const backend = catalog.backends[0]
   const pipeline = catalog.pipelines[0]
+  const maturity = catalog.maturityPresets.find((preset) => preset.id === 'l2') ?? catalog.maturityPresets[0]
   const next = {
     ...state,
     frontend: state.frontend || frontend?.id || '',
     backend: state.backend || backend?.id || '',
     pipeline: state.pipeline || pipeline?.id || '',
+    pipelineMaturity: state.pipelineMaturity || maturity?.id || '',
   }
   return withStackDefaults(withStackDefaults(next, catalog.frontends, 'frontend'), catalog.backends, 'backend')
 }

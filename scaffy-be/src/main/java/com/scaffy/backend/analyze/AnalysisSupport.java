@@ -13,13 +13,13 @@ final class AnalysisSupport {
 		if (score == 0.0) {
 			return 1;
 		}
-		if (score < 0.4) {
+		if (score < 0.5) {
 			return 2;
 		}
-		if (score < 0.6) {
+		if (score < 0.75) {
 			return 3;
 		}
-		if (score < 0.8) {
+		if (score < 0.9) {
 			return 4;
 		}
 		return 5;

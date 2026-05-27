@@ -38,10 +38,19 @@ export type PipelineCatalogOption = {
   description: string
 }
 
+export type MaturityPreset = {
+  id: string
+  label: string
+  description: string
+  level: number
+  dockerRequired: boolean
+}
+
 export type InitCatalog = {
   frontends: StackCatalogOption[]
   backends: StackCatalogOption[]
   pipelines: PipelineCatalogOption[]
+  maturityPresets: MaturityPreset[]
 }
 
 export type InitJobRequest = InitRequest & {
@@ -49,6 +58,7 @@ export type InitJobRequest = InitRequest & {
   frontendRuntime: string
   backendVersion: string
   backendRuntime: string
+  pipelineMaturity: string
 }
 
 export type InitSelectedStack = {
@@ -70,6 +80,7 @@ export type InitSelection = {
     id: string
     name: string
   }
+  pipelineMaturity: MaturityPreset
   includeDocker: boolean
 }
 

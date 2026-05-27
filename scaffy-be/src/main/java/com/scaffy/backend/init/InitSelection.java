@@ -4,6 +4,7 @@ public record InitSelection(
 		SelectedStack frontend,
 		SelectedStack backend,
 		SelectedPipeline pipeline,
+		SelectedMaturity pipelineMaturity,
 		boolean includeDocker) {
 
 	public record SelectedStack(
@@ -21,5 +22,13 @@ public record InitSelection(
 	public record SelectedPipeline(
 			String id,
 			String name) {
+	}
+
+	public record SelectedMaturity(
+			String id,
+			String label,
+			String description,
+			int level,
+			boolean dockerRequired) {
 	}
 }

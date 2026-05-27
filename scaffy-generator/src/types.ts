@@ -9,6 +9,7 @@ export type InitJobRequest = {
   backendVersion: string
   backendRuntime: string
   pipeline: string
+  pipelineMaturity?: string
   includeDocker?: boolean
 }
 
@@ -16,6 +17,7 @@ export type InitSelection = {
   frontend: SelectedStack
   backend: SelectedStack
   pipeline: SelectedPipeline
+  pipelineMaturity: SelectedMaturity
   includeDocker: boolean
 }
 
@@ -34,6 +36,14 @@ export type SelectedStack = {
 export type SelectedPipeline = {
   id: string
   name: string
+}
+
+export type SelectedMaturity = {
+  id: string
+  label: string
+  description: string
+  level: number
+  dockerRequired: boolean
 }
 
 export type InitGenerationJob = {
