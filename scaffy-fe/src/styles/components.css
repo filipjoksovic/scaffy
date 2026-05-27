@@ -56,6 +56,13 @@
   color: var(--color-ink);
 }
 
+.badge--not-evaluated {
+  background: transparent;
+  color: var(--color-muted);
+  border: 1px dashed var(--color-hairline-strong);
+  padding: 3px 9px;
+}
+
 .eyebrow {
   color: var(--color-muted);
 }

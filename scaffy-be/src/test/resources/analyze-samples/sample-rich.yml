@@ -1,0 +1,56 @@
+stages:
+  - build
+  - test
+  - security
+  - deploy
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+build-backend:
+  stage: build
+  image: maven:3.9-eclipse-temurin-25
+  script:
+    - mvn dependency:go-offline
+    - mvn --batch-mode clean package
+  artifacts:
+    paths:
+      - target/*.jar
+
+test-backend:
+  stage: test
+  image: maven:3.9-eclipse-temurin-25
+  script:
+    - mvn --batch-mode test
+  artifacts:
+    when: always
+    reports:
+      junit: target/surefire-reports/*.xml
+
+sast:
+  stage: security
+  image: semgrep/semgrep:latest
+  script:
+    - semgrep --config=auto --sarif --output=semgrep.sarif .
+  artifacts:
+    paths:
+      - semgrep.sarif
+
+dependency-scan:
+  stage: security
+  image: owasp/dependency-check:latest
+  script:
+    - dependency-check --scan . --format "SARIF" --out dependency-check.sarif
+  artifacts:
+    paths:
+      - dependency-check.sarif
+
+deploy-prod:
+  stage: deploy
+  script:
+    - kubectl apply -f k8s/deployment.yaml
+  environment:
+    name: production
+  when: on_success

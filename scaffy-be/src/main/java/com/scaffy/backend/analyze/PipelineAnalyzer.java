@@ -1,38 +1,32 @@
 package com.scaffy.backend.analyze;
 
-import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 @Service
 public class PipelineAnalyzer {
 
-	private static final Map<String, DimensionProfile> DIMENSIONS = Map.of(
-			"build", new DimensionProfile(10, 0.20),
-			"test", new DimensionProfile(20, 0.25),
-			"code_analysis", new DimensionProfile(25, 0.10),
-			"security_scanning", new DimensionProfile(27, 0.20),
-			"artifacts", new DimensionProfile(28, 0.07),
-			"deployment", new DimensionProfile(30, 0.15),
-			"notifications", new DimensionProfile(40, 0.03));
-	private static final DimensionProfile DEFAULT_DIMENSION = new DimensionProfile(100, 0.10);
-
 	private final YamlPipelineParser yamlPipelineParser;
 	private final ProviderDetector providerDetector;
 	private final List<PipelineProviderParser> providerParsers;
 	private final List<CapabilityRuleSet> ruleSets;
+	private final ScoringEngine scoringEngine;
 
 	public PipelineAnalyzer(
 			YamlPipelineParser yamlPipelineParser,
 			ProviderDetector providerDetector,
 			List<PipelineProviderParser> providerParsers,
-			List<CapabilityRuleSet> ruleSets) {
+			List<CapabilityRuleSet> ruleSets,
+			ScoringEngine scoringEngine) {
 		this.yamlPipelineParser = yamlPipelineParser;
 		this.providerDetector = providerDetector;
 		this.providerParsers = providerParsers;
 		this.ruleSets = ruleSets;
+		this.scoringEngine = scoringEngine;
 	}
 
 	public AnalysisResponse analyze(String filename, String content) {
@@ -40,18 +34,32 @@ public class PipelineAnalyzer {
 		PipelineProvider provider = providerDetector.detect(filename, content, root);
 		PipelineProviderParser parser = parserFor(provider);
 		PipelineDocument document = parser.parse(root);
-		List<DimensionAnalysis> dimensions = ruleSets.stream()
-				.sorted(Comparator.comparingInt(ruleSet -> dimensionOrder(ruleSet.dimension())))
-				.map(ruleSet -> ruleSet.analyze(document))
+
+		List<CapabilityFinding> allFindings = ruleSets.stream()
+				.flatMap(ruleSet -> ruleSet.detect(document).stream())
 				.toList();
-		double overallScore = overallScore(dimensions);
+
+		Map<String, List<CapabilityFinding>> byDimension = allFindings.stream()
+				.collect(Collectors.groupingBy(CapabilityFinding::dimension, LinkedHashMap::new, Collectors.toList()));
+
+		List<String> dimensionOrder = ruleSets.stream()
+				.map(CapabilityRuleSet::dimension)
+				.distinct()
+				.toList();
+
+		List<DomainScore> domainScores = dimensionOrder.stream()
+				.map(dim -> scoringEngine.score(dim, byDimension.getOrDefault(dim, List.of())))
+				.toList();
+
+		double overallScore = scoringEngine.overallScore(domainScores);
+		int overallLevel = scoringEngine.maturityLevel(overallScore, domainScores, allFindings);
+
 		return new AnalysisResponse(
 				provider,
 				overallScore,
-				AnalysisSupport.level(overallScore),
-				AnalysisSupport.status(overallScore),
-				confidence(dimensions),
-				dimensions);
+				overallLevel,
+				scoringEngine.overallStatus(overallScore, domainScores),
+				domainScores);
 	}
 
 	private PipelineProviderParser parserFor(PipelineProvider provider) {
@@ -59,46 +67,5 @@ public class PipelineAnalyzer {
 				.filter(parser -> parser.provider() == provider)
 				.findFirst()
 				.orElseThrow(() -> new IllegalStateException("No parser registered for provider " + provider));
-	}
-
-	private int dimensionOrder(String dimension) {
-		return profile(dimension).order();
-	}
-
-	private double overallScore(List<DimensionAnalysis> dimensions) {
-		if (dimensions.isEmpty()) {
-			return 0.0;
-		}
-		double weightedTotal = dimensions.stream()
-				.mapToDouble(dimension -> dimension.score() * dimensionWeight(dimension.dimension()))
-				.sum();
-		double weightTotal = dimensions.stream()
-				.mapToDouble(dimension -> dimensionWeight(dimension.dimension()))
-				.sum();
-		return AnalysisSupport.round(weightedTotal / weightTotal);
-	}
-
-	private double dimensionWeight(String dimension) {
-		return profile(dimension).weight();
-	}
-
-	private DimensionProfile profile(String dimension) {
-		return DIMENSIONS.getOrDefault(dimension, DEFAULT_DIMENSION);
-	}
-
-	private Confidence confidence(List<DimensionAnalysis> dimensions) {
-		if (dimensions.isEmpty()) {
-			return Confidence.HIGH;
-		}
-		long highConfidenceDimensions = dimensions.stream()
-				.filter(dimension -> dimension.confidence() == Confidence.HIGH)
-				.count();
-		if (highConfidenceDimensions > dimensions.size() / 2) {
-			return Confidence.HIGH;
-		}
-		return Confidence.MEDIUM;
-	}
-
-	private record DimensionProfile(int order, double weight) {
 	}
 }

@@ -9,12 +9,11 @@ const initializerPoints = [
 ]
 
 const analyzerSignals = [
-  'Build and test coverage',
-  'Security scanning and secret checks',
-  'Artifact publishing and reuse',
-  'Deployment readiness',
-  'Notifications and feedback loops',
-  'Linting and static analysis',
+  'Build and release management',
+  'Testing maturity and coverage',
+  'Security scanning and secret hygiene',
+  'Deployment automation and rollback',
+  'Workflow quality and reproducibility',
 ]
 
 const modelSources = [
@@ -32,86 +31,56 @@ const modelSources = [
   },
 ]
 
-const overallWeights = [
-  ['Test', '25%'],
-  ['Build', '20%'],
-  ['Security scanning', '20%'],
-  ['Deployment', '15%'],
-  ['Code analysis', '10%'],
-  ['Artifacts', '7%'],
-  ['Notifications', '3%'],
-]
-
-const dimensionMetrics = [
+const dimensionCapabilities = [
   {
-    dimension: 'Build',
-    metrics: [
-      ['Build command', '35%'],
-      ['Dependency install or restore before build', '20%'],
-      ['Recognized ecosystem', '15%'],
-      ['Automatic trigger', '15%'],
-      ['Explicit build artifact', '15%'],
+    dimension: 'Build & release management',
+    capabilities: [
+      'Build scripting',
+      'Packaging',
+      'Registry publish',
+      'Versioning',
     ],
   },
   {
-    dimension: 'Test',
-    metrics: [
-      ['Automated test command', '35%'],
-      ['Automatic trigger', '20%'],
-      ['Recognized test ecosystem', '15%'],
-      ['Test report or coverage output', '15%'],
-      ['Quality signal such as coverage/JUnit', '15%'],
+    dimension: 'Testing maturity',
+    capabilities: [
+      'Test presence',
+      'CI-integrated tests',
+      'Reports & coverage',
+      'Multi-layer testing',
     ],
   },
   {
-    dimension: 'Code analysis',
-    metrics: [
-      ['Lint or static analysis command', '30%'],
-      ['Formatter or style check', '20%'],
-      ['Type checking or deeper analysis', '20%'],
-      ['Code quality report or artifact', '15%'],
-      ['Automatic trigger', '15%'],
+    dimension: 'Security integration',
+    capabilities: [
+      'Static analysis (SAST)',
+      'Dependency & container scanning',
+      'Secret hygiene',
     ],
   },
   {
-    dimension: 'Security scanning',
-    metrics: [
-      ['SAST or static security scanning', '25%'],
-      ['Dependency/SCA scanning', '20%'],
-      ['Secret scanning', '15%'],
-      ['Container image or IaC scanning', '15%'],
-      ['Security report or SARIF/artifact output', '10%'],
-      ['Automatic trigger', '15%'],
+    dimension: 'Deployment automation',
+    capabilities: [
+      'Deployment stage',
+      'Environment targeting',
+      'IaC usage',
+      'Orchestration',
+      'Rollback / controlled release',
     ],
   },
   {
-    dimension: 'Artifacts',
-    metrics: [
-      ['Artifact/archive output', '30%'],
-      ['Package or image registry publish', '25%'],
-      ['Artifact reuse or download', '15%'],
-      ['Artifact identity or versioning', '15%'],
-      ['Automatic trigger', '15%'],
-    ],
-  },
-  {
-    dimension: 'Deployment',
-    metrics: [
-      ['Deployment command', '35%'],
-      ['Deployment environment', '15%'],
-      ['Build artifact or image used for deployment', '20%'],
-      ['Automatic trigger', '15%'],
-      ['Post-deploy validation', '15%'],
-    ],
-  },
-  {
-    dimension: 'Notifications',
-    metrics: [
-      ['Notification channel or integration', '35%'],
-      ['Failure or status condition', '20%'],
-      ['External delivery target', '15%'],
-      ['Deployment or pipeline-result context', '15%'],
-      ['Automatic trigger', '15%'],
+    dimension: 'Workflow quality & optimization',
+    capabilities: [
+      'Execution safety',
+      'Selective execution',
+      'Maintainability',
+      'Reproducibility',
+      'Matrix / cache optimization',
+      'Lint & static analysis',
+      'Formatting',
+      'Type checking',
+      'Notification channel',
+      'Status alerting',
     ],
   },
 ]
@@ -210,35 +179,27 @@ export function Landing() {
         <div className="methodology-body">
           <div className="methodology-formula">
             <p>
-              Each detected practice contributes its configured weight to its dimension. Missing evidence
-              contributes zero and is returned as an issue. The overall maturity score is the weighted
-              average of all dimension scores. Levels are Scaffy's internal evidence coverage bands, not
-              official DORA, OWASP, or SLSA ratings.
+              Each dimension is composed of capabilities. A capability earns up to 4 points based on
+              detected positives, minus any code smells. The dimension score is the total points divided
+              by the maximum (4 × capability count). Dimensions without any matching signals are reported
+              as <em>not evaluated</em> and excluded from the overall average.
             </p>
-            <code>overall = sum(dimension score × dimension weight)</code>
+            <code>dimension = sum(capability points) / (4 × capability count)</code>
+            <code>overall = average(score) over evaluated dimensions</code>
           </div>
 
-          <div className="weight-table" aria-label="Overall dimension weights">
-            {overallWeights.map(([dimension, weight]) => (
-              <div key={dimension}>
-                <span>{dimension}</span>
-                <strong>{weight}</strong>
-              </div>
-            ))}
-          </div>
-
-          <div className="metric-accordion" aria-label="Metric calculation by dimension">
-            {dimensionMetrics.map((group) => (
+          <div className="metric-accordion" aria-label="Capabilities by dimension">
+            {dimensionCapabilities.map((group) => (
               <details key={group.dimension}>
                 <summary>
                   <span>{group.dimension}</span>
-                  <strong>100%</strong>
+                  <strong>{group.capabilities.length} capabilities</strong>
                 </summary>
                 <div>
-                  {group.metrics.map(([metric, weight]) => (
-                    <p key={metric}>
-                      <span>{metric}</span>
-                      <strong>{weight}</strong>
+                  {group.capabilities.map((capability) => (
+                    <p key={capability}>
+                      <span>{capability}</span>
+                      <strong>0 – 4 pts</strong>
                     </p>
                   ))}
                 </div>

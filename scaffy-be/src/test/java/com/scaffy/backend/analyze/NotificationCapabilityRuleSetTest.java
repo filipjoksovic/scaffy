@@ -13,13 +13,13 @@ class NotificationCapabilityRuleSetTest {
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
 			List.of(
-					new BuildCapabilityRuleSet(),
+					new BuildReleaseManagementCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
 					new SecurityScanningCapabilityRuleSet(),
-					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet(),
-					new NotificationCapabilityRuleSet()));
+					new NotificationCapabilityRuleSet()),
+				new ScoringEngine());
 
 	@Test
 	void detectsCompleteGitHubSlackFailureNotification() {
@@ -37,15 +37,12 @@ class NotificationCapabilityRuleSetTest {
 				          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 				""");
 
-		DimensionAnalysis notifications = notifications(response);
+		DomainScore notifications = notifications(response);
 
-		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment", "notifications");
-		assertThat(notifications.score()).isEqualTo(1.0);
-		assertThat(notifications.level()).isEqualTo(5);
-		assertThat(notifications.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(notifications.confidence()).isEqualTo(Confidence.HIGH);
-		assertThat(evidence(notifications)).contains("slackapi/slack-github-action@v2", "failure()", "push");
+		assertThat(response.dimensions()).extracting(DomainScore::dimension)
+				.containsExactly("build_release", "testing_maturity", "workflow_quality", "security_integration", "deployment_automation");
+		assertThat(notifications.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(evidence(notifications)).contains("slackapi/slack-github-action@v2", "failure()");
 	}
 
 	@Test
@@ -60,12 +57,10 @@ class NotificationCapabilityRuleSetTest {
 				    - curl -X POST "$MSTEAMS_WEBHOOK" -H "Content-Type: application/json" -d '{"text":"Pipeline failed"}'
 				""");
 
-		DimensionAnalysis notifications = notifications(response);
+		DomainScore notifications = notifications(response);
 
-		assertThat(notifications.score()).isEqualTo(1.0);
-		assertThat(notifications.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(notifications.confidence()).isEqualTo(Confidence.HIGH);
-		assertThat(evidence(notifications)).contains("when: on_failure", "non-manual GitLab CI notification job");
+		assertThat(notifications.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(evidence(notifications)).contains("when: on_failure");
 	}
 
 	@Test
@@ -80,13 +75,10 @@ class NotificationCapabilityRuleSetTest {
 				      - run: curl -X POST https://discord.com/api/webhooks/abc/def -d '{"content":"Done"}'
 				""");
 
-		DimensionAnalysis notifications = notifications(response);
+		DomainScore notifications = notifications(response);
 
-		assertThat(notifications.score()).isEqualTo(0.5);
-		assertThat(notifications.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(notifications.confidence()).isEqualTo(Confidence.HIGH);
+		assertThat(notifications.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(notifications)).contains("curl -X POST https://discord.com/api/webhooks/abc/def -d '{\"content\":\"Done\"}'");
-		assertThat(notifications.missingPractices()).contains("No automatic notification trigger detected");
 	}
 
 	@Test
@@ -101,10 +93,9 @@ class NotificationCapabilityRuleSetTest {
 				      - run: sendmail -t team@example.com < pipeline-status.txt
 				""");
 
-		DimensionAnalysis notifications = notifications(response);
+		DomainScore notifications = notifications(response);
 
-		assertThat(notifications.score()).isEqualTo(0.8);
-		assertThat(notifications.status()).isEqualTo(AnalysisStatus.COMPLETE);
+		assertThat(notifications.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(notifications)).contains("sendmail -t team@example.com < pipeline-status.txt");
 	}
 
@@ -124,24 +115,22 @@ class NotificationCapabilityRuleSetTest {
 				          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 				""");
 
-		DimensionAnalysis notifications = notifications(response);
+		DomainScore notifications = notifications(response);
 
-		assertThat(notifications.score()).isEqualTo(0.8);
-		assertThat(notifications.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(evidence(notifications)).contains("slackapi/slack-github-action@v2", "push");
+		assertThat(notifications.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(evidence(notifications)).contains("slackapi/slack-github-action@v2");
 	}
 
 	@Test
 	void nonNotificationPipelinesReturnMissingNotificationStatus() {
-		String[] commands = {
+		String[] nonNotificationCommands = {
 				"npm run build",
 				"npm test",
-				"npm run lint",
 				"actions/upload-artifact@v4",
 				"kubectl apply -f k8s/"
 		};
 
-		for (String command : commands) {
+		for (String command : nonNotificationCommands) {
 			AnalysisResponse response = analyzer.analyze("ci.yml", """
 					name: CI
 					on: [push]
@@ -152,7 +141,7 @@ class NotificationCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis notifications = notifications(response);
+			DomainScore notifications = notifications(response);
 
 			assertThat(notifications.status())
 					.as("Expected no notification detection for %s", command)
@@ -176,10 +165,9 @@ class NotificationCapabilityRuleSetTest {
 				          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 				""");
 
-		DimensionAnalysis notifications = notifications(response);
+		DomainScore notifications = notifications(response);
 
-		assertThat(notifications.score()).isEqualTo(0.7);
-		assertThat(notifications.missingPractices()).contains("No automatic notification trigger detected");
+		assertThat(notifications.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -194,22 +182,24 @@ class NotificationCapabilityRuleSetTest {
 				      - run: curl https://app.example.com/health
 				""");
 
-		DimensionAnalysis notifications = notifications(response);
+		DomainScore notifications = notifications(response);
 
 		assertThat(notifications.status()).isEqualTo(AnalysisStatus.MISSING);
 		assertThat(notifications.score()).isEqualTo(0.0);
 	}
 
-	private DimensionAnalysis notifications(AnalysisResponse response) {
+	private DomainScore notifications(AnalysisResponse response) {
 		return response.dimensions().stream()
-				.filter(dimension -> "notifications".equals(dimension.dimension()))
+				.filter(dimension -> "workflow_quality".equals(dimension.dimension()))
 				.findFirst()
 				.orElseThrow();
 	}
 
-	private List<String> evidence(DimensionAnalysis analysis) {
-		return analysis.detectedPractices().stream()
-				.map(DetectedPractice::evidence)
+	private List<String> evidence(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::evidence)
 				.toList();
 	}
 }

@@ -11,13 +11,10 @@ import org.springframework.stereotype.Component;
 @Order(25)
 public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 
-	private static final double LINT_STATIC_WEIGHT = 0.30;
-	private static final double FORMATTER_WEIGHT = 0.20;
-	private static final double TYPE_DEEP_ANALYSIS_WEIGHT = 0.20;
-	private static final double REPORT_OUTPUT_WEIGHT = 0.15;
-	private static final double AUTOMATIC_TRIGGER_WEIGHT = 0.15;
+	private static final String CAPABILITY_LINT_STATIC = "Lint / static analysis";
+	private static final String CAPABILITY_FORMATTING = "Formatting";
+	private static final String CAPABILITY_TYPE_CHECKING = "Type checking";
 
-	private static final String DIMENSION = "code_analysis";
 	private static final String ECOSYSTEM_NODE_JS = "Node.js";
 	private static final String ECOSYSTEM_JAVA = "Java";
 	private static final String ECOSYSTEM_DOTNET = ".NET";
@@ -28,14 +25,6 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String PRACTICE_LINT_STATIC_DETECTED = "Lint or static analysis command detected";
 	private static final String PRACTICE_FORMATTER_DETECTED = "Formatter or style check detected";
 	private static final String PRACTICE_TYPE_DEEP_ANALYSIS_DETECTED = "Type checking or deeper static analysis detected";
-	private static final String PRACTICE_REPORT_OUTPUT_DETECTED = "Code quality report or artifact detected";
-	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic code analysis trigger detected";
-
-	private static final String MISSING_LINT_STATIC = "No lint or static analysis command detected";
-	private static final String MISSING_FORMATTER = "No formatter or style check detected";
-	private static final String MISSING_TYPE_DEEP_ANALYSIS = "No type checking or deeper static analysis detected";
-	private static final String MISSING_REPORT_OUTPUT = "No code quality report or artifact detected";
-	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic code analysis trigger detected";
 
 	private static final String KEYWORD_ANALYSIS = "analysis";
 	private static final String KEYWORD_QUALITY = "quality";
@@ -81,94 +70,49 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 
 	@Override
 	public String dimension() {
-		return DIMENSION;
+		return "workflow_quality";
 	}
 
 	@Override
-	public DimensionAnalysis analyze(PipelineDocument document) {
+	public List<CapabilityFinding> detect(PipelineDocument document) {
+		List<CapabilityFinding> findings = new ArrayList<>();
+
 		List<CommandMatch> codeAnalysisMatches = codeAnalysisMatches(document);
 		List<CommandMatch> formatterMatches = CommandMatcher.findMatches(document, FORMATTER_RULES);
 		List<CommandMatch> typeDeepMatches = codeAnalysisContext(CommandMatcher.findMatches(document, TYPE_DEEP_ANALYSIS_RULES));
 		List<DetectedPractice> actionMatches = actionMatches(document);
-		List<CommandMatch> allAnalysisMatches = AnalysisSupport.distinct(codeAnalysisMatches, formatterMatches, typeDeepMatches);
-		if (allAnalysisMatches.isEmpty() && actionMatches.isEmpty()) {
-			return missingAnalysis();
-		}
 
-		double score = 0.0;
-		List<DetectedPractice> detected = new ArrayList<>();
-		List<String> missing = new ArrayList<>();
-
+		// Lint / static analysis
 		Optional<DetectedPractice> lintStatic = lintStaticPractice(codeAnalysisMatches, actionMatches);
 		if (lintStatic.isPresent()) {
-			score += LINT_STATIC_WEIGHT;
-			detected.add(lintStatic.get());
+			findings.add(CapabilityFinding.positive("LINT_STATIC_PRESENT", dimension(), CAPABILITY_LINT_STATIC,
+					lintStatic.get().evidence(), lintStatic.get().location()));
 		}
 		else {
-			missing.add(MISSING_LINT_STATIC);
+			findings.add(CapabilityFinding.missing("LINT_STATIC_MISSING", dimension(), CAPABILITY_LINT_STATIC));
 		}
 
-		if (formatterMatches.isEmpty()) {
-			missing.add(MISSING_FORMATTER);
-		}
-		else {
+		// Formatting
+		if (!formatterMatches.isEmpty()) {
 			CommandMatch formatter = formatterMatches.getFirst();
-			score += FORMATTER_WEIGHT;
-			detected.add(new DetectedPractice(PRACTICE_FORMATTER_DETECTED, formatter.evidence(), formatter.location()));
-		}
-
-		Optional<DetectedPractice> typeDeepAnalysis = typeDeepPractice(typeDeepMatches, actionMatches);
-		if (typeDeepAnalysis.isPresent()) {
-			score += TYPE_DEEP_ANALYSIS_WEIGHT;
-			detected.add(typeDeepAnalysis.get());
+			findings.add(CapabilityFinding.positive("FORMATTER_PRESENT", dimension(), CAPABILITY_FORMATTING,
+					formatter.evidence(), formatter.location()));
 		}
 		else {
-			missing.add(MISSING_TYPE_DEEP_ANALYSIS);
+			findings.add(CapabilityFinding.missing("FORMATTER_MISSING", dimension(), CAPABILITY_FORMATTING));
 		}
 
-		Optional<DetectedPractice> reportOutput = reportOutput(allAnalysisMatches, actionMatches);
-		if (reportOutput.isPresent()) {
-			score += REPORT_OUTPUT_WEIGHT;
-			detected.add(reportOutput.get());
+		// Type checking
+		Optional<DetectedPractice> typeDeep = typeDeepPractice(typeDeepMatches, actionMatches);
+		if (typeDeep.isPresent()) {
+			findings.add(CapabilityFinding.positive("TYPE_CHECK_PRESENT", dimension(), CAPABILITY_TYPE_CHECKING,
+					typeDeep.get().evidence(), typeDeep.get().location()));
 		}
 		else {
-			missing.add(MISSING_REPORT_OUTPUT);
+			findings.add(CapabilityFinding.missing("TYPE_CHECK_MISSING", dimension(), CAPABILITY_TYPE_CHECKING));
 		}
 
-		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, allAnalysisMatches);
-		if (automaticTrigger.isPresent()) {
-			score += AUTOMATIC_TRIGGER_WEIGHT;
-			detected.add(automaticTrigger.get());
-		}
-		else {
-			missing.add(MISSING_AUTOMATIC_TRIGGER);
-		}
-
-		double roundedScore = AnalysisSupport.round(score);
-		return new DimensionAnalysis(
-				dimension(),
-				roundedScore,
-				AnalysisSupport.level(roundedScore),
-				AnalysisSupport.status(roundedScore),
-				confidence(automaticTrigger.isPresent(), reportOutput.isPresent()),
-				detected,
-				missing);
-	}
-
-	private DimensionAnalysis missingAnalysis() {
-		return new DimensionAnalysis(
-				dimension(),
-				0.0,
-				1,
-				AnalysisStatus.MISSING,
-				Confidence.HIGH,
-				List.of(),
-				List.of(
-						MISSING_LINT_STATIC,
-						MISSING_FORMATTER,
-						MISSING_TYPE_DEEP_ANALYSIS,
-						MISSING_REPORT_OUTPUT,
-						MISSING_AUTOMATIC_TRIGGER));
+		return findings;
 	}
 
 	private List<CommandMatch> codeAnalysisMatches(PipelineDocument document) {
@@ -253,79 +197,6 @@ public class CodeAnalysisCapabilityRuleSet implements CapabilityRuleSet {
 				|| uses.startsWith("reviewdog/action-");
 	}
 
-	private Optional<DetectedPractice> reportOutput(
-			List<CommandMatch> codeAnalysisMatches,
-			List<DetectedPractice> actionMatches) {
-		for (CommandMatch match : codeAnalysisMatches) {
-			for (PipelineOutput output : match.job().outputs()) {
-				if (codeQualityOutput(output) || codeQualityJob(match.job())) {
-					return Optional.of(new DetectedPractice(PRACTICE_REPORT_OUTPUT_DETECTED, output.evidence(), output.location()));
-				}
-			}
-			for (PipelineStep step : match.job().steps()) {
-				if (codeQualityUploadAction(step)) {
-					return Optional.of(new DetectedPractice(PRACTICE_REPORT_OUTPUT_DETECTED, step.uses(), step.location()));
-				}
-			}
-		}
-		for (DetectedPractice actionMatch : actionMatches) {
-			if (AnalysisSupport.containsAny(AnalysisSupport.lower(actionMatch.evidence()), "sonar", "reviewdog")) {
-				return Optional.of(new DetectedPractice(
-						PRACTICE_REPORT_OUTPUT_DETECTED,
-						actionMatch.evidence(),
-						actionMatch.location()));
-			}
-		}
-		return Optional.empty();
-	}
-
-	private boolean codeQualityOutput(PipelineOutput output) {
-		return AnalysisSupport.containsAny(AnalysisSupport.lower(output.type() + " " + output.evidence()), "codequality", "code-quality", "code quality");
-	}
-
-	private boolean codeQualityJob(PipelineJob job) {
-		return AnalysisSupport.containsAny(AnalysisSupport.lower(job.id() + " " + job.name() + " " + job.stage()), KEYWORD_QUALITY, "lint", "static", KEYWORD_ANALYSIS);
-	}
-
-	private boolean codeQualityUploadAction(PipelineStep step) {
-		if (step.uses() == null) {
-			return false;
-		}
-		String uses = AnalysisSupport.lower(step.uses());
-		return uses.startsWith("actions/upload-artifact") && AnalysisSupport.containsAny(AnalysisSupport.lower(step.location()), KEYWORD_QUALITY, "lint", KEYWORD_ANALYSIS);
-	}
-
-	private Optional<DetectedPractice> automaticTrigger(PipelineDocument document, List<CommandMatch> codeAnalysisMatches) {
-		if (document.provider() == PipelineProvider.GITHUB_ACTIONS) {
-			return document.triggers().stream()
-					.filter(PipelineTrigger::automatic)
-					.findFirst()
-					.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()));
-		}
-
-		boolean automaticAnalysisJob = codeAnalysisMatches.stream().anyMatch(match -> !match.job().manualOnly());
-		if (!automaticAnalysisJob) {
-			return Optional.empty();
-		}
-
-		return document.triggers().stream()
-				.filter(PipelineTrigger::automatic)
-				.findFirst()
-				.map(trigger -> new DetectedPractice(PRACTICE_AUTOMATIC_TRIGGER_DETECTED, trigger.name(), trigger.location()))
-				.or(() -> codeAnalysisMatches.stream()
-						.filter(match -> !match.job().manualOnly())
-						.findFirst()
-						.map(match -> new DetectedPractice(
-								PRACTICE_AUTOMATIC_TRIGGER_DETECTED,
-								"non-manual GitLab CI code analysis job",
-								match.job().location())));
-	}
-
-	private Confidence confidence(boolean automaticTriggerDetected, boolean reportOutputDetected) {
-		if (automaticTriggerDetected && reportOutputDetected) {
-			return Confidence.HIGH;
-		}
-		return Confidence.MEDIUM;
-	}
 
 }
+

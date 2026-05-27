@@ -93,7 +93,7 @@ public class GitLabCiParser implements PipelineProviderParser {
 		boolean manualOnly = manualOnly(jobMap);
 		String when = YamlSupport.stringValue(jobMap, "when").orElse(null);
 		String condition = rulesText(jobMap);
-		String details = details(jobMap, "variables");
+		String details = details(jobMap, "variables", "timeout", "image", "parallel", "cache", "allow_failure");
 		List<PipelineStep> steps = scriptSteps(id, script);
 		List<PipelineOutput> outputs = outputs(id, jobMap);
 		return new PipelineJob(

@@ -1,0 +1,35 @@
+name: Policy-as-code validation
+
+on:
+  pull_request:
+    paths:
+      - 'kubernetes/**'
+      - 'terraform/**'
+      - 'policy/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Kubernetes manifests with Conftest
+        uses: instrumenta/conftest-action@master
+        with:
+          files: kubernetes/
+          policy: policy/
+      - name: Scan IaC with Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          framework: terraform
+          quiet: true
+          soft_fail: false
+      - name: Run Open Policy Agent
+        run: |
+          opa eval --data policy/ --input kubernetes/deployment.yaml \
+            "data.kubernetes.deny" --format pretty

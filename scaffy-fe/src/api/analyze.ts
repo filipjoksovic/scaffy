@@ -1,14 +1,22 @@
 import { apiUrl, throwApiError } from './client'
 
-export type AnalysisStatus = 'missing' | 'partial' | 'complete' | (string & {})
-export type AnalysisConfidence = 'low' | 'medium' | 'high' | (string & {})
+export type AnalysisStatus = 'missing' | 'partial' | 'complete' | 'not_evaluated' | (string & {})
 export type PipelineProvider = 'github-actions' | 'gitlab-ci' | (string & {})
+export type FindingType = 'POSITIVE' | 'SMELL' | 'MISSING' | (string & {})
 
-export type DetectedPractice = {
-  practice: string
-  evidence: string
-  location: string
-  metadata?: Record<string, string>
+export type CapabilityFinding = {
+  ruleId: string
+  dimension: string
+  capability: string
+  type: FindingType
+  evidence: string | null
+  location: string | null
+}
+
+export type CapabilityScore = {
+  capability: string
+  points: number
+  findings: CapabilityFinding[]
 }
 
 export type DimensionAnalysis = {
@@ -16,9 +24,7 @@ export type DimensionAnalysis = {
   score: number
   level: number
   status: AnalysisStatus
-  confidence: AnalysisConfidence
-  detectedPractices: DetectedPractice[]
-  missingPractices: string[]
+  capabilityScores: CapabilityScore[]
 }
 
 export type AnalysisResponse = {
@@ -26,7 +32,6 @@ export type AnalysisResponse = {
   overallScore: number
   overallLevel: number
   overallStatus: AnalysisStatus
-  overallConfidence: AnalysisConfidence
   dimensions: DimensionAnalysis[]
 }
 

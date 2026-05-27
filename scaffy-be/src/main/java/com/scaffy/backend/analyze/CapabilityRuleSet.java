@@ -1,8 +1,10 @@
 package com.scaffy.backend.analyze;
 
+import java.util.List;
+
 public interface CapabilityRuleSet {
 
 	String dimension();
 
-	DimensionAnalysis analyze(PipelineDocument document);
+	List<CapabilityFinding> detect(PipelineDocument document);
 }

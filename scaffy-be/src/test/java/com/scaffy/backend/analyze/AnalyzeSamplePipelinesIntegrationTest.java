@@ -20,423 +20,89 @@ import org.springframework.web.context.WebApplicationContext;
 @SpringBootTest
 class AnalyzeSamplePipelinesIntegrationTest {
 
-	private static final Path SAMPLE_DIR = Path.of("src/test/resources/analyze-samples");
+private static final Path SAMPLE_DIR = Path.of("src/test/resources/analyze-samples");
 
-	@Autowired
-	private WebApplicationContext context;
+@Autowired
+private WebApplicationContext context;
 
-	private MockMvc mockMvc() {
-		return MockMvcBuilders.webAppContextSetup(context).build();
-	}
+private MockMvc mockMvc() {
+return MockMvcBuilders.webAppContextSetup(context).build();
+}
 
-	@Test
-	void samplePipelineFilesCanBeUploadedThroughAnalyzeEndpoint() throws Exception {
-		for (Sample sample : samples()) {
-			mockMvc().perform(multipart("/api/analyze").file(file(sample.filename())))
-					.andExpect(status().isOk())
-					.andExpect(jsonPath("$.provider").value(sample.provider()))
-					.andExpect(jsonPath("$.dimensions[0].dimension").value("build"))
-					.andExpect(jsonPath("$.dimensions[0].score").value(sample.buildScore()))
-					.andExpect(jsonPath("$.dimensions[0].level").value(sample.buildLevel()))
-					.andExpect(jsonPath("$.dimensions[0].status").value(sample.buildStatus()))
-					.andExpect(jsonPath("$.dimensions[0].confidence").value(sample.buildConfidence()))
-					.andExpect(jsonPath("$.dimensions[1].dimension").value("test"))
-					.andExpect(jsonPath("$.dimensions[1].score").value(sample.testScore()))
-					.andExpect(jsonPath("$.dimensions[1].level").value(sample.testLevel()))
-					.andExpect(jsonPath("$.dimensions[1].status").value(sample.testStatus()))
-					.andExpect(jsonPath("$.dimensions[1].confidence").value(sample.testConfidence()))
-					.andExpect(jsonPath("$.dimensions[2].dimension").value("code_analysis"))
-					.andExpect(jsonPath("$.dimensions[2].score").value(sample.codeAnalysisScore()))
-					.andExpect(jsonPath("$.dimensions[2].level").value(sample.codeAnalysisLevel()))
-					.andExpect(jsonPath("$.dimensions[2].status").value(sample.codeAnalysisStatus()))
-					.andExpect(jsonPath("$.dimensions[2].confidence").value(sample.codeAnalysisConfidence()))
-					.andExpect(jsonPath("$.dimensions[3].dimension").value("security_scanning"))
-					.andExpect(jsonPath("$.dimensions[3].score").value(sample.securityScore()))
-					.andExpect(jsonPath("$.dimensions[3].level").value(sample.securityLevel()))
-					.andExpect(jsonPath("$.dimensions[3].status").value(sample.securityStatus()))
-					.andExpect(jsonPath("$.dimensions[3].confidence").value(sample.securityConfidence()))
-					.andExpect(jsonPath("$.dimensions[4].dimension").value("artifacts"))
-					.andExpect(jsonPath("$.dimensions[4].score").value(sample.artifactScore()))
-					.andExpect(jsonPath("$.dimensions[4].level").value(sample.artifactLevel()))
-					.andExpect(jsonPath("$.dimensions[4].status").value(sample.artifactStatus()))
-					.andExpect(jsonPath("$.dimensions[4].confidence").value(sample.artifactConfidence()))
-					.andExpect(jsonPath("$.dimensions[5].dimension").value("deployment"))
-					.andExpect(jsonPath("$.dimensions[5].score").value(sample.deploymentScore()))
-					.andExpect(jsonPath("$.dimensions[5].level").value(sample.deploymentLevel()))
-					.andExpect(jsonPath("$.dimensions[5].status").value(sample.deploymentStatus()))
-					.andExpect(jsonPath("$.dimensions[5].confidence").value(sample.deploymentConfidence()))
-					.andExpect(jsonPath("$.dimensions[6].dimension").value("notifications"))
-					.andExpect(jsonPath("$.dimensions[6].score").value(sample.notificationScore()))
-					.andExpect(jsonPath("$.dimensions[6].level").value(sample.notificationLevel()))
-					.andExpect(jsonPath("$.dimensions[6].status").value(sample.notificationStatus()))
-					.andExpect(jsonPath("$.dimensions[6].confidence").value(sample.notificationConfidence()));
-		}
-	}
+@Test
+void samplePipelineFilesCanBeUploadedThroughAnalyzeEndpoint() throws Exception {
+for (Sample sample : samples()) {
+mockMvc().perform(multipart("/api/analyze").file(file(sample.filename())))
+.andExpect(status().isOk())
+.andExpect(jsonPath("$.provider").value(sample.provider()))
+.andExpect(jsonPath("$.dimensions[0].dimension").value("build_release"))
+.andExpect(jsonPath("$.dimensions[1].dimension").value("testing_maturity"))
+.andExpect(jsonPath("$.dimensions[2].dimension").value("workflow_quality"))
+.andExpect(jsonPath("$.dimensions[3].dimension").value("security_integration"))
+.andExpect(jsonPath("$.dimensions[4].dimension").value("deployment_automation"));
+}
+}
 
-	private List<Sample> samples() {
-		return List.of(
-				sample("github-01-test-only-missing.yml", "github-actions", 0.0, 1, "missing", "high", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sample("github-02-manual-build-low.yml", "github-actions", 0.5, 3, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sample("github-03-node-build-no-artifact.yml", "github-actions", 0.85, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("github-04-node-build-with-artifact.yml", "github-actions", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("gitlab-05-docker-build-no-explicit-deps.yml", "gitlab-ci", 0.8, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.6, 4, "partial", "medium", 0.0, 1, "missing", "high"),
-				sample("gitlab-06-manual-java-build.yml", "gitlab-ci", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("gitlab-07-java-build-complete.yml", "gitlab-ci", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("gitlab-08-dotnet-build-complete.yml", "gitlab-ci", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sample("test-01-build-only-test-missing.yml", "github-actions", 0.85, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sample("test-02-manual-test-weak.yml", "github-actions", 0.0, 1, "missing", "high", 0.5, 3, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sample("test-03-automated-test-partial.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("test-04-test-with-artifact-strong.yml", "github-actions", 0.0, 1, "missing", "high", 0.85, 5, "complete", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("test-05-complete-test-suite.yml", "gitlab-ci", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sample("deploy-01-build-test-only-missing.yml", "github-actions", 0.85, 5, "complete", "high", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sample("deploy-02-manual-deploy-partial.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.7, 4, "partial", "medium"),
-				sample("deploy-03-auto-deploy-no-validation.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.85, 5, "complete", "medium"),
-				sample("deploy-04-complete-kubernetes.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high"),
-				sample("deploy-05-cloud-provider.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high"),
-				sample("quality-01-build-only-missing.yml", "github-actions", 0.85, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sample("quality-02-github-lint-partial.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("quality-03-github-typescript-complete.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("quality-04-gitlab-java-python.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sample("quality-05-sonar-super-linter.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.8, 5, "complete", "high", 0.0, 1, "missing", "high"),
-				sample("artifact-01-missing.yml", "github-actions", 0.0, 1, "missing", "high", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("artifact-02-github-upload-partial.yml", "github-actions", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("artifact-03-gitlab-paths-partial.yml", "gitlab-ci", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("artifact-04-docker-image-complete.yml", "github-actions", 0.8, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high"),
-				sampleWithArtifacts("artifact-05-package-publish-complete.yml", "github-actions", 0.8, 5, "complete", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.85, 5, "complete", "high", 0.0, 1, "missing", "high"),
-				sample("notification-01-missing.yml", "github-actions", 0.0, 1, "missing", "high", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sampleWithNotifications("notification-02-github-slack-failure-complete.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high"),
-				sampleWithNotifications("notification-03-gitlab-teams-on-failure.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high"),
-				sampleWithNotifications("notification-04-discord-webhook-partial.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.5, 3, "partial", "high"),
-				sampleWithNotifications("notification-05-email-notification.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.8, 5, "complete", "high"),
-				sampleWithSecurity("security-01-missing.yml", "github-actions", 0.0, 1, "missing", "high", 0.7, 4, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sampleWithSecurity("security-02-github-codeql-complete.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.0, 1, "missing", "high"),
-				sampleWithSecurity("security-03-dependency-scan-partial.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.35, 2, "partial", "high", 0.0, 1, "missing", "high"),
-				sampleWithAll("security-04-gitlab-security-reports-complete.yml", "gitlab-ci", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 1.0, 5, "complete", "high", 0.45, 3, "partial", "medium", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high"),
-				sampleWithSecurity("security-05-container-iac-secret-scan.yml", "github-actions", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.0, 1, "missing", "high", 0.45, 3, "partial", "high", 0.0, 1, "missing", "high"));
-	}
+private List<Sample> samples() {
+return List.of(
+new Sample("github-01-test-only-missing.yml", "github-actions"),
+new Sample("github-02-manual-build-low.yml", "github-actions"),
+new Sample("github-03-node-build-no-artifact.yml", "github-actions"),
+new Sample("github-04-node-build-with-artifact.yml", "github-actions"),
+new Sample("gitlab-05-docker-build-no-explicit-deps.yml", "gitlab-ci"),
+new Sample("gitlab-06-manual-java-build.yml", "gitlab-ci"),
+new Sample("gitlab-07-java-build-complete.yml", "gitlab-ci"),
+new Sample("gitlab-08-dotnet-build-complete.yml", "gitlab-ci"),
+new Sample("test-01-build-only-test-missing.yml", "github-actions"),
+new Sample("test-02-manual-test-weak.yml", "github-actions"),
+new Sample("test-03-automated-test-partial.yml", "gitlab-ci"),
+new Sample("test-04-test-with-artifact-strong.yml", "github-actions"),
+new Sample("test-05-complete-test-suite.yml", "gitlab-ci"),
+new Sample("deploy-01-build-test-only-missing.yml", "github-actions"),
+new Sample("deploy-02-manual-deploy-partial.yml", "github-actions"),
+new Sample("deploy-03-auto-deploy-no-validation.yml", "gitlab-ci"),
+new Sample("deploy-04-complete-kubernetes.yml", "github-actions"),
+new Sample("deploy-05-cloud-provider.yml", "gitlab-ci"),
+new Sample("quality-01-build-only-missing.yml", "github-actions"),
+new Sample("quality-02-github-lint-partial.yml", "github-actions"),
+new Sample("quality-03-github-typescript-complete.yml", "github-actions"),
+new Sample("quality-04-gitlab-java-python.yml", "gitlab-ci"),
+new Sample("quality-05-sonar-super-linter.yml", "github-actions"),
+new Sample("artifact-01-missing.yml", "github-actions"),
+new Sample("artifact-02-github-upload-partial.yml", "github-actions"),
+new Sample("artifact-03-gitlab-paths-partial.yml", "gitlab-ci"),
+new Sample("artifact-04-docker-image-complete.yml", "github-actions"),
+new Sample("artifact-05-package-publish-complete.yml", "github-actions"),
+new Sample("notification-01-missing.yml", "github-actions"),
+new Sample("notification-02-github-slack-failure-complete.yml", "github-actions"),
+new Sample("notification-03-gitlab-teams-on-failure.yml", "gitlab-ci"),
+new Sample("notification-04-discord-webhook-partial.yml", "github-actions"),
+new Sample("notification-05-email-notification.yml", "github-actions"),
+new Sample("security-01-missing.yml", "github-actions"),
+new Sample("security-02-github-codeql-complete.yml", "github-actions"),
+new Sample("security-03-dependency-scan-partial.yml", "github-actions"),
+new Sample("security-04-gitlab-security-reports-complete.yml", "gitlab-ci"),
+new Sample("security-05-container-iac-secret-scan.yml", "github-actions"),
+new Sample("workflow-01-missing-permissions.yml", "github-actions"),
+new Sample("workflow-02-unpinned-actions.yml", "github-actions"),
+new Sample("workflow-03-timeout-missing.yml", "github-actions"),
+new Sample("workflow-04-concurrency-present.yml", "github-actions"),
+new Sample("workflow-05-path-filters.yml", "github-actions"),
+new Sample("workflow-06-hardcoded-secret.yml", "github-actions"),
+new Sample("workflow-07-policy-as-code.yml", "github-actions"),
+new Sample("workflow-08-rollback-signal.yml", "gitlab-ci"),
+new Sample("workflow-09-default-job-names.yml", "github-actions"),
+new Sample("workflow-10-matrix-cache-use.yml", "github-actions"));
+}
 
-	private Sample sample(
-			String filename,
-			String provider,
-			double buildScore,
-			int buildLevel,
-			String buildStatus,
-			String buildConfidence,
-			double testScore,
-			int testLevel,
-			String testStatus,
-			String testConfidence,
-			double codeAnalysisScore,
-			int codeAnalysisLevel,
-			String codeAnalysisStatus,
-			String codeAnalysisConfidence,
-			double deploymentScore,
-			int deploymentLevel,
-			String deploymentStatus,
-			String deploymentConfidence) {
-		return sampleWithAll(
-				filename,
-				provider,
-				buildScore,
-				buildLevel,
-				buildStatus,
-				buildConfidence,
-				testScore,
-				testLevel,
-				testStatus,
-				testConfidence,
-				codeAnalysisScore,
-				codeAnalysisLevel,
-				codeAnalysisStatus,
-				codeAnalysisConfidence,
-				0.0,
-				1,
-				"missing",
-				"high",
-				0.0,
-				1,
-				"missing",
-				"high",
-				deploymentScore,
-				deploymentLevel,
-				deploymentStatus,
-				deploymentConfidence,
-				0.0,
-				1,
-				"missing",
-				"high");
-	}
+private MockMultipartFile file(String filename) throws IOException {
+return new MockMultipartFile(
+"file",
+filename,
+"application/x-yaml",
+Files.readAllBytes(SAMPLE_DIR.resolve(filename)));
+}
 
-	private Sample sampleWithSecurity(
-			String filename,
-			String provider,
-			double buildScore,
-			int buildLevel,
-			String buildStatus,
-			String buildConfidence,
-			double testScore,
-			int testLevel,
-			String testStatus,
-			String testConfidence,
-			double codeAnalysisScore,
-			int codeAnalysisLevel,
-			String codeAnalysisStatus,
-			String codeAnalysisConfidence,
-			double securityScore,
-			int securityLevel,
-			String securityStatus,
-			String securityConfidence,
-			double deploymentScore,
-			int deploymentLevel,
-			String deploymentStatus,
-			String deploymentConfidence) {
-		return sampleWithAll(
-				filename,
-				provider,
-				buildScore,
-				buildLevel,
-				buildStatus,
-				buildConfidence,
-				testScore,
-				testLevel,
-				testStatus,
-				testConfidence,
-				codeAnalysisScore,
-				codeAnalysisLevel,
-				codeAnalysisStatus,
-				codeAnalysisConfidence,
-				securityScore,
-				securityLevel,
-				securityStatus,
-				securityConfidence,
-				0.0,
-				1,
-				"missing",
-				"high",
-				deploymentScore,
-				deploymentLevel,
-				deploymentStatus,
-				deploymentConfidence,
-				0.0,
-				1,
-				"missing",
-				"high");
-	}
-
-	private Sample sampleWithNotifications(
-			String filename,
-			String provider,
-			double buildScore,
-			int buildLevel,
-			String buildStatus,
-			String buildConfidence,
-			double testScore,
-			int testLevel,
-			String testStatus,
-			String testConfidence,
-			double codeAnalysisScore,
-			int codeAnalysisLevel,
-			String codeAnalysisStatus,
-			String codeAnalysisConfidence,
-			double deploymentScore,
-			int deploymentLevel,
-			String deploymentStatus,
-			String deploymentConfidence,
-			double notificationScore,
-			int notificationLevel,
-			String notificationStatus,
-			String notificationConfidence) {
-		return sampleWithAll(
-				filename,
-				provider,
-				buildScore,
-				buildLevel,
-				buildStatus,
-				buildConfidence,
-				testScore,
-				testLevel,
-				testStatus,
-				testConfidence,
-				codeAnalysisScore,
-				codeAnalysisLevel,
-				codeAnalysisStatus,
-				codeAnalysisConfidence,
-				0.0,
-				1,
-				"missing",
-				"high",
-				0.0,
-				1,
-				"missing",
-				"high",
-				deploymentScore,
-				deploymentLevel,
-				deploymentStatus,
-				deploymentConfidence,
-				notificationScore,
-				notificationLevel,
-				notificationStatus,
-				notificationConfidence);
-	}
-
-	private Sample sampleWithArtifacts(
-			String filename,
-			String provider,
-			double buildScore,
-			int buildLevel,
-			String buildStatus,
-			String buildConfidence,
-			double testScore,
-			int testLevel,
-			String testStatus,
-			String testConfidence,
-			double codeAnalysisScore,
-			int codeAnalysisLevel,
-			String codeAnalysisStatus,
-			String codeAnalysisConfidence,
-			double artifactScore,
-			int artifactLevel,
-			String artifactStatus,
-			String artifactConfidence,
-			double deploymentScore,
-			int deploymentLevel,
-			String deploymentStatus,
-			String deploymentConfidence) {
-		return sampleWithAll(
-				filename,
-				provider,
-				buildScore,
-				buildLevel,
-				buildStatus,
-				buildConfidence,
-				testScore,
-				testLevel,
-				testStatus,
-				testConfidence,
-				codeAnalysisScore,
-				codeAnalysisLevel,
-				codeAnalysisStatus,
-				codeAnalysisConfidence,
-				0.0,
-				1,
-				"missing",
-				"high",
-				artifactScore,
-				artifactLevel,
-				artifactStatus,
-				artifactConfidence,
-				deploymentScore,
-				deploymentLevel,
-				deploymentStatus,
-				deploymentConfidence,
-				0.0,
-				1,
-				"missing",
-				"high");
-	}
-
-	private Sample sampleWithAll(
-			String filename,
-			String provider,
-			double buildScore,
-			int buildLevel,
-			String buildStatus,
-			String buildConfidence,
-			double testScore,
-			int testLevel,
-			String testStatus,
-			String testConfidence,
-			double codeAnalysisScore,
-			int codeAnalysisLevel,
-			String codeAnalysisStatus,
-			String codeAnalysisConfidence,
-			double securityScore,
-			int securityLevel,
-			String securityStatus,
-			String securityConfidence,
-			double artifactScore,
-			int artifactLevel,
-			String artifactStatus,
-			String artifactConfidence,
-			double deploymentScore,
-			int deploymentLevel,
-			String deploymentStatus,
-			String deploymentConfidence,
-			double notificationScore,
-			int notificationLevel,
-			String notificationStatus,
-			String notificationConfidence) {
-		return new Sample(
-				filename,
-				provider,
-				buildScore,
-				buildLevel,
-				buildStatus,
-				buildConfidence,
-				testScore,
-				testLevel,
-				testStatus,
-				testConfidence,
-				codeAnalysisScore,
-				codeAnalysisLevel,
-				codeAnalysisStatus,
-				codeAnalysisConfidence,
-				securityScore,
-				securityLevel,
-				securityStatus,
-				securityConfidence,
-				artifactScore,
-				artifactLevel,
-				artifactStatus,
-				artifactConfidence,
-				deploymentScore,
-				deploymentLevel,
-				deploymentStatus,
-				deploymentConfidence,
-				notificationScore,
-				notificationLevel,
-				notificationStatus,
-				notificationConfidence);
-	}
-
-	private MockMultipartFile file(String filename) throws IOException {
-		return new MockMultipartFile(
-				"file",
-				filename,
-				"application/x-yaml",
-				Files.readAllBytes(SAMPLE_DIR.resolve(filename)));
-	}
-
-	private record Sample(
-			String filename,
-			String provider,
-			double buildScore,
-			int buildLevel,
-			String buildStatus,
-			String buildConfidence,
-			double testScore,
-			int testLevel,
-			String testStatus,
-			String testConfidence,
-			double codeAnalysisScore,
-			int codeAnalysisLevel,
-			String codeAnalysisStatus,
-			String codeAnalysisConfidence,
-			double securityScore,
-			int securityLevel,
-			String securityStatus,
-			String securityConfidence,
-			double artifactScore,
-			int artifactLevel,
-			String artifactStatus,
-			String artifactConfidence,
-			double deploymentScore,
-			int deploymentLevel,
-			String deploymentStatus,
-			String deploymentConfidence,
-			double notificationScore,
-			int notificationLevel,
-			String notificationStatus,
-			String notificationConfidence) {
-	}
+private record Sample(String filename, String provider) {
+}
 }

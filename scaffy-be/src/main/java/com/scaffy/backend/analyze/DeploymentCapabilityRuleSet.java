@@ -12,29 +12,27 @@ import org.springframework.stereotype.Component;
 @Order(30)
 public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 
-	private static final double DEPLOYMENT_COMMAND_WEIGHT = 0.35;
-	private static final double ENVIRONMENT_WEIGHT = 0.15;
-	private static final double ARTIFACT_IMAGE_WEIGHT = 0.20;
-	private static final double AUTOMATIC_TRIGGER_WEIGHT = 0.15;
-	private static final double POST_DEPLOY_VALIDATION_WEIGHT = 0.15;
+	private static final String CAPABILITY_DEPLOYMENT_STAGE = "Deployment stage presence";
+	private static final String CAPABILITY_ENVIRONMENT_TARGETING = "Environment targeting";
+	private static final String CAPABILITY_IAC_USAGE = "IaC usage";
+	private static final String CAPABILITY_ORCHESTRATION = "Orchestration maturity";
+	private static final String CAPABILITY_ROLLBACK_CONTROLLED = "Rollback / controlled rollout";
 
-	private static final String DIMENSION = "deployment";
 	private static final String PRACTICE_DEPLOYMENT_COMMAND_DETECTED = "Deployment command detected";
 	private static final String PRACTICE_ENVIRONMENT_DETECTED = "Deployment environment detected";
 	private static final String PRACTICE_ARTIFACT_IMAGE_DETECTED = "Build artifact or image used for deployment";
-	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic deployment trigger detected";
+	private static final String PRACTICE_IAC_TOOL_DETECTED = "Infrastructure-as-code tool detected";
 	private static final String PRACTICE_POST_DEPLOY_VALIDATION_DETECTED = "Post-deploy validation detected";
-
-	private static final String MISSING_DEPLOYMENT_COMMAND = "No deployment command detected";
-	private static final String MISSING_ENVIRONMENT = "No deployment environment detected";
-	private static final String MISSING_ARTIFACT_IMAGE = "No build artifact or image used for deployment detected";
-	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic deployment trigger detected";
-	private static final String MISSING_POST_DEPLOY_VALIDATION = "No post-deploy validation detected";
+	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic deployment trigger detected";
+	private static final String PRACTICE_MULTI_STAGE_DETECTED = "Multi-stage pipeline structure detected";
 
 	private static final List<CommandRule> DEPLOYMENT_RULES = List.of(
 			CommandRule.of("Kubernetes", "(?:^|[;&|\\n]\\s*)(?<cmd>kubectl\\s+(?:apply|patch|set\\s+image)\\b[^\\n;&|]*)"),
 			CommandRule.of("Kubernetes", "(?:^|[;&|\\n]\\s*)(?<cmd>kubectl\\s+rollout\\s+(?:restart|undo)\\b[^\\n;&|]*)"),
 			CommandRule.of("Helm", "(?:^|[;&|\\n]\\s*)(?<cmd>helm\\s+(?:upgrade|install)\\b[^\\n;&|]*)"),
+			CommandRule.of("Terraform", "(?:^|[;&|\\n]\\s*)(?<cmd>terraform\\s+(?:apply|destroy)\\b[^\\n;&|]*)"),
+			CommandRule.of("Ansible", "(?:^|[;&|\\n]\\s*)(?<cmd>ansible-playbook\\b[^\\n;&|]*)"),
+			CommandRule.of("Pulumi", "(?:^|[;&|\\n]\\s*)(?<cmd>pulumi\\s+(?:up|destroy)\\b[^\\n;&|]*)"),
 			CommandRule.of("Docker", "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+(?:compose\\s+up|stack\\s+deploy|service\\s+update)\\b[^\\n;&|]*)"),
 			CommandRule.of("AWS", "(?:^|[;&|\\n]\\s*)(?<cmd>aws\\s+(?:ecs\\s+update-service|deploy\\s+create-deployment)\\b[^\\n;&|]*)"),
 			CommandRule.of("GCP", "(?:^|[;&|\\n]\\s*)(?<cmd>gcloud\\s+(?:run\\s+deploy|app\\s+deploy)\\b[^\\n;&|]*)"),
@@ -44,6 +42,12 @@ public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 			CommandRule.of("Netlify", "(?:^|[;&|\\n]\\s*)(?<cmd>netlify\\s+deploy\\b[^\\n;&|]*)"),
 			CommandRule.of("Deployment script", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:\\./)?(?:scripts/)?[^\\s;&|]*deploy[^\\s;&|]*\\.sh\\b[^\\n;&|]*)"),
 			CommandRule.of("Remote shell", "(?:^|[;&|\\n]\\s*)(?<cmd>(?:scp|rsync|ssh)\\b[^\\n;&|]*)"));
+
+	private static final List<CommandRule> IAC_TOOL_RULES = List.of(
+			CommandRule.of("Terraform", "(?:^|[;&|\\n]\\s*)(?<cmd>terraform\\s+\\w+\\b[^\\n;&|]*)"),
+			CommandRule.of("Ansible", "(?:^|[;&|\\n]\\s*)(?<cmd>ansible-playbook\\b[^\\n;&|]*)"),
+			CommandRule.of("Pulumi", "(?:^|[;&|\\n]\\s*)(?<cmd>pulumi\\s+\\w+\\b[^\\n;&|]*)"),
+			CommandRule.of("Helm", "(?:^|[;&|\\n]\\s*)(?<cmd>helm\\s+(?:upgrade|install|template|lint)\\b[^\\n;&|]*)"));
 
 	private static final List<CommandRule> ARTIFACT_IMAGE_RULES = List.of(
 			CommandRule.of("Docker image", "(?:^|[;&|\\n]\\s*)(?<cmd>docker\\s+pull\\b[^\\n;&|]*)"),
@@ -60,84 +64,92 @@ public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 
 	@Override
 	public String dimension() {
-		return DIMENSION;
+		return "deployment_automation";
 	}
 
 	@Override
-	public DimensionAnalysis analyze(PipelineDocument document) {
+	public List<CapabilityFinding> detect(PipelineDocument document) {
+		List<CapabilityFinding> findings = new ArrayList<>();
 		List<CommandMatch> deploymentMatches = CommandMatcher.findMatches(document, DEPLOYMENT_RULES);
-		if (deploymentMatches.isEmpty()) {
-			return missingAnalysis();
-		}
 
-		double score = DEPLOYMENT_COMMAND_WEIGHT;
-		List<DetectedPractice> detected = new ArrayList<>();
-		List<String> missing = new ArrayList<>();
+		// Deployment stage presence
+		if (!deploymentMatches.isEmpty()) {
+			CommandMatch match = deploymentMatches.getFirst();
+			findings.add(CapabilityFinding.positive("DEPLOYMENT_STAGE_PRESENT", dimension(), CAPABILITY_DEPLOYMENT_STAGE,
+					match.evidence(), match.location()));
+		}
+		else {
+			findings.add(CapabilityFinding.missing("NO_DEPLOYMENT_STAGE", dimension(), CAPABILITY_DEPLOYMENT_STAGE));
+			findings.add(CapabilityFinding.missing("MISSING_ENVIRONMENT_DECLARATION", dimension(), CAPABILITY_ENVIRONMENT_TARGETING));
+			findings.add(CapabilityFinding.missing("IaC_NOT_PRESENT", dimension(), CAPABILITY_IAC_USAGE));
+			findings.add(CapabilityFinding.missing("MULTI_STAGE_PIPELINE_PRESENT", dimension(), CAPABILITY_ORCHESTRATION));
+			findings.add(CapabilityFinding.missing("NO_ROLLBACK_ON_FAILURE", dimension(), CAPABILITY_ROLLBACK_CONTROLLED));
+			return findings;
+		}
 
 		CommandMatch primaryDeployment = deploymentMatches.getFirst();
-		detected.add(new DetectedPractice(PRACTICE_DEPLOYMENT_COMMAND_DETECTED, primaryDeployment.evidence(), primaryDeployment.location()));
 
+		// Environment targeting
 		Optional<DetectedPractice> environment = environment(deploymentMatches);
 		if (environment.isPresent()) {
-			score += ENVIRONMENT_WEIGHT;
-			detected.add(environment.get());
+			findings.add(CapabilityFinding.positive("ENVIRONMENT_DECLARED", dimension(), CAPABILITY_ENVIRONMENT_TARGETING,
+					environment.get().evidence(), environment.get().location()));
 		}
 		else {
-			missing.add(MISSING_ENVIRONMENT);
+			findings.add(CapabilityFinding.missing("MISSING_ENVIRONMENT_DECLARATION", dimension(), CAPABILITY_ENVIRONMENT_TARGETING));
 		}
 
+		// IaC usage: IaC tools (terraform/ansible/pulumi/helm) and/or container image usage
+		Optional<DetectedPractice> iacTool = iacTool(document);
 		Optional<DetectedPractice> artifactImage = artifactImage(document, deploymentMatches);
+		if (iacTool.isPresent()) {
+			findings.add(CapabilityFinding.positive("IAC_PRESENT", dimension(), CAPABILITY_IAC_USAGE,
+					iacTool.get().evidence(), iacTool.get().location()));
+		}
 		if (artifactImage.isPresent()) {
-			score += ARTIFACT_IMAGE_WEIGHT;
-			detected.add(artifactImage.get());
+			findings.add(CapabilityFinding.positive("ARTIFACT_IMAGE_USED", dimension(), CAPABILITY_IAC_USAGE,
+					artifactImage.get().evidence(), artifactImage.get().location()));
 		}
-		else {
-			missing.add(MISSING_ARTIFACT_IMAGE);
-		}
-
-		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, deploymentMatches);
-		if (automaticTrigger.isPresent()) {
-			score += AUTOMATIC_TRIGGER_WEIGHT;
-			detected.add(automaticTrigger.get());
-		}
-		else {
-			missing.add(MISSING_AUTOMATIC_TRIGGER);
+		if (iacTool.isEmpty() && artifactImage.isEmpty()) {
+			findings.add(CapabilityFinding.missing("IaC_NOT_PRESENT", dimension(), CAPABILITY_IAC_USAGE));
 		}
 
+		// Orchestration maturity: multi-stage pipeline vs monolithic
+		int stages = stageCount(document);
+		if (stages >= 2) {
+			findings.add(CapabilityFinding.positive("MULTI_STAGE_PIPELINE_PRESENT", dimension(), CAPABILITY_ORCHESTRATION,
+					PRACTICE_MULTI_STAGE_DETECTED + " (" + stages + " stages/jobs)", primaryDeployment.job().location()));
+		}
+		else {
+			findings.add(CapabilityFinding.smell("MONOLITHIC_BUILD_PIPELINE", dimension(), CAPABILITY_ORCHESTRATION,
+					primaryDeployment.evidence(), primaryDeployment.job().location()));
+		}
+
+		// Rollback / controlled rollout
 		Optional<DetectedPractice> validation = postDeployValidation(document, deploymentMatches);
 		if (validation.isPresent()) {
-			score += POST_DEPLOY_VALIDATION_WEIGHT;
-			detected.add(validation.get());
+			findings.add(CapabilityFinding.positive("ROLLBACK_SIGNAL_PRESENT", dimension(), CAPABILITY_ROLLBACK_CONTROLLED,
+					validation.get().evidence(), validation.get().location()));
 		}
 		else {
-			missing.add(MISSING_POST_DEPLOY_VALIDATION);
+			findings.add(CapabilityFinding.missing("NO_ROLLBACK_ON_FAILURE", dimension(), CAPABILITY_ROLLBACK_CONTROLLED));
 		}
 
-		double roundedScore = round(score);
-		return new DimensionAnalysis(
-				dimension(),
-				roundedScore,
-				level(roundedScore),
-				roundedScore >= 0.8 ? AnalysisStatus.COMPLETE : AnalysisStatus.PARTIAL,
-				confidence(automaticTrigger.isPresent(), validation.isPresent()),
-				detected,
-				missing);
+		return findings;
 	}
 
-	private DimensionAnalysis missingAnalysis() {
-		return new DimensionAnalysis(
-				dimension(),
-				0.0,
-				1,
-				AnalysisStatus.MISSING,
-				Confidence.HIGH,
-				List.of(),
-				List.of(
-						MISSING_DEPLOYMENT_COMMAND,
-						MISSING_ENVIRONMENT,
-						MISSING_ARTIFACT_IMAGE,
-						MISSING_AUTOMATIC_TRIGGER,
-						MISSING_POST_DEPLOY_VALIDATION));
+	private Optional<DetectedPractice> iacTool(PipelineDocument document) {
+		List<CommandMatch> matches = CommandMatcher.findMatches(document, IAC_TOOL_RULES);
+		return matches.stream()
+				.findFirst()
+				.map(match -> new DetectedPractice(PRACTICE_IAC_TOOL_DETECTED, match.evidence(), match.location()));
+	}
+
+	private int stageCount(PipelineDocument document) {
+		return (int) document.jobs().stream()
+				.map(job -> hasText(job.stage()) ? job.stage() : job.id())
+				.distinct()
+				.count();
 	}
 
 	private Optional<DetectedPractice> environment(List<CommandMatch> deploymentMatches) {
@@ -162,7 +174,7 @@ public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 
 	private Optional<String> inferredEnvironment(PipelineJob job) {
 		String stage = lower(job.stage());
-		if ("deploy".equals(stage) || DIMENSION.equals(stage)) {
+		if ("deploy".equals(stage) || "deployment".equals(stage)) {
 			return Optional.of("stage: " + job.stage());
 		}
 
@@ -272,30 +284,4 @@ public class DeploymentCapabilityRuleSet implements CapabilityRuleSet {
 		return value == null ? "" : value.toLowerCase(Locale.ROOT);
 	}
 
-	private Confidence confidence(boolean automaticTriggerDetected, boolean validationDetected) {
-		if (automaticTriggerDetected && validationDetected) {
-			return Confidence.HIGH;
-		}
-		return Confidence.MEDIUM;
-	}
-
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
-	}
 }

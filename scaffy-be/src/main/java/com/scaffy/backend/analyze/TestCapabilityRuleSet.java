@@ -14,13 +14,11 @@ import org.springframework.stereotype.Component;
 @Order(20)
 public class TestCapabilityRuleSet implements CapabilityRuleSet {
 
-	private static final double TEST_COMMAND_WEIGHT = 0.35;
-	private static final double AUTOMATIC_TRIGGER_WEIGHT = 0.20;
-	private static final double ECOSYSTEM_WEIGHT = 0.15;
-	private static final double TEST_OUTPUT_WEIGHT = 0.15;
-	private static final double QUALITY_SIGNAL_WEIGHT = 0.15;
+	private static final String CAPABILITY_TEST_PRESENCE = "Test presence";
+	private static final String CAPABILITY_CI_INTEGRATED_TESTS = "CI-integrated tests";
+	private static final String CAPABILITY_REPORTS_COVERAGE = "Reports & coverage";
+	private static final String CAPABILITY_MULTI_LAYER = "Multi-layer testing";
 
-	private static final String DIMENSION = "test";
 	private static final String ECOSYSTEM_NODE_JS = "Node.js";
 	private static final String ECOSYSTEM_DOTNET = ".NET";
 	private static final String ECOSYSTEM_GO = "Go";
@@ -29,17 +27,8 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 	private static final String TOOL_MAVEN = "Maven";
 	private static final String TOOL_GRADLE = "Gradle";
 
-	private static final String PRACTICE_TEST_COMMAND_DETECTED = "Automated test command detected";
 	private static final String PRACTICE_AUTOMATIC_TRIGGER_DETECTED = "Automatic test trigger detected";
-	private static final String PRACTICE_TEST_ECOSYSTEM_DETECTED = "Test ecosystem detected";
 	private static final String PRACTICE_TEST_OUTPUT_DETECTED = "Test report or coverage output detected";
-	private static final String PRACTICE_QUALITY_SIGNAL_DETECTED = "Test quality signal detected";
-
-	private static final String MISSING_TEST_COMMAND = "No automated test command detected";
-	private static final String MISSING_AUTOMATIC_TRIGGER = "No automatic test trigger detected";
-	private static final String MISSING_TEST_ECOSYSTEM = "No test ecosystem detected";
-	private static final String MISSING_TEST_OUTPUT = "No test report or coverage output detected";
-	private static final String MISSING_QUALITY_SIGNAL = "No test quality signal detected";
 
 	private static final List<CommandRule> TEST_RULES = List.of(
 			CommandRule.of(ECOSYSTEM_NODE_JS, "(?:^|[;&|\\n]\\s*)(?<cmd>npm\\s+(?:run\\s+)?test(?::[\\w-]+)?\\b[^\\n;&|]*)"),
@@ -66,92 +55,70 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 
 	@Override
 	public String dimension() {
-		return DIMENSION;
+		return "testing_maturity";
 	}
 
 	@Override
-	public DimensionAnalysis analyze(PipelineDocument document) {
+	public List<CapabilityFinding> detect(PipelineDocument document) {
+		List<CapabilityFinding> findings = new ArrayList<>();
+
 		List<CommandMatch> testMatches = CommandMatcher.findMatches(document, TEST_RULES);
 		if (testMatches.isEmpty()) {
-			return missingAnalysis();
+			findings.add(CapabilityFinding.missing("PIPELINE_MISSING_TEST_STAGE", dimension(), CAPABILITY_TEST_PRESENCE));
+			findings.add(CapabilityFinding.missing("TESTS_NOT_AUTOMATED", dimension(), CAPABILITY_CI_INTEGRATED_TESTS));
+			findings.add(CapabilityFinding.missing("NO_TEST_REPORT_OUTPUT", dimension(), CAPABILITY_REPORTS_COVERAGE));
+			findings.add(CapabilityFinding.missing("NO_COVERAGE_TOOL", dimension(), CAPABILITY_REPORTS_COVERAGE));
+			return findings;
 		}
 
-		double score = TEST_COMMAND_WEIGHT;
-		List<DetectedPractice> detected = new ArrayList<>();
-		List<String> missing = new ArrayList<>();
 		CommandMatch primaryTest = testMatches.getFirst();
-		detected.add(new DetectedPractice(PRACTICE_TEST_COMMAND_DETECTED, primaryTest.evidence(), primaryTest.location()));
+		findings.add(CapabilityFinding.positive("TESTS_PRESENT", dimension(), CAPABILITY_TEST_PRESENCE,
+				primaryTest.evidence(), primaryTest.location()));
 
 		Optional<DetectedPractice> automaticTrigger = automaticTrigger(document, testMatches);
 		if (automaticTrigger.isPresent()) {
-			score += AUTOMATIC_TRIGGER_WEIGHT;
-			detected.add(automaticTrigger.get());
+			findings.add(CapabilityFinding.positive("CI_INTEGRATED_TESTS", dimension(), CAPABILITY_CI_INTEGRATED_TESTS,
+					automaticTrigger.get().evidence(), automaticTrigger.get().location()));
 		}
 		else {
-			missing.add(MISSING_AUTOMATIC_TRIGGER);
+			findings.add(CapabilityFinding.smell("TESTS_NOT_AUTOMATED", dimension(), CAPABILITY_CI_INTEGRATED_TESTS,
+					primaryTest.evidence(), primaryTest.location()));
 		}
 
-		Set<String> ecosystems = ecosystems(testMatches);
-		if (ecosystems.isEmpty()) {
-			missing.add(MISSING_TEST_ECOSYSTEM);
-		}
-		else {
-			score += ECOSYSTEM_WEIGHT;
-			detected.add(new DetectedPractice(PRACTICE_TEST_ECOSYSTEM_DETECTED, String.join(", ", ecosystems), primaryTest.location()));
+		if (testMatches.stream().allMatch(match -> match.job().manualOnly())) {
+			findings.add(CapabilityFinding.smell("MANUAL_ONLY_TEST_JOB", dimension(), CAPABILITY_CI_INTEGRATED_TESTS,
+					primaryTest.evidence(), primaryTest.job().location()));
 		}
 
 		List<CommandMatch> reportMatches = CommandMatcher.findMatches(document, REPORT_RULES);
 		Optional<DetectedPractice> testOutput = testOutput(testMatches, reportMatches);
+		boolean hasCoverage = reportMatches.stream()
+				.filter(m -> sameTestJob(m, testMatches))
+				.anyMatch(m -> "Coverage".equals(m.rule().ecosystem()) || "Go coverage".equals(m.rule().ecosystem()));
+
 		if (testOutput.isPresent()) {
-			score += TEST_OUTPUT_WEIGHT;
-			detected.add(testOutput.get());
+			findings.add(CapabilityFinding.positive("TEST_REPORT_OUTPUT_PRESENT", dimension(), CAPABILITY_REPORTS_COVERAGE,
+					testOutput.get().evidence(), testOutput.get().location()));
+			if (hasCoverage) {
+				findings.add(CapabilityFinding.positive("COVERAGE_TOOL_PRESENT", dimension(), CAPABILITY_REPORTS_COVERAGE,
+						testOutput.get().evidence(), testOutput.get().location()));
+			}
 		}
 		else {
-			missing.add(MISSING_TEST_OUTPUT);
+			findings.add(CapabilityFinding.missing("NO_TEST_REPORT_OUTPUT", dimension(), CAPABILITY_REPORTS_COVERAGE));
 		}
 
-		Optional<DetectedPractice> qualitySignal = qualitySignal(testMatches, reportMatches);
-		if (qualitySignal.isPresent()) {
-			score += QUALITY_SIGNAL_WEIGHT;
-			detected.add(qualitySignal.get());
-		}
-		else {
-			missing.add(MISSING_QUALITY_SIGNAL);
+		if (!hasCoverage) {
+			findings.add(CapabilityFinding.missing("NO_COVERAGE_TOOL", dimension(), CAPABILITY_REPORTS_COVERAGE));
 		}
 
-		double roundedScore = round(score);
-		return new DimensionAnalysis(
-				dimension(),
-				roundedScore,
-				level(roundedScore),
-				roundedScore >= 0.8 ? AnalysisStatus.COMPLETE : AnalysisStatus.PARTIAL,
-				confidence(automaticTrigger.isPresent(), testOutput.isPresent()),
-				detected,
-				missing);
-	}
-
-	private DimensionAnalysis missingAnalysis() {
-		return new DimensionAnalysis(
-				dimension(),
-				0.0,
-				1,
-				AnalysisStatus.MISSING,
-				Confidence.HIGH,
-				List.of(),
-				List.of(
-						MISSING_TEST_COMMAND,
-						MISSING_AUTOMATIC_TRIGGER,
-						MISSING_TEST_ECOSYSTEM,
-						MISSING_TEST_OUTPUT,
-						MISSING_QUALITY_SIGNAL));
-	}
-
-	private Set<String> ecosystems(List<CommandMatch> testMatches) {
-		Set<String> ecosystems = new LinkedHashSet<>();
-		for (CommandMatch testMatch : testMatches) {
-			ecosystems.add(testMatch.rule().ecosystem());
+		Set<String> layers = testLayers(testMatches);
+		if (layers.size() >= 2) {
+			findings.add(CapabilityFinding.positive("MULTI_LAYER_TEST_SIGNAL", dimension(), CAPABILITY_MULTI_LAYER,
+					String.join(", ", layers), primaryTest.job().location()));
 		}
-		return ecosystems;
+
+		return findings;
 	}
 
 	private Optional<DetectedPractice> automaticTrigger(PipelineDocument document, List<CommandMatch> testMatches) {
@@ -215,24 +182,6 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 				|| uses.contains("codecov");
 	}
 
-	private Optional<DetectedPractice> qualitySignal(List<CommandMatch> testMatches, List<CommandMatch> reportMatches) {
-		Optional<CommandMatch> report = reportMatches.stream()
-				.filter(match -> sameTestJob(match, testMatches))
-				.findFirst();
-		if (report.isPresent()) {
-			CommandMatch reportMatch = report.get();
-			return Optional.of(new DetectedPractice(PRACTICE_QUALITY_SIGNAL_DETECTED, reportMatch.evidence(), reportMatch.location()));
-		}
-
-		Set<String> layers = testLayers(testMatches);
-		if (layers.size() >= 2) {
-			CommandMatch first = testMatches.getFirst();
-			return Optional.of(new DetectedPractice(PRACTICE_QUALITY_SIGNAL_DETECTED, String.join(", ", layers), first.job().location()));
-		}
-
-		return Optional.empty();
-	}
-
 	private Set<String> testLayers(List<CommandMatch> testMatches) {
 		Set<String> layers = new LinkedHashSet<>();
 		for (CommandMatch testMatch : testMatches) {
@@ -259,30 +208,4 @@ public class TestCapabilityRuleSet implements CapabilityRuleSet {
 		return testMatches.stream().anyMatch(testMatch -> testMatch.job().equals(candidate.job()));
 	}
 
-	private Confidence confidence(boolean automaticTriggerDetected, boolean testOutputDetected) {
-		if (automaticTriggerDetected && testOutputDetected) {
-			return Confidence.HIGH;
-		}
-		return Confidence.MEDIUM;
-	}
-
-	private int level(double score) {
-		if (score == 0.0) {
-			return 1;
-		}
-		if (score < 0.4) {
-			return 2;
-		}
-		if (score < 0.6) {
-			return 3;
-		}
-		if (score < 0.8) {
-			return 4;
-		}
-		return 5;
-	}
-
-	private double round(double score) {
-		return Math.round(score * 100.0) / 100.0;
-	}
 }

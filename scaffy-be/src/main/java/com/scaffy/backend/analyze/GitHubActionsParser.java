@@ -76,7 +76,7 @@ public class GitHubActionsParser implements PipelineProviderParser {
 	private PipelineJob job(String id, Map<Object, Object> jobMap) {
 		String name = YamlSupport.stringValue(jobMap, "name").orElse(id);
 		String condition = YamlSupport.stringValue(jobMap, "if").orElse(null);
-		String details = details(jobMap, "env", "with");
+		String details = details(jobMap, "env", "with", "timeout-minutes", "concurrency", "runs-on", "strategy", "permissions");
 		return new PipelineJob(
 				id,
 				name,
@@ -123,7 +123,7 @@ public class GitHubActionsParser implements PipelineProviderParser {
 			String uses = YamlSupport.stringValue(stepMap, "uses").orElse(null);
 			String name = YamlSupport.stringValue(stepMap, "name").orElse(null);
 			String condition = YamlSupport.stringValue(stepMap, "if").orElse(null);
-			String details = details(stepMap, "with", "env");
+			String details = details(stepMap, "with", "env", "continue-on-error");
 			if (command != null || uses != null) {
 				steps.add(new PipelineStep(
 						command,

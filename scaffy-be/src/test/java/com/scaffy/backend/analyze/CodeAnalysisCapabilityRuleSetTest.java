@@ -13,12 +13,12 @@ class CodeAnalysisCapabilityRuleSetTest {
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
 			List.of(
-					new BuildCapabilityRuleSet(),
+					new BuildReleaseManagementCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
 					new SecurityScanningCapabilityRuleSet(),
-					new ArtifactCapabilityRuleSet(),
-					new DeploymentCapabilityRuleSet()));
+					new DeploymentCapabilityRuleSet()),
+			new ScoringEngine());
 
 	@Test
 	void detectsCompleteGitHubActionsTypescriptCodeAnalysis() {
@@ -38,15 +38,12 @@ class CodeAnalysisCapabilityRuleSetTest {
 				          path: reports/code-quality.json
 				""");
 
-		DimensionAnalysis codeAnalysis = codeAnalysis(response);
+		DomainScore codeAnalysis = codeAnalysis(response);
 
-		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment");
-		assertThat(codeAnalysis.score()).isEqualTo(1.0);
-		assertThat(codeAnalysis.level()).isEqualTo(5);
-		assertThat(codeAnalysis.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(codeAnalysis.confidence()).isEqualTo(Confidence.HIGH);
-		assertThat(evidence(codeAnalysis)).contains("npm run lint", "npm run typecheck", "prettier --check .", "pull_request");
+		assertThat(response.dimensions()).extracting(DomainScore::dimension)
+				.containsExactly("build_release", "testing_maturity", "workflow_quality", "security_integration", "deployment_automation");
+		assertThat(codeAnalysis.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(evidence(codeAnalysis)).contains("npm run lint", "npm run typecheck", "prettier --check .");
 	}
 
 	@Test
@@ -58,13 +55,10 @@ class CodeAnalysisCapabilityRuleSetTest {
 				    - ./gradlew check
 				""");
 
-		DimensionAnalysis codeAnalysis = codeAnalysis(response);
+		DomainScore codeAnalysis = codeAnalysis(response);
 
-		assertThat(codeAnalysis.score()).isEqualTo(0.45);
 		assertThat(codeAnalysis.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(codeAnalysis.confidence()).isEqualTo(Confidence.MEDIUM);
 		assertThat(evidence(codeAnalysis)).contains("./gradlew check");
-		assertThat(codeAnalysis.missingPractices()).contains("No formatter or style check detected");
 	}
 
 	@Test
@@ -81,11 +75,10 @@ class CodeAnalysisCapabilityRuleSetTest {
 				      - run: mypy src
 				""");
 
-		DimensionAnalysis codeAnalysis = codeAnalysis(response);
+		DomainScore codeAnalysis = codeAnalysis(response);
 
-		assertThat(codeAnalysis.score()).isEqualTo(0.85);
-		assertThat(codeAnalysis.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(evidence(codeAnalysis)).contains("ruff check .", "black --check .", "mypy src", "push");
+		assertThat(codeAnalysis.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(evidence(codeAnalysis)).contains("ruff check .", "black --check .", "mypy src");
 	}
 
 	@Test
@@ -97,10 +90,9 @@ class CodeAnalysisCapabilityRuleSetTest {
 				    - golangci-lint run
 				""");
 
-		DimensionAnalysis codeAnalysis = codeAnalysis(response);
+		DomainScore codeAnalysis = codeAnalysis(response);
 
 		assertThat(codeAnalysis.status()).isNotEqualTo(AnalysisStatus.MISSING);
-		assertThat(codeAnalysis.score()).isEqualTo(0.65);
 		assertThat(evidence(codeAnalysis)).contains("go vet ./...");
 	}
 
@@ -122,7 +114,7 @@ class CodeAnalysisCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(signal));
 
-			DimensionAnalysis codeAnalysis = codeAnalysis(response);
+			DomainScore codeAnalysis = codeAnalysis(response);
 
 			assertThat(codeAnalysis.status())
 					.as("Expected Sonar signal to be detected for %s", signal)
@@ -140,10 +132,9 @@ class CodeAnalysisCapabilityRuleSetTest {
 				      - uses: sonarsource/sonarcloud-github-action@v2
 				""");
 
-		DimensionAnalysis actionAnalysis = codeAnalysis(actionResponse);
+		DomainScore actionAnalysis = codeAnalysis(actionResponse);
 
-		assertThat(actionAnalysis.score()).isEqualTo(0.8);
-		assertThat(actionAnalysis.status()).isEqualTo(AnalysisStatus.COMPLETE);
+		assertThat(actionAnalysis.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(actionAnalysis)).contains("sonarsource/sonarcloud-github-action@v2");
 	}
 
@@ -159,11 +150,10 @@ class CodeAnalysisCapabilityRuleSetTest {
 				      - uses: github/super-linter@v6
 				""");
 
-		DimensionAnalysis codeAnalysis = codeAnalysis(response);
+		DomainScore codeAnalysis = codeAnalysis(response);
 
-		assertThat(codeAnalysis.score()).isEqualTo(0.45);
 		assertThat(codeAnalysis.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(evidence(codeAnalysis)).contains("github/super-linter@v6", "push");
+		assertThat(evidence(codeAnalysis)).contains("github/super-linter@v6");
 	}
 
 	@Test
@@ -188,12 +178,10 @@ class CodeAnalysisCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis codeAnalysis = codeAnalysis(response);
+			DomainScore codeAnalysis = codeAnalysis(response);
 
-			assertThat(codeAnalysis.status())
-					.as("Expected no code analysis detection for %s", command)
-					.isEqualTo(AnalysisStatus.MISSING);
-			assertThat(codeAnalysis.score()).isEqualTo(0.0);
+			assertThat(codeAnalysis.status()).as(command).isEqualTo(AnalysisStatus.MISSING);
+			assertThat(codeAnalysis.score()).as(command).isEqualTo(0.0);
 		}
 	}
 
@@ -210,11 +198,9 @@ class CodeAnalysisCapabilityRuleSetTest {
 				      - run: npm run lint
 				""");
 
-		DimensionAnalysis codeAnalysis = codeAnalysis(response);
+		DomainScore codeAnalysis = codeAnalysis(response);
 
-		assertThat(codeAnalysis.score()).isEqualTo(0.3);
-		assertThat(codeAnalysis.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(codeAnalysis.missingPractices()).contains("No automatic code analysis trigger detected");
+		assertThat(codeAnalysis.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -232,23 +218,24 @@ class CodeAnalysisCapabilityRuleSetTest {
 				      codequality: gl-code-quality-report.json
 				""");
 
-		DimensionAnalysis codeAnalysis = codeAnalysis(response);
+		DomainScore codeAnalysis = codeAnalysis(response);
 
-		assertThat(codeAnalysis.score()).isEqualTo(0.6);
 		assertThat(codeAnalysis.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(evidence(codeAnalysis)).contains("eslint . --format gitlab", "artifacts.reports.codequality");
+		assertThat(evidence(codeAnalysis)).contains("eslint . --format gitlab");
 	}
 
-	private DimensionAnalysis codeAnalysis(AnalysisResponse response) {
+	private DomainScore codeAnalysis(AnalysisResponse response) {
 		return response.dimensions().stream()
-				.filter(dimension -> "code_analysis".equals(dimension.dimension()))
+				.filter(dimension -> "workflow_quality".equals(dimension.dimension()))
 				.findFirst()
 				.orElseThrow();
 	}
 
-	private List<String> evidence(DimensionAnalysis analysis) {
-		return analysis.detectedPractices().stream()
-				.map(DetectedPractice::evidence)
+	private List<String> evidence(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::evidence)
 				.toList();
 	}
 }

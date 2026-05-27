@@ -1,9 +1,25 @@
 import { type ChangeEvent, useMemo, useRef, useState } from 'react'
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from 'recharts'
-import { analyzePipeline, type AnalysisResponse, type DimensionAnalysis } from '../api/analyze'
+import {
+  analyzePipeline,
+  type AnalysisResponse,
+  type CapabilityFinding,
+  type DimensionAnalysis,
+} from '../api/analyze'
 import { AppFrame, Badge, Button, Card, Eyebrow, StateRow } from '../components'
-
-const ACCEPTED_EXTENSIONS = ['.yml', '.yaml']
+import {
+  collectFindings,
+  countIssues,
+  dimensionSummary,
+  findingKey,
+  formatDimension,
+  formatFileSize,
+  formatLabel,
+  formatProvider,
+  formatScore,
+  statusBadgeClassName,
+  validateFile,
+} from '../lib/analyzer'
 
 type AnalyzeStatus =
   | { kind: 'idle' }
@@ -20,7 +36,10 @@ export function Analyzer() {
   const canAnalyze = file !== null && validationError === null && status.kind !== 'loading'
   const issueCount = useMemo(() => {
     if (status.kind !== 'success') return 0
-    return status.report.dimensions.reduce((total, dimension) => total + dimension.missingPractices.length, 0)
+    return status.report.dimensions.reduce(
+      (total, dimension) => total + countIssues(dimension),
+      0,
+    )
   }, [status])
 
   function selectFile(event: ChangeEvent<HTMLInputElement>) {
@@ -61,8 +80,8 @@ export function Analyzer() {
           <Eyebrow>Pipeline analyzer</Eyebrow>
           <h1 id="analyzer-title">Upload a pipeline and review its CI/CD maturity.</h1>
           <p>
-            Analyze GitHub Actions or GitLab CI YAML files against build, test, security,
-            artifacts, deployment, notification, and code quality practices.
+            Analyze GitHub Actions or GitLab CI YAML files against build &amp; release, testing,
+            workflow quality, security, and deployment capabilities.
           </p>
         </header>
 
@@ -114,8 +133,8 @@ export function Analyzer() {
               <Eyebrow>Report</Eyebrow>
               <h2>No analysis yet</h2>
               <p>
-                The report will show an overall maturity rating, dimension scores, detected practices,
-                and the missing practices that need attention.
+                The report will show an overall maturity rating, per-dimension capability scores,
+                detected positives, smells, and missing signals.
               </p>
             </Card>
           )}
@@ -125,7 +144,12 @@ export function Analyzer() {
   )
 }
 
-function ReportPanel({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
+type ReportPanelProps = Readonly<{
+  issueCount: number
+  report: AnalysisResponse
+}>
+
+function ReportPanel({ issueCount, report }: ReportPanelProps) {
   const [openSection, setOpenSection] = useState<string | null>('overall')
   const issueSuffix = issueCount === 1 ? '' : 's'
 
@@ -151,10 +175,9 @@ function ReportPanel({ issueCount, report }: { issueCount: number; report: Analy
             <div className="score-card__meta">
               <Badge>{formatProvider(report.provider)}</Badge>
               <Badge>Level {report.overallLevel}</Badge>
-              <Badge>{formatLabel(report.overallStatus)}</Badge>
-              <Badge>{formatLabel(report.overallConfidence)} confidence</Badge>
+              <StatusBadge status={report.overallStatus} />
             </div>
-            <p>{issueCount === 0 ? 'No missing practices were reported.' : `${issueCount} issue${issueSuffix} found across analyzed dimensions.`}</p>
+            <p>{issueCount === 0 ? 'No issues were reported across analyzed dimensions.' : `${issueCount} issue${issueSuffix} found across analyzed dimensions.`}</p>
           </div>
           <span className="accordion-chevron" aria-hidden="true">{openSection === 'overall' ? 'Hide' : 'Show'}</span>
         </button>
@@ -179,16 +202,18 @@ function ReportPanel({ issueCount, report }: { issueCount: number; report: Analy
   )
 }
 
-function DimensionAccordion({
-  dimension,
-  onToggle,
-  open,
-}: {
+type DimensionAccordionProps = Readonly<{
   dimension: DimensionAnalysis
   onToggle: () => void
   open: boolean
-}) {
+}>
+
+function DimensionAccordion({ dimension, onToggle, open }: DimensionAccordionProps) {
   const contentId = `${dimension.dimension}-details`
+  const notEvaluated = dimension.status === 'not_evaluated'
+  const positives = collectFindings(dimension, 'POSITIVE')
+  const smells = collectFindings(dimension, 'SMELL')
+  const missing = collectFindings(dimension, 'MISSING')
 
   return (
     <Card as="section" className={open ? 'accordion-section accordion-section--open' : 'accordion-section'}>
@@ -202,34 +227,59 @@ function DimensionAccordion({
         <div className="dimension-card__head">
           <div>
             <h3>{formatDimension(dimension.dimension)}</h3>
-            <p>Level {dimension.level} · {formatLabel(dimension.status)}</p>
+            <p>
+              {notEvaluated ? 'Not evaluated' : `Level ${dimension.level} · ${formatLabel(dimension.status)}`}
+            </p>
           </div>
-          <strong>{formatScore(dimension.score)}</strong>
+          <strong>{notEvaluated ? '—' : formatScore(dimension.score)}</strong>
         </div>
-        <div aria-hidden="true" className="score-bar">
-          <span style={{ width: formatScore(dimension.score) }} />
-        </div>
+        {!notEvaluated && (
+          <div aria-hidden="true" className="score-bar">
+            <span style={{ width: formatScore(dimension.score) }} />
+          </div>
+        )}
         <div className="dimension-card__details">
-          <span>{dimension.detectedPractices.length} detected</span>
-          <span>{dimension.missingPractices.length} missing</span>
-          <span>{formatLabel(dimension.confidence)} confidence</span>
+          {notEvaluated ? (
+            <span>No signals found in this pipeline for the dimension.</span>
+          ) : (
+            <>
+              <span>{positives.length} positive</span>
+              <span>{smells.length} smell{smells.length === 1 ? '' : 's'}</span>
+              <span>{missing.length} missing</span>
+            </>
+          )}
         </div>
         <span className="accordion-chevron" aria-hidden="true">{open ? 'Hide' : 'Show'}</span>
       </button>
       {open && (
         <div className="accordion-content" id={contentId}>
-          <DimensionDetail dimension={dimension} />
+          {notEvaluated ? (
+            <StateRow
+              detail="The ruleset for this dimension did not match any signals in the uploaded pipeline."
+              label="Dimension not evaluated"
+              tone="empty"
+            />
+          ) : (
+            <DimensionDetail dimension={dimension} missing={missing} positives={positives} smells={smells} />
+          )}
         </div>
       )}
     </Card>
   )
 }
 
-function OverallDetail({ issueCount, report }: { issueCount: number; report: AnalysisResponse }) {
-  const radarData = report.dimensions.map((dimension) => ({
-    dimension: formatDimension(dimension.dimension),
-    score: Math.round(dimension.score * 100),
-  }))
+type OverallDetailProps = Readonly<{
+  issueCount: number
+  report: AnalysisResponse
+}>
+
+function OverallDetail({ issueCount, report }: OverallDetailProps) {
+  const radarData = report.dimensions
+    .filter((dimension) => dimension.status !== 'not_evaluated')
+    .map((dimension) => ({
+      dimension: formatDimension(dimension.dimension),
+      score: Math.round(dimension.score * 100),
+    }))
 
   return (
     <>
@@ -265,8 +315,8 @@ function OverallDetail({ issueCount, report }: { issueCount: number; report: Ana
           {report.dimensions.map((dimension) => (
             <div className="overview-row" key={dimension.dimension}>
               <span>{formatDimension(dimension.dimension)}</span>
-              <strong>{formatScore(dimension.score)}</strong>
-              <small>{dimension.missingPractices.length} missing</small>
+              <strong>{dimension.status === 'not_evaluated' ? '—' : formatScore(dimension.score)}</strong>
+              <small>{dimensionSummary(dimension)}</small>
             </div>
           ))}
         </div>
@@ -275,79 +325,87 @@ function OverallDetail({ issueCount, report }: { issueCount: number; report: Ana
   )
 }
 
-function DimensionDetail({ dimension }: { dimension: DimensionAnalysis }) {
+type DimensionDetailProps = Readonly<{
+  dimension: DimensionAnalysis
+  missing: CapabilityFinding[]
+  positives: CapabilityFinding[]
+  smells: CapabilityFinding[]
+}>
+
+function DimensionDetail({ dimension, missing, positives, smells }: DimensionDetailProps) {
   return (
     <div className="detail-columns">
-      <div className="issue-group">
-        <h3>Missing practices</h3>
-        {dimension.missingPractices.length > 0 ? (
-          <ul>
-            {dimension.missingPractices.map((practice) => (
-              <li key={practice}>{practice}</li>
-            ))}
-          </ul>
-        ) : (
-          <StateRow detail="No missing practices were reported for this dimension." icon="✓" label="No issues found" tone="success" />
-        )}
-      </div>
-
       <div className="detected-group">
-        <h3>Detected practices</h3>
-        {dimension.detectedPractices.length > 0 ? (
+        <h3>Positives ({positives.length})</h3>
+        {positives.length > 0 ? (
           <ul>
-            {dimension.detectedPractices.map((practice) => (
-              <li key={`${practice.practice}-${practice.location}-${practice.evidence}`}>
-                <strong>{practice.practice}</strong>
-                <span>{practice.evidence}</span>
-                {practice.location && <code>{practice.location}</code>}
+            {positives.map((finding) => (
+              <li key={findingKey(finding)}>
+                <strong>{finding.ruleId}</strong>
+                {finding.evidence && <span>{finding.evidence}</span>}
+                {finding.location && <code>{finding.location}</code>}
               </li>
             ))}
           </ul>
         ) : (
-          <StateRow detail="No detected practices were reported for this dimension." label="No evidence found" tone="empty" />
+          <StateRow detail="No positive practices were detected for this dimension." label="No positives" tone="empty" />
+        )}
+      </div>
+
+      <div className="issue-group">
+        <h3>Smells ({smells.length})</h3>
+        {smells.length > 0 ? (
+          <ul>
+            {smells.map((finding) => (
+              <li key={findingKey(finding)}>
+                <strong>{finding.ruleId}</strong>
+                {finding.evidence && <span>{finding.evidence}</span>}
+                {finding.location && <code>{finding.location}</code>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <StateRow detail="No code smells were detected for this dimension." icon="✓" label="No smells" tone="success" />
+        )}
+      </div>
+
+      <div className="issue-group">
+        <h3>Missing ({missing.length})</h3>
+        {missing.length > 0 ? (
+          <ul>
+            {missing.map((finding) => (
+              <li key={findingKey(finding)}>
+                <strong>{finding.ruleId}</strong>
+                <span>{finding.capability}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <StateRow detail="All expected signals were detected for this dimension." icon="✓" label="Nothing missing" tone="success" />
+        )}
+      </div>
+
+      <div className="detected-group">
+        <h3>Capabilities ({dimension.capabilityScores.length})</h3>
+        {dimension.capabilityScores.length > 0 ? (
+          <ul>
+            {dimension.capabilityScores.map((capability) => (
+              <li key={capability.capability}>
+                <strong>{capability.capability}</strong>
+                <span>{capability.points} / 4 points · {capability.findings.length} finding{capability.findings.length === 1 ? '' : 's'}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <StateRow detail="No capabilities scored for this dimension." label="No capabilities" tone="empty" />
         )}
       </div>
     </div>
   )
 }
 
-function validateFile(file: File | null): string | null {
-  if (!file) return null
-  const normalizedName = file.name.toLowerCase()
-  if (!ACCEPTED_EXTENSIONS.some((extension) => normalizedName.endsWith(extension))) {
-    return 'Upload a .yml or .yaml pipeline file.'
-  }
-  return null
-}
+type StatusBadgeProps = Readonly<{ status: string }>
 
-function formatScore(score: number): string {
-  return `${Math.round(score * 100)}%`
-}
-
-function formatFileSize(size: number): string {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
-}
-
-function formatProvider(provider: string): string {
-  if (provider === 'github-actions') return 'GitHub Actions'
-  if (provider === 'gitlab-ci') return 'GitLab CI'
-  return formatLabel(provider)
-}
-
-function formatDimension(dimension: string): string {
-  return dimension
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
-function formatLabel(value: string): string {
-  return value
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
+function StatusBadge({ status }: StatusBadgeProps) {
+  return <Badge className={statusBadgeClassName(status)}>{formatLabel(status)}</Badge>
 }

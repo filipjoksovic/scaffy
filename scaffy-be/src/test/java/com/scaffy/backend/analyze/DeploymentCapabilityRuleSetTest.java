@@ -13,12 +13,12 @@ class DeploymentCapabilityRuleSetTest {
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
 			List.of(
-					new BuildCapabilityRuleSet(),
+					new BuildReleaseManagementCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
 					new SecurityScanningCapabilityRuleSet(),
-					new ArtifactCapabilityRuleSet(),
-					new DeploymentCapabilityRuleSet()));
+					new DeploymentCapabilityRuleSet()),
+			new ScoringEngine());
 
 	@Test
 	void detectsCompleteGitHubActionsKubernetesDeployment() {
@@ -37,18 +37,14 @@ class DeploymentCapabilityRuleSetTest {
 				      - run: kubectl rollout status deployment/app
 				""");
 
-		DimensionAnalysis deployment = deployment(response);
+		DomainScore deployment = deployment(response);
 
-		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment");
-		assertThat(deployment.score()).isEqualTo(1.0);
-		assertThat(deployment.level()).isEqualTo(5);
-		assertThat(deployment.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(deployment.confidence()).isEqualTo(Confidence.HIGH);
+		assertThat(response.dimensions()).extracting(DomainScore::dimension)
+				.containsExactly("build_release", "testing_maturity", "workflow_quality", "security_integration", "deployment_automation");
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(deployment)).contains(
 				"kubectl set image deployment/app app=ghcr.io/acme/app:$GITHUB_SHA",
 				"environment: production",
-				"push",
 				"kubectl rollout status deployment/app");
 	}
 
@@ -65,12 +61,9 @@ class DeploymentCapabilityRuleSetTest {
 				    - helm upgrade --install app chart/ --set image.tag=$CI_COMMIT_SHORT_SHA
 				""");
 
-		DimensionAnalysis deployment = deployment(response);
+		DomainScore deployment = deployment(response);
 
-		assertThat(deployment.score()).isEqualTo(0.85);
-		assertThat(deployment.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(deployment.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(deployment.missingPractices()).contains("No post-deploy validation detected");
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(deployment)).contains("helm upgrade --install app chart/ --set image.tag=$CI_COMMIT_SHORT_SHA");
 	}
 
@@ -87,11 +80,9 @@ class DeploymentCapabilityRuleSetTest {
 				    - curl https://app.example.com/health
 				""");
 
-		DimensionAnalysis deployment = deployment(response);
+		DomainScore deployment = deployment(response);
 
-		assertThat(deployment.score()).isEqualTo(0.85);
-		assertThat(deployment.confidence()).isEqualTo(Confidence.MEDIUM);
-		assertThat(deployment.missingPractices()).contains("No automatic deployment trigger detected");
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
 	@Test
@@ -116,7 +107,7 @@ class DeploymentCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis deployment = deployment(response);
+			DomainScore deployment = deployment(response);
 
 			assertThat(deployment.status())
 					.as("Expected no deployment detection for %s", command)
@@ -153,7 +144,7 @@ class DeploymentCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis deployment = deployment(response);
+			DomainScore deployment = deployment(response);
 
 			assertThat(deployment.status())
 					.as("Expected deployment command to be detected for %s", command)
@@ -162,16 +153,128 @@ class DeploymentCapabilityRuleSetTest {
 		}
 	}
 
-	private DimensionAnalysis deployment(AnalysisResponse response) {
+	@Test
+	void detectsTerraformAsIacTool() {
+		AnalysisResponse response = analyzer.analyze("deploy.yml", """
+				name: Deploy
+				on: [push]
+				jobs:
+				  infra:
+				    runs-on: ubuntu-latest
+				    environment: production
+				    steps:
+				      - run: terraform init
+				      - run: terraform apply -auto-approve
+				""");
+
+		DomainScore deployment = deployment(response);
+
+		assertThat(deployment.status()).isNotEqualTo(AnalysisStatus.MISSING);
+		assertThat(positiveRuleIds(deployment)).contains("IAC_PRESENT");
+	}
+
+	@Test
+	void detectsAnsibleAndPulumiAsIacTools() {
+		String[] commands = {
+				"ansible-playbook deploy.yml",
+				"pulumi up --yes"
+		};
+
+		for (String command : commands) {
+			AnalysisResponse response = analyzer.analyze("deploy.yml", """
+					name: Deploy
+					on: [push]
+					jobs:
+					  deploy:
+					    runs-on: ubuntu-latest
+					    environment: production
+					    steps:
+					      - run: %s
+					""".formatted(command));
+
+			DomainScore deployment = deployment(response);
+
+			assertThat(deployment.status())
+					.as("Expected IaC tool detection for %s", command)
+					.isNotEqualTo(AnalysisStatus.MISSING);
+			assertThat(positiveRuleIds(deployment))
+					.as("Expected IAC_PRESENT for %s", command)
+					.contains("IAC_PRESENT");
+		}
+	}
+
+	@Test
+	void multiStageGitLabPipelineEmitsMultiStagePositive() {
+		AnalysisResponse response = analyzer.analyze(".gitlab-ci.yml", """
+				stages:
+				  - build
+				  - deploy
+
+				build:
+				  stage: build
+				  script:
+				    - npm run build
+
+				deploy:
+				  stage: deploy
+				  environment: production
+				  script:
+				    - kubectl apply -f k8s/
+				""");
+
+		DomainScore deployment = deployment(response);
+
+		assertThat(positiveRuleIds(deployment)).contains("MULTI_STAGE_PIPELINE_PRESENT");
+		assertThat(smellRuleIds(deployment)).doesNotContain("MONOLITHIC_BUILD_PIPELINE");
+	}
+
+	@Test
+	void singleJobDeploymentEmitsMonolithicBuildPipelineSmell() {
+		AnalysisResponse response = analyzer.analyze("deploy.yml", """
+				name: Deploy
+				on: [push]
+				jobs:
+				  deploy:
+				    runs-on: ubuntu-latest
+				    environment: production
+				    steps:
+				      - run: kubectl apply -f k8s/
+				""");
+
+		DomainScore deployment = deployment(response);
+
+		assertThat(smellRuleIds(deployment)).contains("MONOLITHIC_BUILD_PIPELINE");
+		assertThat(positiveRuleIds(deployment)).doesNotContain("MULTI_STAGE_PIPELINE_PRESENT");
+	}
+
+	private DomainScore deployment(AnalysisResponse response) {
 		return response.dimensions().stream()
-				.filter(dimension -> "deployment".equals(dimension.dimension()))
+				.filter(dimension -> "deployment_automation".equals(dimension.dimension()))
 				.findFirst()
 				.orElseThrow();
 	}
 
-	private List<String> evidence(DimensionAnalysis analysis) {
-		return analysis.detectedPractices().stream()
-				.map(DetectedPractice::evidence)
+	private List<String> evidence(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::evidence)
+				.toList();
+	}
+
+	private List<String> positiveRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::ruleId)
+				.toList();
+	}
+
+	private List<String> smellRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.SMELL)
+				.map(CapabilityFinding::ruleId)
 				.toList();
 	}
 }

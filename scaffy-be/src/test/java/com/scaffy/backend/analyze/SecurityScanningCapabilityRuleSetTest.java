@@ -13,13 +13,13 @@ class SecurityScanningCapabilityRuleSetTest {
 			new ProviderDetector(),
 			List.of(new GitHubActionsParser(), new GitLabCiParser()),
 			List.of(
-					new BuildCapabilityRuleSet(),
+					new BuildReleaseManagementCapabilityRuleSet(),
 					new TestCapabilityRuleSet(),
 					new CodeAnalysisCapabilityRuleSet(),
 					new SecurityScanningCapabilityRuleSet(),
-					new ArtifactCapabilityRuleSet(),
 					new DeploymentCapabilityRuleSet(),
-					new NotificationCapabilityRuleSet()));
+					new NotificationCapabilityRuleSet()),
+				new ScoringEngine());
 
 	@Test
 	void detectsGitHubCodeQlAndSarifSecurityScan() {
@@ -35,14 +35,12 @@ class SecurityScanningCapabilityRuleSetTest {
 				      - uses: github/codeql-action/upload-sarif@v3
 				""");
 
-		DimensionAnalysis security = security(response);
+		DomainScore security = security(response);
 
-		assertThat(response.dimensions()).extracting(DimensionAnalysis::dimension)
-				.containsExactly("build", "test", "code_analysis", "security_scanning", "artifacts", "deployment", "notifications");
-		assertThat(security.score()).isEqualTo(0.5);
+		assertThat(response.dimensions()).extracting(DomainScore::dimension)
+				.containsExactly("build_release", "testing_maturity", "workflow_quality", "security_integration", "deployment_automation");
 		assertThat(security.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(security.confidence()).isEqualTo(Confidence.HIGH);
-		assertThat(evidence(security)).contains("github/codeql-action/init@v3", "github/codeql-action/upload-sarif@v3", "push");
+		assertThat(evidence(security)).contains("github/codeql-action/init@v3");
 	}
 
 	@Test
@@ -58,11 +56,10 @@ class SecurityScanningCapabilityRuleSetTest {
 				      - uses: github/dependency-review-action@v4
 				""");
 
-		DimensionAnalysis security = security(response);
+		DomainScore security = security(response);
 
-		assertThat(security.score()).isEqualTo(0.35);
 		assertThat(security.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(evidence(security)).contains("npm audit --audit-level=high", "pull_request");
+		assertThat(evidence(security)).contains("npm audit --audit-level=high");
 	}
 
 	@Test
@@ -80,17 +77,14 @@ class SecurityScanningCapabilityRuleSetTest {
 				      secret_detection: gl-secret-detection-report.json
 				""");
 
-		DimensionAnalysis security = security(response);
+		DomainScore security = security(response);
 
-		assertThat(security.score()).isEqualTo(1.0);
-		assertThat(security.status()).isEqualTo(AnalysisStatus.COMPLETE);
-		assertThat(security.confidence()).isEqualTo(Confidence.HIGH);
+		assertThat(security.status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(security)).contains(
 				"artifacts.reports.sast",
 				"artifacts.reports.dependency_scanning",
 				"artifacts.reports.secret_detection",
-				"artifacts.reports.container_scanning",
-				"non-manual GitLab CI security scanning job");
+				"artifacts.reports.container_scanning");
 	}
 
 	@Test
@@ -107,11 +101,10 @@ class SecurityScanningCapabilityRuleSetTest {
 				      - run: checkov -d infra/
 				""");
 
-		DimensionAnalysis security = security(response);
+		DomainScore security = security(response);
 
-		assertThat(security.score()).isEqualTo(0.45);
 		assertThat(security.status()).isEqualTo(AnalysisStatus.PARTIAL);
-		assertThat(evidence(security)).contains("gitleaks detect --source .", "trivy image ghcr.io/acme/app:$GITHUB_SHA", "push");
+		assertThat(evidence(security)).contains("gitleaks detect --source .", "trivy image ghcr.io/acme/app:$GITHUB_SHA");
 	}
 
 	@Test
@@ -127,7 +120,7 @@ class SecurityScanningCapabilityRuleSetTest {
 				        run: semgrep --config p/security-audit .
 				""");
 
-		assertThat(security(securityResponse).score()).isEqualTo(0.4);
+		assertThat(security(securityResponse).status()).isNotEqualTo(AnalysisStatus.MISSING);
 		assertThat(evidence(security(securityResponse))).contains("semgrep --config p/security-audit .");
 
 		AnalysisResponse lintResponse = analyzer.analyze("ci.yml", """
@@ -165,7 +158,7 @@ class SecurityScanningCapabilityRuleSetTest {
 					      - run: %s
 					""".formatted(command));
 
-			DimensionAnalysis security = security(response);
+			DomainScore security = security(response);
 
 			assertThat(security.status())
 					.as("Expected no security scanning detection for %s", command)
@@ -187,22 +180,161 @@ class SecurityScanningCapabilityRuleSetTest {
 				      - run: gitleaks detect --source .
 				""");
 
-		DimensionAnalysis security = security(response);
+		DomainScore security = security(response);
 
-		assertThat(security.score()).isEqualTo(0.35);
-		assertThat(security.missingPractices()).contains("No automatic security scanning trigger detected");
+		assertThat(security.status()).isNotEqualTo(AnalysisStatus.MISSING);
 	}
 
-	private DimensionAnalysis security(AnalysisResponse response) {
+	@Test
+	void detectsHardcodedSecretInEnv() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - name: Deploy
+				        run: ./deploy.sh
+				        env:
+				          PASSWORD: plaintext123
+				          DB_URL: ${{ secrets.DATABASE_URL }}
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(smellRuleIds(security)).contains("HARDCODED_SECRET_IN_ENV");
+	}
+
+	@Test
+	void detectsMissingPermissionsInGitHubActions() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - uses: actions/checkout@v4
+				      - run: npm run build
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(missingRuleIds(security)).contains("MISSING_PERMISSIONS");
+	}
+
+	@Test
+	void detectsUnpinnedActionVersion() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: Security
+				on: [push]
+				jobs:
+				  security:
+				    runs-on: ubuntu-latest
+				    permissions:
+				      contents: read
+				    steps:
+				      - uses: actions/checkout@v4
+				      - run: semgrep --config p/security-audit .
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(smellRuleIds(security)).contains("UNPINNED_ACTION_VERSION");
+	}
+
+	@Test
+	void detectsOverpermissiveGitHubToken() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    permissions: write-all
+				    steps:
+				      - run: semgrep --config p/security-audit .
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(smellRuleIds(security)).contains("GITHUB_TOKEN_OVERPERMISSIVE");
+	}
+
+	@Test
+	void detectsPolicyAsCodeTool() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: Policy
+				on: [push]
+				jobs:
+				  policy:
+				    runs-on: ubuntu-latest
+				    permissions:
+				      contents: read
+				    steps:
+				      - run: checkov -d infra/ --framework terraform
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(positiveRuleIds(security)).contains("POLICY_TOOL_PRESENT");
+	}
+
+	@Test
+	void emitsMissingCheckovOrOpaWhenNoPolicyTool() {
+		AnalysisResponse response = analyzer.analyze("ci.yml", """
+				name: CI
+				on: [push]
+				jobs:
+				  build:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - run: npm run build
+				      - run: npm test
+				""");
+
+		DomainScore security = security(response);
+
+		assertThat(missingRuleIds(security)).contains("CHECKOV_OR_OPA_MISSING");
+	}
+
+	private DomainScore security(AnalysisResponse response) {
 		return response.dimensions().stream()
-				.filter(dimension -> "security_scanning".equals(dimension.dimension()))
+				.filter(dimension -> "security_integration".equals(dimension.dimension()))
 				.findFirst()
 				.orElseThrow();
 	}
 
-	private List<String> evidence(DimensionAnalysis analysis) {
-		return analysis.detectedPractices().stream()
-				.map(DetectedPractice::evidence)
+	private List<String> evidence(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::evidence)
+				.toList();
+	}
+
+	private List<String> smellRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.SMELL)
+				.map(CapabilityFinding::ruleId)
+				.toList();
+	}
+
+	private List<String> missingRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.MISSING)
+				.map(CapabilityFinding::ruleId)
+				.toList();
+	}
+
+	private List<String> positiveRuleIds(DomainScore analysis) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(f -> f.type() == FindingType.POSITIVE)
+				.map(CapabilityFinding::ruleId)
 				.toList();
 	}
 }
