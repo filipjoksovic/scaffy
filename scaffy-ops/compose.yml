@@ -39,6 +39,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: 8080
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-scaffy}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-scaffy}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-scaffy}
