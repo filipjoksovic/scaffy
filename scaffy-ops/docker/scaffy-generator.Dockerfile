@@ -1,8 +1,15 @@
-FROM node:24-bookworm
+FROM node:24-bookworm AS node-runtime
+
+FROM maven:3.9-eclipse-temurin-21
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git unzip zip openjdk-21-jdk maven \
+    && apt-get install -y --no-install-recommends ca-certificates curl git unzip zip \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-runtime /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=node-runtime /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=node-runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 ENV DOTNET_ROOT=/usr/share/dotnet
 ENV PATH="${PATH}:${DOTNET_ROOT}"
