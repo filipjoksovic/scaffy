@@ -111,6 +111,7 @@ HETZNER_USER=<ssh-user>
 HETZNER_SSH_KEY=<private-ssh-key>
 LETSENCRYPT_EMAIL=<your-email>
 POSTGRES_PASSWORD=<strong-database-password>
+MINIO_ROOT_PASSWORD=<strong-object-storage-password>
 SCAFFY_JWT_SECRET=<at-least-32-random-bytes>
 GOOGLE_OAUTH_CLIENT_ID=<google-oauth-client-id>
 GOOGLE_OAUTH_CLIENT_SECRET=<google-oauth-client-secret>

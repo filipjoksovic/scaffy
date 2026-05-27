@@ -37,6 +37,7 @@ env:
   HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
   LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
   POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
   SCAFFY_JWT_SECRET: ${{ secrets.SCAFFY_JWT_SECRET }}
   SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET: ${{ secrets.SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET || secrets.SCAFFY_JWT_SECRET }}
   GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
@@ -83,7 +84,7 @@ jobs:
       - name: Validate required deployment config
         run: |
           set -euo pipefail
-          for name in HETZNER_HOST HETZNER_USER HETZNER_SSH_KEY LETSENCRYPT_EMAIL POSTGRES_PASSWORD SCAFFY_JWT_SECRET; do
+          for name in HETZNER_HOST HETZNER_USER HETZNER_SSH_KEY LETSENCRYPT_EMAIL POSTGRES_PASSWORD MINIO_ROOT_PASSWORD SCAFFY_JWT_SECRET; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing required secret: ${name}"
               exit 1
@@ -167,6 +168,7 @@ jobs:
             printf 'POSTGRES_DB=%s\n' "$POSTGRES_DB"
             printf 'POSTGRES_USER=%s\n' "$POSTGRES_USER"
             printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'MINIO_ROOT_PASSWORD=%s\n' "$MINIO_ROOT_PASSWORD"
             printf 'SCAFFY_JWT_SECRET=%s\n' "$SCAFFY_JWT_SECRET"
             printf 'SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET=%s\n' "$SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET"
             printf 'GOOGLE_OAUTH_CLIENT_ID=%s\n' "$GOOGLE_OAUTH_CLIENT_ID"
