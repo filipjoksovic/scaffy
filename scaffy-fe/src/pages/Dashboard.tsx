@@ -165,7 +165,6 @@ export function Dashboard() {
     }
   }, [connections, selectedRepositoryId]);
 
-  const connectedCount = connections.length;
   const needsGitHubReconnect =
     error?.toLowerCase().includes("reconnect with github") ?? false;
 
@@ -193,10 +192,6 @@ export function Dashboard() {
   const selectedAnalysisError = selectedConnection
     ? (analysisErrorByRepository[selectedConnection.id] ?? null)
     : null;
-  const analyzedCount = connections.filter(
-    (connection) =>
-      connection.analysisSummary || analysisByRepository[connection.id],
-  ).length;
   const selectedConnectionId = selectedConnection?.id ?? null;
   const selectedSummaryRunId = selectedConnection?.analysisSummary?.runId ?? null;
   const hasSelectedAnalysis = selectedConnectionId
@@ -522,11 +517,13 @@ export function Dashboard() {
       <section className="dashboard-band" aria-labelledby="dashboard-title">
         <header className="dashboard-header">
           <div className="dashboard-header__copy">
-            <Eyebrow>Workspace</Eyebrow>
-            <h2 id="dashboard-title">Connected projects</h2>
-            <p>
-              Manage the GitHub repositories Scaffy can analyze. Connect new
-              projects, audit access, and queue them for the pipeline grader.
+            <h2 id="dashboard-title">Projects</h2>
+            <p className="dashboard-header__status">
+              <span
+                aria-hidden="true"
+                className={`dot dot--${githubAccessDot}`}
+              />
+              <span>{githubAccessLabel}</span>
             </p>
           </div>
           <div className="dashboard-header__actions">
@@ -538,50 +535,13 @@ export function Dashboard() {
               }}
               variant="secondary"
             >
-              {githubLoading ? "Syncing" : "Refresh GitHub"}
-            </Button>
-            <Button onClick={() => setConnectDialogOpen(true)}>
-              Connect repository
+              {githubLoading ? "Syncing…" : "Connect repository"}
             </Button>
             <Button onClick={() => setCreatingProject(true)}>
               {creatingProject ? "Creating…" : "Create project"}
             </Button>
           </div>
         </header>
-
-        <div
-          className="dashboard-summary"
-          aria-label="Repository workspace status"
-        >
-          <div className="dashboard-summary__item">
-            <span>Connected</span>
-            <strong>{connectedCount}</strong>
-          </div>
-          <div className="dashboard-summary__item">
-            <span>GitHub access</span>
-            <strong>
-              <span
-                aria-hidden="true"
-                className={`dot dot--${githubAccessDot}`}
-              />
-              {githubAccessLabel}
-            </strong>
-          </div>
-          <div className="dashboard-summary__item">
-            <span>Fetched</span>
-            <strong>{githubRepositories.length}</strong>
-          </div>
-          <div className="dashboard-summary__item dashboard-summary__item--wide">
-            <span>Next step</span>
-            <strong>
-              {connectedCount === 0
-                ? "Connect a repository"
-                : analyzedCount === connectedCount
-                  ? "Review findings"
-                  : "Analyze selected project"}
-            </strong>
-          </div>
-        </div>
 
         <div className="dashboard-layout">
           <ProjectSidebar
@@ -703,15 +663,12 @@ function ProjectSidebar({
       aria-label="Connected projects"
     >
       <div className="project-sidebar__header">
-        <div>
-          <Eyebrow>Projects</Eyebrow>
-          <h3>{connections.length} connected</h3>
-        </div>
         <SearchInput
           onChange={onFilterChange}
-          placeholder="Filter projects"
+          placeholder="Search projects"
           value={filter}
         />
+        <span className="project-sidebar__count">{connections.length}</span>
       </div>
 
       {loading ? (
@@ -757,18 +714,19 @@ function ProjectSidebar({
                     </strong>
                     <span>
                       {summary
-                        ? `${formatScore(summary.overallScore)} · ${connection.analysisRunCount || summary.runNumber} ${
-                            (connection.analysisRunCount || summary.runNumber) ===
-                            1
-                              ? "run"
-                              : "runs"
-                          } · ${formatRelative(summary.analyzedAt)}`
+                        ? formatRelative(summary.analyzedAt)
                         : `Connected ${formatRelative(connection.connectedAt)}`}
                     </span>
                   </span>
-                  <span className="project-list__status">
-                    {summary ? "Analyzed" : "Ready"}
-                  </span>
+                  {summary ? (
+                    <span className="project-list__score">
+                      {formatScore(summary.overallScore)}
+                    </span>
+                  ) : (
+                    <span className="project-list__score project-list__score--pending">
+                      —
+                    </span>
+                  )}
                 </button>
               </li>
             );

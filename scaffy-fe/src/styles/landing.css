@@ -404,9 +404,10 @@
   padding: var(--space-lg);
 }
 
-.promotion-block h3,
-.not-evaluated-block h3 {
+.landing-methodology .promotion-block h3,
+.landing-methodology .not-evaluated-block h3 {
   margin: 0;
+  color: var(--color-ink);
   font-size: 18px;
   font-weight: 500;
 }
