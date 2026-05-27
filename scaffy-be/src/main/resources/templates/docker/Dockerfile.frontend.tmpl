@@ -5,6 +5,9 @@ RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
-COPY --from=build /workspace/{{frontendDistPath}} /usr/share/nginx/html
-EXPOSE 80
+FROM node:24-alpine
+WORKDIR /app
+RUN npm install -g serve
+COPY --from=build /workspace/{{frontendDistPath}} ./dist
+EXPOSE 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]
