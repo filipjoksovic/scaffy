@@ -82,7 +82,17 @@ new Sample("security-01-missing.yml", "github-actions"),
 new Sample("security-02-github-codeql-complete.yml", "github-actions"),
 new Sample("security-03-dependency-scan-partial.yml", "github-actions"),
 new Sample("security-04-gitlab-security-reports-complete.yml", "gitlab-ci"),
-new Sample("security-05-container-iac-secret-scan.yml", "github-actions"));
+new Sample("security-05-container-iac-secret-scan.yml", "github-actions"),
+new Sample("workflow-01-missing-permissions.yml", "github-actions"),
+new Sample("workflow-02-unpinned-actions.yml", "github-actions"),
+new Sample("workflow-03-timeout-missing.yml", "github-actions"),
+new Sample("workflow-04-concurrency-present.yml", "github-actions"),
+new Sample("workflow-05-path-filters.yml", "github-actions"),
+new Sample("workflow-06-hardcoded-secret.yml", "github-actions"),
+new Sample("workflow-07-policy-as-code.yml", "github-actions"),
+new Sample("workflow-08-rollback-signal.yml", "gitlab-ci"),
+new Sample("workflow-09-default-job-names.yml", "github-actions"),
+new Sample("workflow-10-matrix-cache-use.yml", "github-actions"));
 }
 
 private MockMultipartFile file(String filename) throws IOException {
