@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import type {
   CapabilityFinding,
   CapabilityScore,
@@ -11,10 +12,12 @@ import {
   connectRepository,
   disconnectRepository,
   getRepositoryAnalysis,
+  getRepositoryAnalysisDelta,
   listGitHubRepositories,
   listRepositoryConnections,
   type GitHubRepository,
   type RepositoryAnalysis,
+  type RepositoryAnalysisDelta,
   type RepositoryAnalysisSummary,
   type RepositoryConnection,
 } from "../api/repositories";
@@ -57,6 +60,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [githubFilter, setGithubFilter] = useState("");
+  const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [githubAccess, setGithubAccess] =
     useState<GitHubAccessState>("unknown");
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<
@@ -64,6 +68,9 @@ export function Dashboard() {
   >(null);
   const [analysisByRepository, setAnalysisByRepository] = useState<
     Record<string, RepositoryAnalysis>
+  >({});
+  const [deltaByRepository, setDeltaByRepository] = useState<
+    Record<string, RepositoryAnalysisDelta>
   >({});
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [loadingAnalysisId, setLoadingAnalysisId] = useState<string | null>(
@@ -78,7 +85,9 @@ export function Dashboard() {
       setConnections([]);
       setGitHubRepositories([]);
       setSelectedRepositoryId(null);
+      setConnectDialogOpen(false);
       setAnalysisByRepository({});
+      setDeltaByRepository({});
       setLoadingAnalysisId(null);
       setAnalysisErrorByRepository({});
       return;
@@ -151,6 +160,9 @@ export function Dashboard() {
   const selectedAnalysis = selectedConnection
     ? (analysisByRepository[selectedConnection.id] ?? null)
     : null;
+  const selectedDelta = selectedConnection
+    ? (deltaByRepository[selectedConnection.id] ?? null)
+    : null;
   const selectedAnalysisError = selectedConnection
     ? (analysisErrorByRepository[selectedConnection.id] ?? null)
     : null;
@@ -158,29 +170,34 @@ export function Dashboard() {
     (connection) =>
       connection.analysisSummary || analysisByRepository[connection.id],
   ).length;
+  const selectedConnectionId = selectedConnection?.id ?? null;
+  const selectedSummaryRunId = selectedConnection?.analysisSummary?.runId ?? null;
+  const hasSelectedAnalysis = selectedConnectionId
+    ? Boolean(analysisByRepository[selectedConnectionId])
+    : false;
+  const hasSelectedDelta = selectedConnectionId
+    ? Boolean(deltaByRepository[selectedConnectionId])
+    : false;
 
   useEffect(() => {
-    if (
-      !selectedConnection?.analysisSummary ||
-      analysisByRepository[selectedConnection.id]
-    ) {
+    if (!selectedConnectionId || !selectedSummaryRunId || hasSelectedAnalysis) {
       return undefined;
     }
 
     let mounted = true;
-    setLoadingAnalysisId(selectedConnection.id);
+    setLoadingAnalysisId(selectedConnectionId);
     setAnalysisErrorByRepository((current) => {
       const next = { ...current };
-      delete next[selectedConnection.id];
+      delete next[selectedConnectionId];
       return next;
     });
 
-    getRepositoryAnalysis(selectedConnection.id)
+    getRepositoryAnalysis(selectedConnectionId)
       .then((storedAnalysis) => {
         if (mounted) {
           setAnalysisByRepository((current) => ({
             ...current,
-            [selectedConnection.id]: storedAnalysis,
+            [selectedConnectionId]: storedAnalysis,
           }));
         }
       })
@@ -188,7 +205,7 @@ export function Dashboard() {
         if (mounted) {
           setAnalysisErrorByRepository((current) => ({
             ...current,
-            [selectedConnection.id]:
+            [selectedConnectionId]:
               err instanceof Error
                 ? err.message
                 : "Could not load repository analysis.",
@@ -198,7 +215,7 @@ export function Dashboard() {
       .finally(() => {
         if (mounted) {
           setLoadingAnalysisId((current) =>
-            current === selectedConnection.id ? null : current,
+            current === selectedConnectionId ? null : current,
           );
         }
       });
@@ -206,7 +223,67 @@ export function Dashboard() {
     return () => {
       mounted = false;
     };
-  }, [analysisByRepository, selectedConnection]);
+  }, [hasSelectedAnalysis, selectedConnectionId, selectedSummaryRunId]);
+
+  useEffect(() => {
+    if (
+      !selectedConnectionId ||
+      !selectedSummaryRunId ||
+      !hasSelectedAnalysis ||
+      hasSelectedDelta
+    ) {
+      return undefined;
+    }
+
+    let mounted = true;
+    getRepositoryAnalysisDelta(selectedConnectionId)
+      .then((storedDelta) => {
+        if (mounted) {
+          setDeltaByRepository((current) => ({
+            ...current,
+            [selectedConnectionId]: storedDelta,
+          }));
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setDeltaByRepository((current) => {
+            const next = { ...current };
+            delete next[selectedConnectionId];
+            return next;
+          });
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    hasSelectedAnalysis,
+    hasSelectedDelta,
+    selectedConnectionId,
+    selectedSummaryRunId,
+  ]);
+
+  useEffect(() => {
+    if (
+      !connectDialogOpen ||
+      !user ||
+      githubLoading ||
+      githubRepositories.length > 0 ||
+      githubAccess === "needs-reconnect"
+    ) {
+      return;
+    }
+
+    void handleFetchGitHubRepositories();
+  }, [
+    connectDialogOpen,
+    githubAccess,
+    githubLoading,
+    githubRepositories.length,
+    user,
+  ]);
 
   const accessState: GitHubAccessState = needsGitHubReconnect
     ? "needs-reconnect"
@@ -240,6 +317,7 @@ export function Dashboard() {
       ]);
       setSelectedRepositoryId(connection.id);
       setRepository("");
+      setConnectDialogOpen(false);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not connect repository.",
@@ -257,6 +335,11 @@ export function Dashboard() {
       return next;
     });
     setAnalysisByRepository((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    setDeltaByRepository((current) => {
       const next = { ...current };
       delete next[id];
       return next;
@@ -289,10 +372,30 @@ export function Dashboard() {
       setConnections((current) =>
         current.map((item) =>
           item.id === connection.id
-            ? { ...item, analysisSummary: summaryFromAnalysis(nextAnalysis) }
+            ? {
+                ...item,
+                analysisRunCount: Math.max(
+                  (item.analysisRunCount ?? 0) + 1,
+                  nextAnalysis.runNumber,
+                ),
+                analysisSummary: summaryFromAnalysis(nextAnalysis),
+              }
             : item,
         ),
       );
+      try {
+        const nextDelta = await getRepositoryAnalysisDelta(connection.id);
+        setDeltaByRepository((current) => ({
+          ...current,
+          [connection.id]: nextDelta,
+        }));
+      } catch {
+        setDeltaByRepository((current) => {
+          const next = { ...current };
+          delete next[connection.id];
+          return next;
+        });
+      }
     } catch (err) {
       setAnalysisErrorByRepository((current) => ({
         ...current,
@@ -332,6 +435,7 @@ export function Dashboard() {
         ...current.filter((item) => item.id !== connection.id),
       ]);
       setSelectedRepositoryId(connection.id);
+      setConnectDialogOpen(false);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not connect repository.",
@@ -401,14 +505,17 @@ export function Dashboard() {
           <div className="dashboard-header__actions">
             <Button
               disabled={githubLoading}
-              onClick={() => void handleFetchGitHubRepositories()}
+              onClick={() => {
+                setConnectDialogOpen(true);
+                void handleFetchGitHubRepositories();
+              }}
               variant="secondary"
             >
-              {githubLoading ? "Syncing" : "Sync GitHub"}
+              {githubLoading ? "Syncing" : "Refresh GitHub"}
             </Button>
-            <a className="button button--primary" href="#quick-connect">
+            <Button onClick={() => setConnectDialogOpen(true)}>
               Connect repository
-            </a>
+            </Button>
           </div>
         </header>
 
@@ -462,6 +569,7 @@ export function Dashboard() {
             <ProjectDetail
               analysis={selectedAnalysis}
               connection={selectedConnection}
+              delta={selectedDelta}
               error={selectedAnalysisError}
               loading={
                 selectedConnection
@@ -474,26 +582,30 @@ export function Dashboard() {
                   : false
               }
               onAnalyze={handleAnalyzeRepository}
+              onConnect={() => setConnectDialogOpen(true)}
               onDisconnect={handleDisconnect}
             />
 
-            <RepositoryConnectPanel
-              connections={connections}
-              error={error}
-              githubFilter={githubFilter}
-              githubLoading={githubLoading}
-              githubRepositories={githubRepositories}
-              needsGitHubReconnect={needsGitHubReconnect}
-              onConnectGithubRepository={handleConnectGitHubRepository}
-              onFetchGithubRepositories={handleFetchGitHubRepositories}
-              onGithubFilterChange={setGithubFilter}
-              onRepositoryChange={setRepository}
-              onSubmit={handleSubmit}
-              repository={repository}
-              submitting={submitting}
-            />
           </div>
         </div>
+
+        <RepositoryConnectDialog
+          connections={connections}
+          error={error}
+          githubFilter={githubFilter}
+          githubLoading={githubLoading}
+          githubRepositories={githubRepositories}
+          needsGitHubReconnect={needsGitHubReconnect}
+          onConnectGithubRepository={handleConnectGitHubRepository}
+          onFetchGithubRepositories={handleFetchGitHubRepositories}
+          onGithubFilterChange={setGithubFilter}
+          onOpenChange={setConnectDialogOpen}
+          onRepositoryChange={setRepository}
+          onSubmit={handleSubmit}
+          open={connectDialogOpen}
+          repository={repository}
+          submitting={submitting}
+        />
       </section>
     </AppFrame>
   );
@@ -560,9 +672,11 @@ function ProjectSidebar({
         <ul className="project-list">
           {filteredConnections.map((connection) => {
             const selected = selectedRepositoryId === connection.id;
-            const analyzed = Boolean(
-              connection.analysisSummary || analysisByRepository[connection.id],
-            );
+            const summary =
+              connection.analysisSummary ||
+              (analysisByRepository[connection.id]
+                ? summaryFromAnalysis(analysisByRepository[connection.id])
+                : null);
             return (
               <li key={connection.id}>
                 <button
@@ -577,10 +691,19 @@ function ProjectSidebar({
                     <strong>
                       {connection.owner}/{connection.name}
                     </strong>
-                    <span>{formatRelative(connection.connectedAt)}</span>
+                    <span>
+                      {summary
+                        ? `${formatScore(summary.overallScore)} · ${connection.analysisRunCount || summary.runNumber} ${
+                            (connection.analysisRunCount || summary.runNumber) ===
+                            1
+                              ? "run"
+                              : "runs"
+                          } · ${formatRelative(summary.analyzedAt)}`
+                        : `Connected ${formatRelative(connection.connectedAt)}`}
+                    </span>
                   </span>
                   <span className="project-list__status">
-                    {analyzed ? "Analyzed" : "Ready"}
+                    {summary ? "Analyzed" : "Ready"}
                   </span>
                 </button>
               </li>
@@ -595,20 +718,24 @@ function ProjectSidebar({
 type ProjectDetailProps = Readonly<{
   analysis: RepositoryAnalysis | null;
   connection: RepositoryConnection | null;
+  delta: RepositoryAnalysisDelta | null;
   error: string | null;
   loading: boolean;
   loadingStored: boolean;
   onAnalyze: (connection: RepositoryConnection) => void;
+  onConnect: () => void;
   onDisconnect: (id: string) => void;
 }>;
 
 function ProjectDetail({
   analysis,
   connection,
+  delta,
   error,
   loading,
   loadingStored,
   onAnalyze,
+  onConnect,
   onDisconnect,
 }: ProjectDetailProps) {
   if (!connection) {
@@ -620,9 +747,9 @@ function ProjectDetail({
           Connected projects appear in the sidebar. Select one to inspect its
           analysis state.
         </p>
-        <a className="button button--primary" href="#quick-connect">
+        <button className="button button--primary" onClick={onConnect} type="button">
           Connect repository
-        </a>
+        </button>
       </Card>
     );
   }
@@ -632,6 +759,7 @@ function ProjectDetail({
       <Card as="section" className="project-detail">
         <ProjectDetailHeader
           connection={connection}
+          hasAnalysis={Boolean(connection.analysisSummary || analysis)}
           loading={loading}
           onAnalyze={onAnalyze}
           onDisconnect={onDisconnect}
@@ -653,6 +781,7 @@ function ProjectDetail({
     <Card as="section" className="project-detail">
       <ProjectDetailHeader
         connection={connection}
+        hasAnalysis={Boolean(connection.analysisSummary || analysis)}
         loading={loading}
         onAnalyze={onAnalyze}
         onDisconnect={onDisconnect}
@@ -676,7 +805,7 @@ function ProjectDetail({
           )}
         </div>
       ) : analysis ? (
-        <AnalysisBreakdown analysis={analysis} />
+        <AnalysisBreakdown analysis={analysis} delta={delta} />
       ) : (
         <div className="analysis-empty">
           <div>
@@ -698,6 +827,7 @@ function ProjectDetail({
 
 type ProjectDetailHeaderProps = Readonly<{
   connection: RepositoryConnection;
+  hasAnalysis: boolean;
   loading: boolean;
   onAnalyze: (connection: RepositoryConnection) => void;
   onDisconnect: (id: string) => void;
@@ -705,6 +835,7 @@ type ProjectDetailHeaderProps = Readonly<{
 
 function ProjectDetailHeader({
   connection,
+  hasAnalysis,
   loading,
   onAnalyze,
   onDisconnect,
@@ -730,7 +861,7 @@ function ProjectDetailHeader({
           onClick={() => onAnalyze(connection)}
           variant="secondary"
         >
-          {loading ? "Analyzing" : "Run analysis"}
+          {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
         </Button>
         <a
           aria-label={`Open ${connection.owner}/${connection.name} on GitHub`}
@@ -746,7 +877,7 @@ function ProjectDetailHeader({
           aria-label={`Disconnect ${connection.owner}/${connection.name}`}
           className="icon-button icon-button--danger"
           onClick={() => onDisconnect(connection.id)}
-          title="Disconnect"
+          title="Disconnect repository"
           type="button"
         >
           <IconTrash />
@@ -758,9 +889,10 @@ function ProjectDetailHeader({
 
 type AnalysisBreakdownProps = Readonly<{
   analysis: RepositoryAnalysis;
+  delta: RepositoryAnalysisDelta | null;
 }>;
 
-function AnalysisBreakdown({ analysis }: AnalysisBreakdownProps) {
+function AnalysisBreakdown({ analysis, delta }: AnalysisBreakdownProps) {
   const issueCount = analysis.analysis.dimensions.reduce(
     (total, dimension) => total + countIssues(dimension),
     0,
@@ -774,7 +906,7 @@ function AnalysisBreakdown({ analysis }: AnalysisBreakdownProps) {
           <h3>{analysis.repository}</h3>
           <p>
             {formatProvider(analysis.analysis.provider)} ·{" "}
-            <code>{analysis.workflowPath}</code>
+            Run {analysis.runNumber} · <code>{analysis.workflowPath}</code>
           </p>
         </div>
         <div className="analysis-score">
@@ -793,7 +925,10 @@ function AnalysisBreakdown({ analysis }: AnalysisBreakdownProps) {
         <span>
           {issueCount} open {issueCount === 1 ? "issue" : "issues"}
         </span>
+        <span>Analyzed {formatRelative(analysis.analyzedAt)}</span>
       </div>
+
+      <AnalysisDeltaPanel delta={delta} />
 
       <div className="analysis-dimensions">
         {analysis.analysis.dimensions.map((dimension) => (
@@ -801,6 +936,132 @@ function AnalysisBreakdown({ analysis }: AnalysisBreakdownProps) {
         ))}
       </div>
     </div>
+  );
+}
+
+type AnalysisDeltaPanelProps = Readonly<{
+  delta: RepositoryAnalysisDelta | null;
+}>;
+
+function AnalysisDeltaPanel({ delta }: AnalysisDeltaPanelProps) {
+  if (!delta) {
+    return (
+      <section className="analysis-delta analysis-delta--empty">
+        <Eyebrow>Delta</Eyebrow>
+        <h4>Loading comparison</h4>
+        <p>Scaffy is preparing the latest run comparison.</p>
+      </section>
+    );
+  }
+
+  if (!delta.hasPrevious || !delta.overall || !delta.baseRun) {
+    return (
+      <section className="analysis-delta analysis-delta--empty">
+        <Eyebrow>Delta</Eyebrow>
+        <h4>No previous analysis yet</h4>
+        <p>
+          Run the analyzer again later to compare this snapshot against the next
+          one.
+        </p>
+      </section>
+    );
+  }
+
+  const changedFindings = delta.findingChanges.filter(
+    (finding) => finding.kind !== "unchanged",
+  );
+  const improved = changedFindings.filter(
+    (finding) => finding.direction === "improved",
+  ).length;
+  const worsened = changedFindings.filter(
+    (finding) => finding.direction === "worsened",
+  ).length;
+  const topDimensions = delta.dimensions
+    .filter((dimension) => dimension.direction !== "unchanged")
+    .slice(0, 4);
+  const topFindings = changedFindings.slice(0, 6);
+
+  return (
+    <section className="analysis-delta">
+      <header className="analysis-delta__header">
+        <div>
+          <Eyebrow>Latest delta</Eyebrow>
+          <h4>
+            Run {delta.currentRun.runNumber} vs run {delta.baseRun.runNumber}
+          </h4>
+          <p>
+            Compared against {formatRelative(delta.baseRun.analyzedAt)}.
+          </p>
+        </div>
+        <Badge className={`delta-badge delta-badge--${delta.overall.direction}`}>
+          {formatDeltaDirection(delta.overall.direction)}
+        </Badge>
+      </header>
+
+      <div className="analysis-delta__metrics">
+        <div>
+          <span>Score</span>
+          <strong>{formatSignedNumber(delta.overall.scoreDelta)}</strong>
+        </div>
+        <div>
+          <span>Level</span>
+          <strong>{formatSignedInteger(delta.overall.levelDelta)}</strong>
+        </div>
+        <div>
+          <span>Improved</span>
+          <strong>{improved}</strong>
+        </div>
+        <div>
+          <span>Worsened</span>
+          <strong>{worsened}</strong>
+        </div>
+      </div>
+
+      {topDimensions.length > 0 && (
+        <div className="analysis-delta__section">
+          <strong>Dimension movement</strong>
+          <ul>
+            {topDimensions.map((dimension) => (
+              <li key={dimension.dimension}>
+                <span>{dimensionMeta(dimension.dimension).label}</span>
+                <Badge
+                  className={`delta-badge delta-badge--${dimension.direction}`}
+                >
+                  {formatSignedNumber(dimension.scoreDelta)}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {topFindings.length > 0 ? (
+        <div className="analysis-delta__section">
+          <strong>Finding changes</strong>
+          <ul>
+            {topFindings.map((finding) => (
+              <li
+                key={`${finding.kind}-${finding.type}-${finding.dimension}-${finding.capability}-${finding.ruleId}`}
+              >
+                <span>
+                  {formatFindingChangeKind(finding.kind)}{" "}
+                  {ruleMeta(finding.ruleId).label}
+                </span>
+                <Badge
+                  className={`delta-badge delta-badge--${finding.direction}`}
+                >
+                  {formatDeltaDirection(finding.direction)}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="analysis-delta__quiet">
+          No rule-level findings changed between the last two runs.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -915,7 +1176,7 @@ function FindingItem({ finding }: FindingItemProps) {
   );
 }
 
-type RepositoryConnectPanelProps = Readonly<{
+type RepositoryConnectDialogProps = Readonly<{
   connections: RepositoryConnection[];
   error: string | null;
   githubFilter: string;
@@ -925,13 +1186,15 @@ type RepositoryConnectPanelProps = Readonly<{
   onConnectGithubRepository: (repo: GitHubRepository) => void;
   onFetchGithubRepositories: () => void;
   onGithubFilterChange: (value: string) => void;
+  onOpenChange: (open: boolean) => void;
   onRepositoryChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  open: boolean;
   repository: string;
   submitting: boolean;
 }>;
 
-function RepositoryConnectPanel({
+function RepositoryConnectDialog({
   connections,
   error,
   githubFilter,
@@ -941,11 +1204,13 @@ function RepositoryConnectPanel({
   onConnectGithubRepository,
   onFetchGithubRepositories,
   onGithubFilterChange,
+  onOpenChange,
   onRepositoryChange,
   onSubmit,
+  open,
   repository,
   submitting,
-}: RepositoryConnectPanelProps) {
+}: RepositoryConnectDialogProps) {
   const filteredGithubRepositories = useMemo(() => {
     if (!githubFilter.trim()) return githubRepositories;
     const query = githubFilter.trim().toLowerCase();
@@ -955,128 +1220,156 @@ function RepositoryConnectPanel({
   }, [githubFilter, githubRepositories]);
 
   return (
-    <Card as="section" className="panel project-connect" id="quick-connect">
-      <div className="panel__header">
-        <div className="panel__heading">
-          <Eyebrow>Add projects</Eyebrow>
-          <h3>Connect another repository</h3>
-          <p>
-            Sync GitHub to pick from your account, or paste a repository
-            manually.
-          </p>
-        </div>
-        <div className="panel__actions">
-          <Button
-            className="button--small"
-            disabled={githubLoading}
-            onClick={onFetchGithubRepositories}
-            variant="secondary"
-          >
-            {githubLoading
-              ? "Syncing"
-              : githubRepositories.length === 0
-                ? "Sync GitHub"
-                : "Refresh"}
-          </Button>
-        </div>
-      </div>
+    <Dialog.Root onOpenChange={onOpenChange} open={open}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="repository-dialog__overlay" />
+        <Dialog.Content className="repository-dialog">
+          <header className="repository-dialog__header">
+            <div>
+              <Eyebrow>Add project</Eyebrow>
+              <Dialog.Title className="repository-dialog__title">
+                Choose a GitHub repository
+              </Dialog.Title>
+              <Dialog.Description className="repository-dialog__description">
+                Select a repository from your GitHub account, or paste a
+                repository URL manually.
+              </Dialog.Description>
+            </div>
+            <Dialog.Close className="icon-button" aria-label="Close dialog">
+              <IconClose />
+            </Dialog.Close>
+          </header>
 
-      <div className="project-connect__body">
-        <form className="quick-connect" onSubmit={onSubmit}>
-          <label htmlFor="repository">Repository</label>
-          <div className="input-row">
-            <TextInput
-              id="repository"
-              onChange={(event) => onRepositoryChange(event.target.value)}
-              placeholder="owner/repo"
-              value={repository}
+          <div className="repository-dialog__toolbar">
+            <SearchInput
+              onChange={onGithubFilterChange}
+              placeholder="Search repositories"
+              value={githubFilter}
             />
-            <Button disabled={submitting} type="submit">
-              {submitting ? "Connecting" : "Connect"}
+            <Button
+              className="button--small"
+              disabled={githubLoading}
+              onClick={onFetchGithubRepositories}
+              variant="secondary"
+            >
+              {githubLoading
+                ? "Refreshing"
+                : githubRepositories.length === 0
+                  ? "Fetch GitHub"
+                  : "Refresh"}
             </Button>
           </div>
-          <span className="quick-connect__hint">
-            owner/repo · https://github.com/owner/repo
-          </span>
-          {error && (
-            <div>
-              <p className="form-error">{error}</p>
-              {needsGitHubReconnect && (
-                <div className="form-error__actions">
-                  <a
-                    className="button button--secondary button--small"
-                    href={oauthLoginUrl.github}
-                  >
-                    Reconnect GitHub
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-        </form>
 
-        <div className="github-picker">
-          <div className="github-picker__header">
-            <strong>Your GitHub repositories</strong>
-            {githubRepositories.length > 0 && (
-              <SearchInput
-                onChange={onGithubFilterChange}
-                placeholder="Filter repositories"
-                value={githubFilter}
+          <div className="repository-dialog__body">
+            {githubLoading ? (
+              <StateRow
+                detail="Fetching repositories from your connected GitHub account."
+                label="Loading GitHub repositories"
+                tone="loading"
               />
+            ) : needsGitHubReconnect ? (
+              <div className="repository-dialog__empty">
+                <h4>Reconnect GitHub</h4>
+                <p>
+                  Scaffy needs a fresh GitHub authorization before it can list
+                  your repositories.
+                </p>
+                <a
+                  className="button button--secondary button--small"
+                  href={oauthLoginUrl.github}
+                >
+                  Reconnect GitHub
+                </a>
+              </div>
+            ) : githubRepositories.length === 0 ? (
+              <div className="repository-dialog__empty">
+                <h4>No repositories loaded</h4>
+                <p>
+                  Fetch your GitHub repositories to choose one without pasting a
+                  link.
+                </p>
+                <Button onClick={onFetchGithubRepositories}>
+                  Fetch GitHub repositories
+                </Button>
+              </div>
+            ) : filteredGithubRepositories.length === 0 ? (
+              <div className="repository-dialog__empty">
+                <h4>No matches</h4>
+                <p>No repository matches “{githubFilter}”.</p>
+              </div>
+            ) : (
+              <ul className="repository-picker-list">
+                {filteredGithubRepositories.map((repo) => {
+                  const connected = connections.some(
+                    (connection) =>
+                      `${connection.owner}/${connection.name}`.toLowerCase() ===
+                      repo.fullName.toLowerCase(),
+                  );
+                  return (
+                    <li className="repository-picker-list__item" key={repo.fullName}>
+                      <button
+                        className="repository-picker-list__main"
+                        disabled={connected || submitting}
+                        onClick={() => onConnectGithubRepository(repo)}
+                        type="button"
+                      >
+                        <span className="repository-picker-list__name">
+                          {repo.fullName}
+                        </span>
+                        <span className="repository-picker-list__meta">
+                          <span aria-hidden="true" className="dot" />
+                          {repo.privateRepository ? "Private" : "Public"}
+                        </span>
+                      </button>
+                      <Button
+                        className="button--small"
+                        disabled={connected || submitting}
+                        onClick={() => onConnectGithubRepository(repo)}
+                        variant={connected ? "secondary" : "primary"}
+                      >
+                        {connected ? "Connected" : "Connect"}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
 
-          {githubLoading ? (
-            <StateRow
-              detail="Calling /api/repositories/github."
-              label="Syncing GitHub repositories"
-              tone="loading"
-            />
-          ) : githubRepositories.length === 0 ? (
-            <div className="empty-state empty-state--compact">
-              <p>
-                Press <strong>Sync GitHub</strong> to fetch repositories from
-                your connected account.
-              </p>
+          <form className="repository-dialog__manual" onSubmit={onSubmit}>
+            <div>
+              <label htmlFor="repository">Paste repository</label>
+              <span>owner/repo or https://github.com/owner/repo</span>
             </div>
-          ) : filteredGithubRepositories.length === 0 ? (
-            <div className="empty-state empty-state--compact">
-              <p>No repositories match “{githubFilter}”.</p>
+            <div className="repository-dialog__manual-row">
+              <TextInput
+                id="repository"
+                onChange={(event) => onRepositoryChange(event.target.value)}
+                placeholder="owner/repo"
+                value={repository}
+              />
+              <Button disabled={submitting} type="submit">
+                {submitting ? "Connecting" : "Connect"}
+              </Button>
             </div>
-          ) : (
-            <ul className="gh-list">
-              {filteredGithubRepositories.map((repo) => {
-                const connected = connections.some(
-                  (connection) =>
-                    `${connection.owner}/${connection.name}`.toLowerCase() ===
-                    repo.fullName.toLowerCase(),
-                );
-                return (
-                  <li className="gh-list__item" key={repo.fullName}>
-                    <div className="gh-list__info">
-                      <span className="gh-list__name">{repo.fullName}</span>
-                      <span className="gh-list__meta">
-                        <span aria-hidden="true" className="dot" />
-                        {repo.privateRepository ? "Private" : "Public"}
-                      </span>
-                    </div>
-                    <Button
-                      className="button--small"
-                      disabled={connected || submitting}
-                      onClick={() => onConnectGithubRepository(repo)}
-                      variant={connected ? "secondary" : "primary"}
-                    >
-                      {connected ? "Connected" : "Connect"}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
+          </form>
+
+          {error && (
+            <div className="repository-dialog__error">
+              <p className="form-error">{error}</p>
+              {needsGitHubReconnect && (
+                <a
+                  className="button button--secondary button--small"
+                  href={oauthLoginUrl.github}
+                >
+                  Reconnect GitHub
+                </a>
+              )}
+            </div>
           )}
-        </div>
-      </div>
-    </Card>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -1105,14 +1398,55 @@ function summaryFromAnalysis(
   analysis: RepositoryAnalysis,
 ): RepositoryAnalysisSummary {
   return {
+    runId: analysis.runId,
+    runNumber: analysis.runNumber,
     analyzedAt: analysis.analyzedAt,
     workflowPath: analysis.workflowPath,
+    workflowContentHash: analysis.workflowContentHash,
     overallScore: analysis.analysis.overallScore,
     overallLevel: analysis.analysis.overallLevel,
     overallStatus: analysis.analysis.overallStatus,
     analysisSchemaVersion: analysis.analysisSchemaVersion,
     analyzerModelVersion: analysis.analyzerModelVersion,
   };
+}
+
+function formatSignedNumber(value: number): string {
+  if (Math.abs(value) < 0.005) {
+    return "0.00";
+  }
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+function formatSignedInteger(value: number): string {
+  if (value === 0) {
+    return "0";
+  }
+  return `${value > 0 ? "+" : ""}${value}`;
+}
+
+function formatDeltaDirection(direction: string): string {
+  switch (direction) {
+    case "improved":
+      return "Improved";
+    case "worsened":
+      return "Worsened";
+    case "mixed":
+      return "Mixed";
+    default:
+      return "Unchanged";
+  }
+}
+
+function formatFindingChangeKind(kind: string): string {
+  switch (kind) {
+    case "added":
+      return "Added";
+    case "removed":
+      return "Removed";
+    default:
+      return "Kept";
+  }
 }
 
 function IconSearch() {
@@ -1146,6 +1480,21 @@ function IconExternal() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      viewBox="0 0 16 16"
+    >
+      <path d="M4 4l8 8" strokeLinecap="round" />
+      <path d="M12 4l-8 8" strokeLinecap="round" />
     </svg>
   );
 }

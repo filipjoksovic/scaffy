@@ -4,7 +4,9 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -28,7 +30,7 @@ import com.scaffy.backend.auth.JwtService;
 
 import jakarta.servlet.http.Cookie;
 
-@SpringBootTest
+@SpringBootTest(properties = "scaffy.cors.allowed-origins=http://localhost:5173")
 class RepositoryConnectionControllerTest {
 
 	@Autowired
@@ -56,6 +58,16 @@ class RepositoryConnectionControllerTest {
 	}
 
 	@Test
+	void deleteRepositoryCorsPreflightAllowsLocalFrontend() throws Exception {
+		mockMvc().perform(options("/api/repositories/a1ec1bfe-40b7-4fc3-9425-ad111b423123")
+						.header("Origin", "http://localhost:5173")
+						.header("Access-Control-Request-Method", "DELETE"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+				.andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+	}
+
+	@Test
 	void connectsListsAndDeletesGitHubRepository() throws Exception {
 		Cookie cookie = authCookie("a1ec1bfe-40b7-4fc3-9425-ad111b423123");
 
@@ -70,6 +82,8 @@ class RepositoryConnectionControllerTest {
 				.andExpect(jsonPath("$.owner").value("scaffy-labs"))
 				.andExpect(jsonPath("$.name").value("demo-app"))
 				.andExpect(jsonPath("$.url").value("https://github.com/scaffy-labs/demo-app"))
+				.andExpect(jsonPath("$.analysisRunCount").value(0))
+				.andExpect(jsonPath("$.analysisSummary").doesNotExist())
 				.andReturn();
 
 		JsonNode body = objectMapper.readTree(created.getResponse().getContentAsByteArray());
@@ -87,7 +101,8 @@ class RepositoryConnectionControllerTest {
 		mockMvc().perform(get("/api/repositories").cookie(cookie))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
-				.andExpect(jsonPath("$[0].id").value(id));
+				.andExpect(jsonPath("$[0].id").value(id))
+				.andExpect(jsonPath("$[0].analysisRunCount").value(0));
 
 		mockMvc().perform(delete("/api/repositories/" + id).cookie(cookie))
 				.andExpect(status().isNoContent());

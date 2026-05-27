@@ -62,40 +62,62 @@ class RepositoryAnalysisPersistenceControllerTest {
 	}
 
 	@Test
-	void analyzePersistsAndReusesFirstResult() throws Exception {
+	void analyzeCreatesRunHistoryAndLatestSummary() throws Exception {
 		Cookie cookie = authCookie("b1ec1bfe-40b7-4fc3-9425-ad111b423200");
 		String repositoryId = connectRepository(cookie);
 
-		MvcResult first = mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
+		mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.runId").exists())
 				.andExpect(jsonPath("$.repositoryId").value(repositoryId))
+				.andExpect(jsonPath("$.runNumber").value(1))
 				.andExpect(jsonPath("$.workflowPath").value(".github/workflows/ci.yml"))
+				.andExpect(jsonPath("$.workflowContentHash").exists())
 				.andExpect(jsonPath("$.analyzedAt").exists())
 				.andExpect(jsonPath("$.analysisSchemaVersion").value(1))
 				.andExpect(jsonPath("$.analyzerModelVersion").value("capability-analyzer-v1"))
-				.andExpect(jsonPath("$.analysis.provider").value("github-actions"))
-				.andReturn();
-		String analyzedAt = objectMapper.readTree(first.getResponse().getContentAsByteArray()).get("analyzedAt").asString();
+				.andExpect(jsonPath("$.analysis.provider").value("github-actions"));
 
 		mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.repositoryId").value(repositoryId))
-				.andExpect(jsonPath("$.analyzedAt").value(analyzedAt));
+				.andExpect(jsonPath("$.runNumber").value(2))
+				.andExpect(jsonPath("$.analyzedAt").exists());
 
-		org.assertj.core.api.Assertions.assertThat(WORKFLOW_FETCHES).hasValue(1);
+		org.assertj.core.api.Assertions.assertThat(WORKFLOW_FETCHES).hasValue(2);
 
 		mockMvc().perform(get("/api/repositories").cookie(cookie))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].analysisRunCount").value(2))
+				.andExpect(jsonPath("$[0].analysisSummary.runNumber").value(2))
 				.andExpect(jsonPath("$[0].analysisSummary.workflowPath").value(".github/workflows/ci.yml"))
 				.andExpect(jsonPath("$[0].analysisSummary.overallStatus").exists())
 				.andExpect(jsonPath("$[0].analysisSummary.analysisSchemaVersion").value(1))
 				.andExpect(jsonPath("$[0].analysisSummary.analyzerModelVersion").value("capability-analyzer-v1"));
 
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis").cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.runNumber").value(2));
+
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis/runs").cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(2)))
+				.andExpect(jsonPath("$[0].runNumber").value(2))
+				.andExpect(jsonPath("$[1].runNumber").value(1));
+
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis/delta").cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.hasPrevious").value(true))
+				.andExpect(jsonPath("$.baseRun.runNumber").value(1))
+				.andExpect(jsonPath("$.currentRun.runNumber").value(2))
+				.andExpect(jsonPath("$.overall.direction").exists())
+				.andExpect(jsonPath("$.findingChanges").isArray());
+
 		mockMvc().perform(delete("/api/repositories/" + repositoryId).cookie(cookie))
 				.andExpect(status().isNoContent());
 		Integer analysisRows = jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM repository_analyses WHERE repository_connection_id = ?",
+				"SELECT COUNT(*) FROM repository_analysis_runs WHERE repository_connection_id = ?",
 				Integer.class,
 				UUID.fromString(repositoryId));
 		org.assertj.core.api.Assertions.assertThat(analysisRows).isZero();
@@ -116,9 +138,20 @@ class RepositoryAnalysisPersistenceControllerTest {
 		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis").cookie(ownerCookie))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.repositoryId").value(repositoryId))
+				.andExpect(jsonPath("$.runNumber").value(1))
 				.andExpect(jsonPath("$.analysis.dimensions").isArray());
 
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis/delta").cookie(ownerCookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.hasPrevious").value(false))
+				.andExpect(jsonPath("$.baseRun").doesNotExist())
+				.andExpect(jsonPath("$.currentRun.runNumber").value(1));
+
 		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis").cookie(otherCookie))
+				.andExpect(status().isNotFound());
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis/runs").cookie(otherCookie))
+				.andExpect(status().isNotFound());
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis/delta").cookie(otherCookie))
 				.andExpect(status().isNotFound());
 	}
 
@@ -160,7 +193,23 @@ class RepositoryAnalysisPersistenceControllerTest {
 			return new GitHubWorkflowClient((ObjectMapper) null, null, null) {
 				@Override
 				public GitHubWorkflowFile findWorkflow(UUID userId, RepositoryConnection repository) {
-					WORKFLOW_FETCHES.incrementAndGet();
+					int fetchCount = WORKFLOW_FETCHES.incrementAndGet();
+					if (fetchCount == 1) {
+						return new GitHubWorkflowFile(".github/workflows/ci.yml", """
+							name: CI
+							on:
+							  push:
+							jobs:
+							  build:
+							    runs-on: ubuntu-22.04
+							    timeout-minutes: 10
+							    permissions:
+							      contents: read
+							    steps:
+							      - name: Build
+							        run: ./mvnw --batch-mode clean package
+							""");
+					}
 					return new GitHubWorkflowFile(".github/workflows/ci.yml", """
 							name: CI
 							on:
@@ -174,6 +223,8 @@ class RepositoryAnalysisPersistenceControllerTest {
 							    steps:
 							      - name: Build
 							        run: ./mvnw --batch-mode clean package
+							      - name: Test
+							        run: ./mvnw --batch-mode test jacoco:report
 							""");
 				}
 			};

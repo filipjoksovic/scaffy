@@ -48,11 +48,16 @@ public class RepositoryConnectionController {
 	@GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
 	public List<RepositoryConnectionResponse> list(@AuthenticationPrincipal ScaffyPrincipal principal) {
 		List<RepositoryConnection> connections = repository.findByUserId(principal.userId());
-		Map<UUID, RepositoryAnalysisSummary> summaries = repositoryAnalysisRepository.findSummariesByRepositoryConnectionIds(
+		Map<UUID, RepositoryAnalysisSummary> summaries = repositoryAnalysisRepository.findLatestSummariesByRepositoryConnectionIds(
+				connections.stream().map(RepositoryConnection::id).toList());
+		Map<UUID, Integer> runCounts = repositoryAnalysisRepository.countByRepositoryConnectionIds(
 				connections.stream().map(RepositoryConnection::id).toList());
 		return connections
 				.stream()
-				.map(connection -> RepositoryConnectionResponse.from(connection, summaries.get(connection.id())))
+				.map(connection -> RepositoryConnectionResponse.from(
+						connection,
+						summaries.get(connection.id()),
+						runCounts.getOrDefault(connection.id(), 0)))
 				.toList();
 	}
 
@@ -68,9 +73,9 @@ public class RepositoryConnectionController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public RepositoryConnectionResponse connect(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
-			@Valid @RequestBody ConnectRepositoryRequest request) {
+		@Valid @RequestBody ConnectRepositoryRequest request) {
 		GitHubRepositoryRef ref = parser.parse(request.repository());
-		return RepositoryConnectionResponse.from(repository.connectGitHub(principal.userId(), ref), null);
+		return RepositoryConnectionResponse.from(repository.connectGitHub(principal.userId(), ref), null, 0);
 	}
 
 	@PostMapping(path = "/{id}/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -85,6 +90,23 @@ public class RepositoryConnectionController {
 			@AuthenticationPrincipal ScaffyPrincipal principal,
 			@PathVariable UUID id) {
 		return repositoryAnalysisService.getStoredAnalysis(principal.userId(), id);
+	}
+
+	@GetMapping(path = "/{id}/analysis/runs", produces = MediaType.APPLICATION_JSON_VALUE)
+	public List<RepositoryAnalysisRunSummaryResponse> getRepositoryAnalysisRuns(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@PathVariable UUID id) {
+		return repositoryAnalysisService.getAnalysisRuns(principal.userId(), id)
+				.stream()
+				.map(RepositoryAnalysisRunSummaryResponse::from)
+				.toList();
+	}
+
+	@GetMapping(path = "/{id}/analysis/delta", produces = MediaType.APPLICATION_JSON_VALUE)
+	public RepositoryAnalysisDeltaResponse getRepositoryAnalysisDelta(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@PathVariable UUID id) {
+		return repositoryAnalysisService.getAnalysisDelta(principal.userId(), id);
 	}
 
 	@DeleteMapping("/{id}")
@@ -102,9 +124,13 @@ public class RepositoryConnectionController {
 			String name,
 			String url,
 			OffsetDateTime connectedAt,
+			int analysisRunCount,
 			RepositoryAnalysisSummaryResponse analysisSummary) {
 
-		static RepositoryConnectionResponse from(RepositoryConnection connection, RepositoryAnalysisSummary summary) {
+		static RepositoryConnectionResponse from(
+				RepositoryConnection connection,
+				RepositoryAnalysisSummary summary,
+				int analysisRunCount) {
 			return new RepositoryConnectionResponse(
 					connection.id().toString(),
 					connection.provider(),
@@ -112,13 +138,17 @@ public class RepositoryConnectionController {
 					connection.name(),
 					connection.url(),
 					connection.connectedAt(),
+					analysisRunCount,
 					RepositoryAnalysisSummaryResponse.from(summary));
 		}
 	}
 
 	public record RepositoryAnalysisSummaryResponse(
+			String runId,
+			int runNumber,
 			OffsetDateTime analyzedAt,
 			String workflowPath,
+			String workflowContentHash,
 			double overallScore,
 			int overallLevel,
 			String overallStatus,
@@ -130,8 +160,38 @@ public class RepositoryConnectionController {
 				return null;
 			}
 			return new RepositoryAnalysisSummaryResponse(
+					summary.id().toString(),
+					summary.runNumber(),
 					summary.analyzedAt(),
 					summary.workflowPath(),
+					summary.workflowContentHash(),
+					summary.overallScore(),
+					summary.overallLevel(),
+					summary.overallStatus(),
+					summary.analysisSchemaVersion(),
+					summary.analyzerModelVersion());
+		}
+	}
+
+	public record RepositoryAnalysisRunSummaryResponse(
+			String runId,
+			int runNumber,
+			OffsetDateTime analyzedAt,
+			String workflowPath,
+			String workflowContentHash,
+			double overallScore,
+			int overallLevel,
+			String overallStatus,
+			int analysisSchemaVersion,
+			String analyzerModelVersion) {
+
+		static RepositoryAnalysisRunSummaryResponse from(RepositoryAnalysisSummary summary) {
+			return new RepositoryAnalysisRunSummaryResponse(
+					summary.id().toString(),
+					summary.runNumber(),
+					summary.analyzedAt(),
+					summary.workflowPath(),
+					summary.workflowContentHash(),
 					summary.overallScore(),
 					summary.overallLevel(),
 					summary.overallStatus(),
