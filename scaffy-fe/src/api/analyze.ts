@@ -4,6 +4,14 @@ export type AnalysisStatus = 'missing' | 'partial' | 'complete' | 'not_evaluated
 export type PipelineProvider = 'github-actions' | 'gitlab-ci' | (string & {})
 export type FindingType = 'POSITIVE' | 'SMELL' | 'MISSING' | (string & {})
 
+export type SourceSpan = {
+  path: string
+  startLine: number
+  startColumn: number
+  endLine: number
+  endColumn: number
+}
+
 export type CapabilityFinding = {
   ruleId: string
   dimension: string
@@ -11,6 +19,7 @@ export type CapabilityFinding = {
   type: FindingType
   evidence: string | null
   location: string | null
+  source: SourceSpan | null
 }
 
 export type CapabilityScore = {

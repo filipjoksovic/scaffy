@@ -83,12 +83,17 @@ class RepositoryAnalysisMigrationTest {
 				"SELECT run_number FROM repository_analysis_runs WHERE repository_connection_id = ?",
 				Integer.class,
 				repositoryId);
+		String workflowContent = jdbcTemplate.queryForObject(
+				"SELECT workflow_content FROM repository_analysis_runs WHERE repository_connection_id = ?",
+				String.class,
+				repositoryId);
 		Integer oldTable = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'repository_analyses'",
 				Integer.class);
 
 		assertThat(runCount).isOne();
 		assertThat(runNumber).isOne();
+		assertThat(workflowContent).isNull();
 		assertThat(oldTable).isZero();
 	}
 }

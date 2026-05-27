@@ -31,6 +31,9 @@ class WorkflowQualityCapabilityRuleSetTest {
 
 		assertThat(smellRuleIds(workflow)).contains("MISSING_TIMEOUT");
 		assertThat(positiveRuleIds(workflow)).doesNotContain("TIMEOUT_PRESENT");
+		assertThat(finding(workflow, "MISSING_TIMEOUT").source())
+				.extracting(SourceSpan::path, SourceSpan::startLine)
+				.containsExactly("jobs.build", 4);
 	}
 
 	@Test
@@ -69,6 +72,9 @@ class WorkflowQualityCapabilityRuleSetTest {
 		DomainScore workflow = workflow(response);
 
 		assertThat(smellRuleIds(workflow)).contains("CONTINUE_ON_ERROR_USED");
+		assertThat(finding(workflow, "CONTINUE_ON_ERROR_USED").source())
+				.extracting(SourceSpan::path, SourceSpan::startLine)
+				.containsExactly("jobs.flaky.steps[0].continue-on-error", 9);
 	}
 
 	@Test
@@ -158,6 +164,9 @@ class WorkflowQualityCapabilityRuleSetTest {
 		DomainScore workflow = workflow(response);
 
 		assertThat(smellRuleIds(workflow)).contains("UNPINNED_ACTION_VERSION");
+		assertThat(finding(workflow, "UNPINNED_ACTION_VERSION").source())
+				.extracting(SourceSpan::path, SourceSpan::startLine)
+				.containsExactly("jobs.build.steps[0].uses", 7);
 	}
 
 	@Test
@@ -263,5 +272,13 @@ class WorkflowQualityCapabilityRuleSetTest {
 				.filter(f -> f.type() == FindingType.SMELL)
 				.map(CapabilityFinding::ruleId)
 				.toList();
+	}
+
+	private CapabilityFinding finding(DomainScore analysis, String ruleId) {
+		return analysis.capabilityScores().stream()
+				.flatMap(cs -> cs.findings().stream())
+				.filter(finding -> ruleId.equals(finding.ruleId()))
+				.findFirst()
+				.orElseThrow();
 	}
 }

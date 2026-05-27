@@ -101,7 +101,7 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 						&& step.details().toLowerCase(Locale.ROOT).replace(" ", "").contains("continue-on-error:true"))
 				.findFirst()
 				.ifPresent(step -> findings.add(CapabilityFinding.smell("CONTINUE_ON_ERROR_USED", DIMENSION,
-						CAPABILITY_EXECUTION_SAFETY, "continue-on-error: true", step.location())));
+						CAPABILITY_EXECUTION_SAFETY, "continue-on-error: true", fieldLocation(step.location(), "continue-on-error"))));
 
 		return findings;
 	}
@@ -298,5 +298,16 @@ public class WorkflowQualityCapabilityRuleSet implements CapabilityRuleSet {
 
 	private boolean hasText(String value) {
 		return value != null && !value.isBlank();
+	}
+
+	private String fieldLocation(String baseLocation, String field) {
+		if (baseLocation == null) {
+			return null;
+		}
+		int lastDot = baseLocation.lastIndexOf('.');
+		if (lastDot < 0) {
+			return baseLocation + "." + field;
+		}
+		return baseLocation.substring(0, lastDot) + "." + field;
 	}
 }

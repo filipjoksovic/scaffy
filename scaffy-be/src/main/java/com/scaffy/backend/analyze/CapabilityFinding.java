@@ -6,7 +6,13 @@ public record CapabilityFinding(
 		String capability,
 		FindingType type,
 		String evidence,
-		String location) {
+		String location,
+		SourceSpan source) {
+
+	public CapabilityFinding(String ruleId, String dimension, String capability, FindingType type,
+			String evidence, String location) {
+		this(ruleId, dimension, capability, type, evidence, location, null);
+	}
 
 	public static CapabilityFinding positive(String ruleId, String dimension, String capability,
 			String evidence, String location) {
@@ -20,5 +26,9 @@ public record CapabilityFinding(
 
 	public static CapabilityFinding missing(String ruleId, String dimension, String capability) {
 		return new CapabilityFinding(ruleId, dimension, capability, FindingType.MISSING, null, null);
+	}
+
+	public CapabilityFinding withSource(SourceSpan source) {
+		return new CapabilityFinding(ruleId, dimension, capability, type, evidence, location, source);
 	}
 }

@@ -1,6 +1,7 @@
 package com.scaffy.backend.repository;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -73,10 +74,12 @@ class RepositoryAnalysisPersistenceControllerTest {
 				.andExpect(jsonPath("$.runNumber").value(1))
 				.andExpect(jsonPath("$.workflowPath").value(".github/workflows/ci.yml"))
 				.andExpect(jsonPath("$.workflowContentHash").exists())
+				.andExpect(jsonPath("$.workflowContent").value(containsString("name: CI")))
 				.andExpect(jsonPath("$.analyzedAt").exists())
 				.andExpect(jsonPath("$.analysisSchemaVersion").value(1))
 				.andExpect(jsonPath("$.analyzerModelVersion").value("capability-analyzer-v1"))
-				.andExpect(jsonPath("$.analysis.provider").value("github-actions"));
+				.andExpect(jsonPath("$.analysis.provider").value("github-actions"))
+				.andExpect(jsonPath("$.analysis.dimensions[*].capabilityScores[*].findings[*].source").exists());
 
 		mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
 				.andExpect(status().isOk())
@@ -139,6 +142,7 @@ class RepositoryAnalysisPersistenceControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.repositoryId").value(repositoryId))
 				.andExpect(jsonPath("$.runNumber").value(1))
+				.andExpect(jsonPath("$.workflowContent").value(containsString("name: CI")))
 				.andExpect(jsonPath("$.analysis.dimensions").isArray());
 
 		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis/delta").cookie(ownerCookie))

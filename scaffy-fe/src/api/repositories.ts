@@ -40,6 +40,7 @@ export type RepositoryAnalysis = {
   runNumber: number
   workflowPath: string
   workflowContentHash: string | null
+  workflowContent: string | null
   analyzedAt: string
   analysisSchemaVersion: number
   analyzerModelVersion: string

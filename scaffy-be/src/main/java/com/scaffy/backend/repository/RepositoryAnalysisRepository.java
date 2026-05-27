@@ -50,6 +50,7 @@ public class RepositoryAnalysisRepository {
 					analyzed_at,
 					analysis_schema_version,
 					analyzer_model_version,
+					workflow_content,
 					analysis_json
 				FROM repository_analysis_runs
 				WHERE repository_connection_id = ?
@@ -72,6 +73,7 @@ public class RepositoryAnalysisRepository {
 					analyzed_at,
 					analysis_schema_version,
 					analyzer_model_version,
+					workflow_content,
 					analysis_json
 				FROM repository_analysis_runs
 				WHERE repository_connection_id = ?
@@ -170,9 +172,10 @@ public class RepositoryAnalysisRepository {
 					overall_status,
 					analysis_schema_version,
 					analyzer_model_version,
+					workflow_content,
 					analysis_json
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""",
 				id,
 				repositoryConnectionId,
@@ -185,6 +188,7 @@ public class RepositoryAnalysisRepository {
 				analysis.overallStatus().value(),
 				ANALYSIS_SCHEMA_VERSION,
 				ANALYZER_MODEL_VERSION,
+				workflowContent,
 				analysisJson(analysis));
 		return findById(id).orElseThrow();
 	}
@@ -203,6 +207,7 @@ public class RepositoryAnalysisRepository {
 					analyzed_at,
 					analysis_schema_version,
 					analyzer_model_version,
+					workflow_content,
 					analysis_json
 				FROM repository_analysis_runs
 				WHERE id = ?
@@ -212,6 +217,7 @@ public class RepositoryAnalysisRepository {
 	private PersistedRepositoryAnalysis mapPersistedAnalysis(ResultSet rs, int rowNum) throws SQLException {
 		return new PersistedRepositoryAnalysis(
 				mapSummary(rs, rowNum),
+				rs.getString("workflow_content"),
 				analysisResponse(rs.getString("analysis_json")));
 	}
 

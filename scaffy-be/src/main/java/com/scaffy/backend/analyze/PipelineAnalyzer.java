@@ -31,12 +31,14 @@ public class PipelineAnalyzer {
 
 	public AnalysisResponse analyze(String filename, String content) {
 		Map<Object, Object> root = yamlPipelineParser.parse(content);
+		YamlSourceIndex sourceIndex = yamlPipelineParser.sourceIndex(content);
 		PipelineProvider provider = providerDetector.detect(filename, content, root);
 		PipelineProviderParser parser = parserFor(provider);
 		PipelineDocument document = parser.parse(root);
 
 		List<CapabilityFinding> allFindings = ruleSets.stream()
 				.flatMap(ruleSet -> ruleSet.detect(document).stream())
+				.map(finding -> finding.withSource(sourceIndex.sourceFor(finding.location())))
 				.toList();
 
 		Map<String, List<CapabilityFinding>> byDimension = allFindings.stream()

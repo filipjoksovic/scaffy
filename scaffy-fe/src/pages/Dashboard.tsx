@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import type * as Monaco from "monaco-editor";
+import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker.js?worker";
 import type {
   CapabilityFinding,
   CapabilityScore,
@@ -41,6 +43,14 @@ import {
   statusMeta,
   statusBadgeClassName,
 } from "../lib/analyzer";
+
+const monacoGlobal = globalThis as typeof globalThis & {
+  MonacoEnvironment?: { getWorker: () => Worker };
+};
+
+monacoGlobal.MonacoEnvironment ??= {
+  getWorker: () => new EditorWorker(),
+};
 
 type GitHubAccessState = "connected" | "needs-reconnect" | "unknown";
 
@@ -719,7 +729,7 @@ type ProjectDetailProps = Readonly<{
   error: string | null;
   loading: boolean;
   loadingStored: boolean;
-  onAnalyze: (connection: RepositoryConnection) => void;
+  onAnalyze: (connection: RepositoryConnection) => Promise<void>;
   onConnect: () => void;
   onDisconnect: (id: string) => void;
 }>;
@@ -755,6 +765,7 @@ function ProjectDetail({
     return (
       <Card as="section" className="project-detail">
         <ProjectDetailHeader
+          analysis={analysis}
           connection={connection}
           hasAnalysis={Boolean(connection.analysisSummary || analysis)}
           loading={loading}
@@ -777,6 +788,7 @@ function ProjectDetail({
   return (
     <Card as="section" className="project-detail">
       <ProjectDetailHeader
+        analysis={analysis}
         connection={connection}
         hasAnalysis={Boolean(connection.analysisSummary || analysis)}
         loading={loading}
@@ -802,7 +814,12 @@ function ProjectDetail({
           )}
         </div>
       ) : analysis ? (
-        <AnalysisBreakdown analysis={analysis} delta={delta} />
+        <AnalysisBreakdown
+          analysis={analysis}
+          delta={delta}
+          onReanalyze={() => onAnalyze(connection)}
+          reanalyzing={loading}
+        />
       ) : (
         <div className="analysis-empty">
           <div>
@@ -823,14 +840,16 @@ function ProjectDetail({
 }
 
 type ProjectDetailHeaderProps = Readonly<{
+  analysis: RepositoryAnalysis | null;
   connection: RepositoryConnection;
   hasAnalysis: boolean;
   loading: boolean;
-  onAnalyze: (connection: RepositoryConnection) => void;
+  onAnalyze: (connection: RepositoryConnection) => Promise<void>;
   onDisconnect: (id: string) => void;
 }>;
 
 function ProjectDetailHeader({
+  analysis,
   connection,
   hasAnalysis,
   loading,
@@ -850,35 +869,58 @@ function ProjectDetailHeader({
             Open repository
           </a>
         </p>
+        {analysis && (
+          <div className="project-detail__analysis-meta">
+            <Badge>{formatProvider(analysis.analysis.provider)}</Badge>
+            <Badge
+              className={statusBadgeClassName(analysis.analysis.overallStatus)}
+            >
+              {statusMeta(analysis.analysis.overallStatus).label}
+            </Badge>
+            <span>Run {analysis.runNumber}</span>
+            <span>
+              Analyzed {formatRelative(analysis.analyzedAt)}
+            </span>
+            <code>{analysis.workflowPath}</code>
+          </div>
+        )}
       </div>
-      <div className="project-detail__actions">
-        <Button
-          className="button--small"
-          disabled={loading}
-          onClick={() => onAnalyze(connection)}
-          variant="secondary"
-        >
-          {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
-        </Button>
-        <a
-          aria-label={`Open ${connection.owner}/${connection.name} on GitHub`}
-          className="icon-button"
-          href={connection.url}
-          rel="noreferrer"
-          target="_blank"
-          title="Open on GitHub"
-        >
-          <IconExternal />
-        </a>
-        <button
-          aria-label={`Disconnect ${connection.owner}/${connection.name}`}
-          className="icon-button icon-button--danger"
-          onClick={() => onDisconnect(connection.id)}
-          title="Disconnect repository"
-          type="button"
-        >
-          <IconTrash />
-        </button>
+      <div className="project-detail__side">
+        <div className="project-detail__actions">
+          <Button
+            className="button--small"
+            disabled={loading}
+            onClick={() => onAnalyze(connection)}
+            variant="secondary"
+          >
+            {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
+          </Button>
+          <a
+            aria-label={`Open ${connection.owner}/${connection.name} on GitHub`}
+            className="icon-button"
+            href={connection.url}
+            rel="noreferrer"
+            target="_blank"
+            title="Open on GitHub"
+          >
+            <IconExternal />
+          </a>
+          <button
+            aria-label={`Disconnect ${connection.owner}/${connection.name}`}
+            className="icon-button icon-button--danger"
+            onClick={() => onDisconnect(connection.id)}
+            title="Disconnect repository"
+            type="button"
+          >
+            <IconTrash />
+          </button>
+        </div>
+        {analysis && (
+          <div className="analysis-score project-detail__score">
+            <strong>{formatScore(analysis.analysis.overallScore)}</strong>
+            <span>Level {analysis.analysis.overallLevel}</span>
+          </div>
+        )}
       </div>
     </header>
   );
@@ -887,9 +929,21 @@ function ProjectDetailHeader({
 type AnalysisBreakdownProps = Readonly<{
   analysis: RepositoryAnalysis;
   delta: RepositoryAnalysisDelta | null;
+  onReanalyze: () => Promise<void>;
+  reanalyzing: boolean;
 }>;
 
-function AnalysisBreakdown({ analysis, delta }: AnalysisBreakdownProps) {
+type AnalysisDetailTab = "findings" | "quality" | "delta";
+
+function AnalysisBreakdown({
+  analysis,
+  delta,
+  onReanalyze,
+  reanalyzing,
+}: AnalysisBreakdownProps) {
+  const [activeTab, setActiveTab] = useState<AnalysisDetailTab>("quality");
+  const [findingFilter, setFindingFilter] = useState<FindingFilter>("missing");
+  const [findingDimension, setFindingDimension] = useState<string | null>(null);
   const findings = flattenAnalysisFindings(analysis.analysis.dimensions);
   const openFindings = findings.filter(
     (finding) => finding.finding.type !== "POSITIVE",
@@ -904,62 +958,117 @@ function AnalysisBreakdown({ analysis, delta }: AnalysisBreakdownProps) {
 
   return (
     <div className="analysis-breakdown">
-      <div className="analysis-panel__header">
-        <div>
-          <Eyebrow>Analysis result</Eyebrow>
-          <h3>{analysis.repository}</h3>
-          <p>
-            {formatProvider(analysis.analysis.provider)} ·{" "}
-            Run {analysis.runNumber} · <code>{analysis.workflowPath}</code>
-          </p>
-        </div>
-        <div className="analysis-score">
-          <strong>{formatScore(analysis.analysis.overallScore)}</strong>
-          <span>Level {analysis.analysis.overallLevel}</span>
-        </div>
-      </div>
-
-      <div className="analysis-meta">
-        <Badge>{formatProvider(analysis.analysis.provider)}</Badge>
-        <Badge
-          className={statusBadgeClassName(analysis.analysis.overallStatus)}
+      <div className="analysis-tabs" aria-label="Analysis detail sections">
+        <button
+          className={activeTab === "findings" ? "analysis-tabs__item--active" : ""}
+          onClick={() => setActiveTab("findings")}
+          type="button"
         >
-          {statusMeta(analysis.analysis.overallStatus).label}
-        </Badge>
-        <span>
-          {openFindings.length} open{" "}
-          {openFindings.length === 1 ? "issue" : "issues"}
-        </span>
-        <span>Analyzed {formatRelative(analysis.analyzedAt)}</span>
+          Findings {openFindings.length}
+        </button>
+        <button
+          className={activeTab === "quality" ? "analysis-tabs__item--active" : ""}
+          onClick={() => setActiveTab("quality")}
+          type="button"
+        >
+          Quality areas
+        </button>
+        <button
+          className={activeTab === "delta" ? "analysis-tabs__item--active" : ""}
+          onClick={() => setActiveTab("delta")}
+          type="button"
+        >
+          Delta
+        </button>
       </div>
 
-      <AnalysisDeltaPanel delta={delta} />
+      {activeTab === "findings" && (
+        <>
+          <DeltaInlineNotice delta={delta} onOpenDelta={() => setActiveTab("delta")} />
+          <FindingsTable
+            dimensionFilter={findingDimension}
+            filter={findingFilter}
+            findings={findings}
+            onClearDimensionFilter={() => setFindingDimension(null)}
+            onFilterChange={setFindingFilter}
+            onReanalyze={onReanalyze}
+            reanalyzing={reanalyzing}
+            workflowContent={analysis.workflowContent}
+            workflowPath={analysis.workflowPath}
+          />
+        </>
+      )}
 
-      <div className="scanner-summary" aria-label="Analysis finding summary">
-        <div>
-          <span>Open issues</span>
-          <strong>{openFindings.length}</strong>
-        </div>
-        <div>
-          <span>Missing controls</span>
-          <strong>{missing.length}</strong>
-        </div>
-        <div>
-          <span>Smells</span>
-          <strong>{smells.length}</strong>
-        </div>
-        <div>
-          <span>Detected checks</span>
-          <strong>{passedFindings.length}</strong>
-        </div>
-      </div>
+      {activeTab === "quality" && (
+        <>
+          <div className="scanner-summary" aria-label="Analysis finding summary">
+            <div>
+              <span>Open issues</span>
+              <strong>{openFindings.length}</strong>
+            </div>
+            <div>
+              <span>Missing controls</span>
+              <strong>{missing.length}</strong>
+            </div>
+            <div>
+              <span>Smells</span>
+              <strong>{smells.length}</strong>
+            </div>
+            <div>
+              <span>Detected checks</span>
+              <strong>{passedFindings.length}</strong>
+            </div>
+          </div>
+          <QualityAreaTable
+            dimensions={analysis.analysis.dimensions}
+            findings={findings}
+            onSelectMissingDimension={(dimension) => {
+              setFindingFilter("missing");
+              setFindingDimension(dimension);
+              setActiveTab("findings");
+            }}
+          />
+        </>
+      )}
 
-      <QualityAreaTable
-        dimensions={analysis.analysis.dimensions}
-        findings={findings}
-      />
-      <FindingsTable findings={findings} />
+      {activeTab === "delta" && <AnalysisDeltaPanel delta={delta} />}
     </div>
+  );
+}
+
+type DeltaInlineNoticeProps = Readonly<{
+  delta: RepositoryAnalysisDelta | null;
+  onOpenDelta: () => void;
+}>;
+
+function DeltaInlineNotice({ delta, onOpenDelta }: DeltaInlineNoticeProps) {
+  if (!delta?.hasPrevious || !delta.overall) {
+    return null;
+  }
+
+  const changedFindings = delta.findingChanges.filter(
+    (finding) => finding.kind !== "unchanged",
+  );
+  const improved = changedFindings.filter(
+    (finding) => finding.direction === "improved",
+  ).length;
+  const worsened = changedFindings.filter(
+    (finding) => finding.direction === "worsened",
+  ).length;
+
+  if (improved === 0 && worsened === 0 && delta.overall.direction === "unchanged") {
+    return null;
+  }
+
+  return (
+    <button className="delta-inline" onClick={onOpenDelta} type="button">
+      <span>
+        Latest delta: {formatDeltaDirection(delta.overall.direction)}
+      </span>
+      <strong>
+        {improved} improved · {worsened} worsened
+      </strong>
+    </button>
   );
 }
 
@@ -1106,9 +1215,14 @@ type FlattenedAnalysisFinding = Readonly<{
 type QualityAreaTableProps = Readonly<{
   dimensions: DimensionAnalysis[];
   findings: FlattenedAnalysisFinding[];
+  onSelectMissingDimension: (dimension: string) => void;
 }>;
 
-function QualityAreaTable({ dimensions, findings }: QualityAreaTableProps) {
+function QualityAreaTable({
+  dimensions,
+  findings,
+  onSelectMissingDimension,
+}: QualityAreaTableProps) {
   return (
     <section className="quality-area-panel">
       <header className="scanner-section-header">
@@ -1127,10 +1241,18 @@ function QualityAreaTable({ dimensions, findings }: QualityAreaTableProps) {
           const open = areaFindings.filter(
             (finding) => finding.finding.type !== "POSITIVE",
           ).length;
+          const missing = areaFindings.filter(
+            (finding) => finding.finding.type === "MISSING",
+          ).length;
           const passed = areaFindings.length - open;
           const status = statusMeta(dimension.status);
           return (
-            <article className="quality-area-row" key={dimension.dimension}>
+            <button
+              className="quality-area-row"
+              key={dimension.dimension}
+              onClick={() => onSelectMissingDimension(dimension.dimension)}
+              type="button"
+            >
               <div className="quality-area-row__main">
                 <strong>{info.label}</strong>
                 <span>{info.description}</span>
@@ -1149,9 +1271,10 @@ function QualityAreaTable({ dimensions, findings }: QualityAreaTableProps) {
               </div>
               <div className="quality-area-row__counts">
                 <span>{open} open</span>
+                <span>{missing} missing</span>
                 <span>{passed} detected</span>
               </div>
-            </article>
+            </button>
           );
         })}
       </div>
@@ -1159,27 +1282,80 @@ function QualityAreaTable({ dimensions, findings }: QualityAreaTableProps) {
   );
 }
 
-type FindingFilter = "open" | "passed" | "all";
+type FindingFilter = "missing" | "smell" | "passed" | "all";
 
 type FindingsTableProps = Readonly<{
+  dimensionFilter: string | null;
+  filter: FindingFilter;
   findings: FlattenedAnalysisFinding[];
+  onClearDimensionFilter: () => void;
+  onFilterChange: (filter: FindingFilter) => void;
+  onReanalyze: () => Promise<void>;
+  reanalyzing: boolean;
+  workflowContent: string | null;
+  workflowPath: string;
 }>;
 
-function FindingsTable({ findings }: FindingsTableProps) {
-  const [filter, setFilter] = useState<FindingFilter>("open");
-  const filteredFindings = findings.filter((finding) => {
-    if (filter === "open") {
-      return finding.finding.type !== "POSITIVE";
+function FindingsTable({
+  dimensionFilter,
+  filter,
+  findings,
+  onClearDimensionFilter,
+  onFilterChange,
+  onReanalyze,
+  reanalyzing,
+  workflowContent,
+  workflowPath,
+}: FindingsTableProps) {
+  const [selectedFinding, setSelectedFinding] =
+    useState<FlattenedAnalysisFinding | null>(null);
+  const scopedFindings = dimensionFilter
+    ? findings.filter(
+        (finding) => finding.dimension.dimension === dimensionFilter,
+      )
+    : findings;
+  const missingFindings = scopedFindings.filter(
+    (finding) => finding.finding.type === "MISSING",
+  );
+  const smellFindings = scopedFindings.filter(
+    (finding) => finding.finding.type === "SMELL",
+  );
+  const passedFindings = scopedFindings.filter(
+    (finding) => finding.finding.type === "POSITIVE",
+  );
+  const passedCount = passedFindings.length;
+  const filteredFindings = scopedFindings.filter((finding) => {
+    if (filter === "missing") {
+      return finding.finding.type === "MISSING";
+    }
+    if (filter === "smell") {
+      return finding.finding.type === "SMELL";
     }
     if (filter === "passed") {
       return finding.finding.type === "POSITIVE";
     }
     return true;
   });
-  const openCount = findings.filter(
-    (finding) => finding.finding.type !== "POSITIVE",
-  ).length;
-  const passedCount = findings.length - openCount;
+  const scopedDimension = dimensionFilter
+    ? dimensionMeta(dimensionFilter)
+    : null;
+
+  useEffect(() => {
+    if (!selectedFinding) {
+      return;
+    }
+
+    const nextSelectedFinding = findings.find(
+      (finding) => findingKey(finding) === findingKey(selectedFinding),
+    );
+    if (!nextSelectedFinding) {
+      setSelectedFinding(null);
+      return;
+    }
+    if (nextSelectedFinding !== selectedFinding) {
+      setSelectedFinding(nextSelectedFinding);
+    }
+  }, [findings, selectedFinding]);
 
   return (
     <section className="findings-panel">
@@ -1190,30 +1366,53 @@ function FindingsTable({ findings }: FindingsTableProps) {
         </div>
         <div className="findings-filter" aria-label="Finding filter">
           <button
-            className={filter === "open" ? "findings-filter__item--active" : ""}
-            onClick={() => setFilter("open")}
+            className={
+              filter === "missing" ? "findings-filter__item--active" : ""
+            }
+            onClick={() => onFilterChange("missing")}
             type="button"
           >
-            Open {openCount}
+            Missing {missingFindings.length}
+          </button>
+          <button
+            className={
+              filter === "smell" ? "findings-filter__item--active" : ""
+            }
+            onClick={() => onFilterChange("smell")}
+            type="button"
+          >
+            Needs review {smellFindings.length}
           </button>
           <button
             className={
               filter === "passed" ? "findings-filter__item--active" : ""
             }
-            onClick={() => setFilter("passed")}
+            onClick={() => onFilterChange("passed")}
             type="button"
           >
             Detected {passedCount}
           </button>
           <button
             className={filter === "all" ? "findings-filter__item--active" : ""}
-            onClick={() => setFilter("all")}
+            onClick={() => onFilterChange("all")}
             type="button"
           >
-            All {findings.length}
+            All {scopedFindings.length}
           </button>
         </div>
       </header>
+
+      {scopedDimension && (
+        <div className="findings-scope">
+          <div>
+            <span>{findingFilterTitle(filter).toLowerCase()} for</span>
+            <strong>{scopedDimension.label}</strong>
+          </div>
+          <button onClick={onClearDimensionFilter} type="button">
+            Show all categories
+          </button>
+        </div>
+      )}
 
       {filteredFindings.length === 0 ? (
         <div className="findings-empty">
@@ -1221,29 +1420,187 @@ function FindingsTable({ findings }: FindingsTableProps) {
           <p>Switch filters to inspect detected checks or all analyzer output.</p>
         </div>
       ) : (
-        <div className="findings-list" aria-label="Findings">
-          {filteredFindings.map((finding) => (
-            <FindingRow
-              finding={finding}
-              key={`${finding.finding.ruleId}-${finding.finding.dimension}-${finding.finding.capability}-${finding.finding.type}`}
-            />
-          ))}
-        </div>
+        <FindingsContent
+          dimensionFilter={dimensionFilter}
+          filter={filter}
+          findings={filteredFindings}
+          onSelectFinding={setSelectedFinding}
+        />
       )}
+      <FindingSourceDialog
+        finding={selectedFinding}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedFinding(null);
+          }
+        }}
+        onReanalyze={onReanalyze}
+        reanalyzing={reanalyzing}
+        workflowContent={workflowContent}
+        workflowPath={workflowPath}
+      />
     </section>
   );
 }
 
-type FindingRowProps = Readonly<{
-  finding: FlattenedAnalysisFinding;
+type FindingsContentProps = Readonly<{
+  dimensionFilter: string | null;
+  filter: FindingFilter;
+  findings: FlattenedAnalysisFinding[];
+  onSelectFinding: (finding: FlattenedAnalysisFinding) => void;
 }>;
 
-function FindingRow({ finding }: FindingRowProps) {
+function FindingsContent({
+  dimensionFilter,
+  filter,
+  findings,
+  onSelectFinding,
+}: FindingsContentProps) {
+  if (filter === "missing" && !dimensionFilter) {
+    return (
+      <div className="findings-groups">
+        {groupFindingsByDimension(findings).map((group) => (
+          <FindingGroup
+            description={group.description}
+            findings={group.findings}
+            key={group.dimension}
+            onSelectFinding={onSelectFinding}
+            title={group.label}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <details
+    <FindingGroup
+      description={findingFilterDescription(filter)}
+      findings={findings}
+      onSelectFinding={onSelectFinding}
+      title={findingFilterTitle(filter)}
+    />
+  );
+}
+
+function groupFindingsByDimension(findings: FlattenedAnalysisFinding[]) {
+  const groups = new Map<
+    string,
+    {
+      description: string;
+      dimension: string;
+      findings: FlattenedAnalysisFinding[];
+      label: string;
+    }
+  >();
+
+  findings.forEach((finding) => {
+    const current = groups.get(finding.dimension.dimension);
+    if (current) {
+      current.findings.push(finding);
+      return;
+    }
+    groups.set(finding.dimension.dimension, {
+      description: finding.dimensionDescription,
+      dimension: finding.dimension.dimension,
+      findings: [finding],
+      label: finding.dimensionLabel,
+    });
+  });
+
+  return Array.from(groups.values());
+}
+
+type FindingGroupProps = Readonly<{
+  description: string;
+  findings: FlattenedAnalysisFinding[];
+  onSelectFinding: (finding: FlattenedAnalysisFinding) => void;
+  title: string;
+}>;
+
+function FindingGroup({
+  description,
+  findings,
+  onSelectFinding,
+  title,
+}: FindingGroupProps) {
+  if (findings.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="findings-group">
+      <header className="findings-group__header">
+        <div>
+          <h5>{title}</h5>
+          <p>{description}</p>
+        </div>
+        <span>
+          {findings.length} {findings.length === 1 ? "finding" : "findings"}
+        </span>
+      </header>
+      <div className="findings-list" aria-label={title}>
+        {findings.map((finding, index) => (
+          <FindingRow
+            finding={finding}
+            key={`${findingKey(finding)}-${index}`}
+            onSelect={onSelectFinding}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function findingFilterTitle(filter: FindingFilter): string {
+  if (filter === "missing") {
+    return "Missing practices";
+  }
+  if (filter === "smell") {
+    return "Needs review";
+  }
+  if (filter === "passed") {
+    return "Detected checks";
+  }
+  return "All findings";
+}
+
+function findingFilterDescription(filter: FindingFilter): string {
+  if (filter === "missing") {
+    return "Practices Scaffy expected but could not find in this workflow.";
+  }
+  if (filter === "smell") {
+    return "Existing workflow configuration that deserves review before it becomes a reliability or security problem.";
+  }
+  if (filter === "passed") {
+    return "Signals Scaffy found and counted toward the repository score.";
+  }
+  return "Every analyzer signal for this workflow, including missing practices, review items, and detected checks.";
+}
+
+function findingKey(finding: FlattenedAnalysisFinding): string {
+  return [
+    finding.finding.ruleId,
+    finding.finding.dimension,
+    finding.finding.capability,
+    finding.finding.type,
+    finding.finding.location ?? "",
+    finding.finding.evidence ?? "",
+  ].join("|");
+}
+
+type FindingRowProps = Readonly<{
+  finding: FlattenedAnalysisFinding;
+  onSelect: (finding: FlattenedAnalysisFinding) => void;
+}>;
+
+function FindingRow({ finding, onSelect }: FindingRowProps) {
+  return (
+    <button
       className={`finding-row finding-row--${finding.finding.type.toLowerCase()}`}
+      onClick={() => onSelect(finding)}
+      type="button"
     >
-      <summary className="finding-row__summary">
+      <span className="finding-row__summary">
         <span className="finding-row__main">
           <span className="finding-row__heading">
             <Badge
@@ -1267,20 +1624,210 @@ function FindingRow({ finding }: FindingRowProps) {
             )}
           </span>
         </span>
-      </summary>
-      <div className="finding-row__details">
-        <div>
-          <strong>Area</strong>
-          <p>{finding.dimensionDescription}</p>
-          <p>{finding.capabilityDescription}</p>
-        </div>
-        <div>
-          <strong>Evidence</strong>
-          <p>{finding.finding.evidence ?? "No evidence was emitted."}</p>
-          {finding.finding.location && <code>{finding.finding.location}</code>}
-        </div>
-      </div>
-    </details>
+      </span>
+    </button>
+  );
+}
+
+type FindingSourceDialogProps = Readonly<{
+  finding: FlattenedAnalysisFinding | null;
+  onOpenChange: (open: boolean) => void;
+  onReanalyze: () => Promise<void>;
+  reanalyzing: boolean;
+  workflowContent: string | null;
+  workflowPath: string;
+}>;
+
+function FindingSourceDialog({
+  finding,
+  onOpenChange,
+  onReanalyze,
+  reanalyzing,
+  workflowContent,
+  workflowPath,
+}: FindingSourceDialogProps) {
+  const source = finding?.finding.source ?? null;
+  const canShowSource = Boolean(finding && source && workflowContent);
+
+  async function handleReanalyze() {
+    await onReanalyze();
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog.Root onOpenChange={onOpenChange} open={Boolean(finding)}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="source-dialog__overlay" />
+        <Dialog.Content className="source-dialog">
+          <header className="source-dialog__header">
+            <div>
+              <Eyebrow>Workflow source</Eyebrow>
+              <Dialog.Title className="source-dialog__title">
+                {finding?.ruleLabel ?? "Finding source"}
+              </Dialog.Title>
+              <Dialog.Description className="source-dialog__description">
+                {workflowPath}
+              </Dialog.Description>
+            </div>
+            <Dialog.Close className="icon-button" aria-label="Close source viewer">
+              <IconClose />
+            </Dialog.Close>
+          </header>
+
+          {finding && canShowSource && source && workflowContent ? (
+            <>
+              <div className="source-dialog__meta">
+                <Badge
+                  className={`finding-badge finding-badge--${finding.finding.type.toLowerCase()}`}
+                >
+                  {finding.typeLabel}
+                </Badge>
+                <span className="source-dialog__meta-group">
+                  <span>{finding.dimensionLabel}</span>
+                  <span>{finding.capabilityLabel}</span>
+                </span>
+                <span className="source-dialog__meta-location">
+                  <code>{source.path}</code>
+                  <span>
+                    Line {source.startLine}
+                    {source.endLine !== source.startLine
+                      ? `-${source.endLine}`
+                      : ""}
+                  </span>
+                </span>
+              </div>
+              {finding.finding.evidence && (
+                <p className="source-dialog__evidence">
+                  {finding.finding.evidence}
+                </p>
+              )}
+              <SourceCodeViewer content={workflowContent} source={source} />
+            </>
+          ) : (
+            <div className="source-dialog__empty">
+              <h4>Exact source is not available</h4>
+              <p>
+                {workflowContent
+                  ? "This finding does not map to a concrete YAML node."
+                  : "This analysis was created before Scaffy stored workflow source. Re-run the analyzer to enable click-to-code navigation."}
+              </p>
+              {!workflowContent && (
+                <Button disabled={reanalyzing} onClick={handleReanalyze}>
+                  {reanalyzing ? "Analyzing" : "Re-analyze repository"}
+                </Button>
+              )}
+            </div>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+type SourceCodeViewerProps = Readonly<{
+  content: string;
+  source: NonNullable<CapabilityFinding["source"]>;
+}>;
+
+function SourceCodeViewer({ content, source }: SourceCodeViewerProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const monacoRef = useRef<typeof Monaco | null>(null);
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+  const decorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(
+    null,
+  );
+  const [editorReadyKey, setEditorReadyKey] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) {
+      return undefined;
+    }
+
+    let disposed = false;
+    let model: Monaco.editor.ITextModel | null = null;
+    let editor: Monaco.editor.IStandaloneCodeEditor | null = null;
+
+    void Promise.all([
+      import("monaco-editor/esm/vs/editor/editor.api.js"),
+      import("monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js"),
+      import("monaco-editor/min/vs/editor/editor.main.css"),
+    ]).then(([monacoModule]) => {
+      if (disposed || !containerRef.current) {
+        return;
+      }
+
+      const monacoApi = monacoModule as unknown as typeof Monaco;
+      monacoRef.current = monacoApi;
+      model = monacoApi.editor.createModel(content, "yaml");
+      editor = monacoApi.editor.create(containerRef.current, {
+        automaticLayout: true,
+        contextmenu: false,
+        folding: true,
+        fontFamily:
+          "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontSize: 12,
+        glyphMargin: false,
+        language: "yaml",
+        lineDecorationsWidth: 0,
+        lineNumbersMinChars: 3,
+        minimap: { enabled: false },
+        model,
+        overviewRulerLanes: 0,
+        readOnly: true,
+        renderLineHighlight: "none",
+        scrollBeyondLastLine: false,
+        stickyScroll: { enabled: false },
+        theme: "vs",
+        wordWrap: "off",
+      });
+      editorRef.current = editor;
+      setEditorReadyKey((current) => current + 1);
+    });
+
+    return () => {
+      disposed = true;
+      decorationsRef.current?.clear();
+      decorationsRef.current = null;
+      editorRef.current = null;
+      editor?.dispose();
+      model?.dispose();
+    };
+  }, [content]);
+
+  useEffect(() => {
+    const monacoApi = monacoRef.current;
+    const editor = editorRef.current;
+    if (!monacoApi || !editor) {
+      return;
+    }
+
+    decorationsRef.current = editor.createDecorationsCollection([
+      {
+        options: {
+          className: "source-monaco-line-highlight",
+          isWholeLine: true,
+        },
+        range: new monacoApi.Range(
+          source.startLine,
+          1,
+          source.endLine,
+          Number.MAX_SAFE_INTEGER,
+        ),
+      },
+    ]);
+    editor.revealLineInCenter(
+      source.startLine,
+      monacoApi.editor.ScrollType.Smooth,
+    );
+  }, [editorReadyKey, source.endLine, source.startLine]);
+
+  return (
+    <div
+      className="source-viewer source-viewer--monaco"
+      ref={containerRef}
+      role="region"
+      aria-label="Workflow YAML"
+    />
   );
 }
 
