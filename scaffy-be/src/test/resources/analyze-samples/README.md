@@ -44,6 +44,16 @@ Expected behavior:
 | `security-03-dependency-scan-partial.yml` | Partial dependency scanning workflow with automatic pull request trigger. |
 | `security-04-gitlab-security-reports-complete.yml` | Complete GitLab security report workflow with SAST, dependency, container, and secret reports. |
 | `security-05-container-iac-secret-scan.yml` | Partial workflow with secret, container, and IaC scanning. |
+| `workflow-01-missing-permissions.yml` | GitHub workflow without an explicit `permissions:` block — exercises the MISSING_PERMISSIONS smell. |
+| `workflow-02-unpinned-actions.yml` | Actions referenced by floating `@v4` tags rather than commit SHAs — exercises UNPINNED_ACTION_VERSION. |
+| `workflow-03-timeout-missing.yml` | Job without `timeout-minutes:` — exercises MISSING_TIMEOUT. |
+| `workflow-04-concurrency-present.yml` | Positive: workflow with `concurrency.cancel-in-progress` — satisfies MISSING_CONCURRENCY_CONTROL. |
+| `workflow-05-path-filters.yml` | Positive: trigger gated by `on.push.paths` and `on.pull_request.paths` — satisfies NO_PATH_FILTERS. |
+| `workflow-06-hardcoded-secret.yml` | Anti-pattern: credentials inlined under `env:` and used in shell — exercises HARDCODED_SECRET. |
+| `workflow-07-policy-as-code.yml` | Positive: policy-as-code via Conftest, Checkov, and OPA — satisfies the policy-as-code special case. |
+| `workflow-08-rollback-signal.yml` | Positive GitLab CI: explicit rollback stage with `when: on_failure` and `kubectl rollout undo` — satisfies ROLLBACK_SIGNAL_PRESENT. |
+| `workflow-09-default-job-names.yml` | Jobs called `job1` / `build` without descriptive names — exercises DEFAULT_JOB_NAME. |
+| `workflow-10-matrix-cache-use.yml` | Positive: matrix strategy across OSes/Node versions with `actions/cache` and `setup-node` cache — satisfies NO_MULTI_OS_TEST / MISSING_CACHE_SIGNAL. |
 
 Example:
 
