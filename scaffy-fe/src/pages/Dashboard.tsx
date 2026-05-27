@@ -37,6 +37,7 @@ import {
   capabilityMeta,
   dimensionMeta,
   findingTypeMeta,
+  formatMaturityLevel,
   formatProvider,
   formatScore,
   ruleMeta,
@@ -918,7 +919,7 @@ function ProjectDetailHeader({
         {analysis && (
           <div className="analysis-score project-detail__score">
             <strong>{formatScore(analysis.analysis.overallScore)}</strong>
-            <span>Level {analysis.analysis.overallLevel}</span>
+            <span>{formatMaturityLevel(analysis.analysis.overallLevel)}</span>
           </div>
         )}
       </div>
@@ -1266,7 +1267,7 @@ function QualityAreaTable({
                 <span>
                   {dimension.status === "not_evaluated"
                     ? status.label
-                    : `Level ${dimension.level}`}
+                    : formatMaturityLevel(dimension.level)}
                 </span>
               </div>
               <div className="quality-area-row__counts">

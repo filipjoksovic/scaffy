@@ -642,6 +642,23 @@ export function formatScore(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
+const MATURITY_LEVEL_LABELS: Record<number, string> = {
+  1: "Initial / Chaos",
+  2: "Basic CI",
+  3: "Structured Delivery",
+  4: "Governed Automation",
+  5: "Advanced Pipeline",
+};
+
+export function maturityLevelLabel(level: number): string {
+  return MATURITY_LEVEL_LABELS[level] ?? `Level ${level}`;
+}
+
+export function formatMaturityLevel(level: number): string {
+  const label = MATURITY_LEVEL_LABELS[level];
+  return label ? `L${level} · ${label}` : `Level ${level}`;
+}
+
 export function formatFileSize(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
