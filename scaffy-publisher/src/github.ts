@@ -64,7 +64,7 @@ export class GitHubPublisher {
       `read ${owner}/${repo} ${branch} branch reference`,
     )
 
-    for (const file of files) {
+    for (const file of orderFilesForUpload(files)) {
       const existingSha = await this.existingFileSha(token, owner, repo, branch, file.path)
       await this.request<GitHubBlob>(
         token,
@@ -219,4 +219,15 @@ function delay(ms: number): Promise<void> {
 
 function encodePath(filePath: string): string {
   return filePath.split('/').map(encodeURIComponent).join('/')
+}
+
+function orderFilesForUpload(files: ExtractedFile[]): ExtractedFile[] {
+  return [...files].sort((left, right) => {
+    const priorityDelta = uploadPriority(left.path) - uploadPriority(right.path)
+    return priorityDelta || left.path.localeCompare(right.path)
+  })
+}
+
+function uploadPriority(filePath: string): number {
+  return filePath.startsWith('.github/workflows/') ? 1 : 0
 }
