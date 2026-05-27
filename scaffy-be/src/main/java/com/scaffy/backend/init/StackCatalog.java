@@ -89,7 +89,7 @@ public class StackCatalog {
 			List.of(
 					maturity(
 							MATURITY_L1,
-							"L1 Minimal",
+							"L1 Initial / Chaos",
 							"Small CI surface for prototypes: build validation and selected runtimes.",
 							1,
 							false),

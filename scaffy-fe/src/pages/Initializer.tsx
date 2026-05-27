@@ -563,7 +563,7 @@ function MaturityLockedCard() {
           <div className="maturity-locked__title-row">
             <span className="maturity-card__name">
               <span className="maturity-card__level">L5</span>
-              Advanced delivery
+              Advanced Pipeline
             </span>
             <span className="maturity-locked__chip">Coming later</span>
           </div>
