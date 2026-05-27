@@ -1,17 +1,27 @@
-import { useMemo, useState } from 'react'
-import { AppFrame, Button, Card, Eyebrow, StateRow, TextInput } from '../components'
-import { ChoiceCard } from '../components/wizard/ChoiceCard'
-import { StepIndicator } from '../components/wizard/StepIndicator'
-import { downloadBlob, initProject } from '../api/init'
-import { BACKENDS, FRONTENDS, PIPELINES, findOption } from '../catalog'
+import { useEffect, useMemo, useState } from 'react'
+import { AppFrame, Button, StateRow, TextInput } from '../components'
+import { StackIcon } from '../components/wizard/StackIcon'
+import {
+  createInitJob,
+  downloadBlob,
+  downloadInitJob,
+  getInitCatalog,
+  getInitJob,
+  type InitCatalog,
+  type InitJob,
+  type PipelineCatalogOption,
+  type StackCatalogOption,
+} from '../api/init'
 
 const PROJECT_NAME_PATTERN = /^[a-z][a-z0-9-]*[a-z0-9]$/
-const STEPS = ['Stack', 'Pipeline', 'Configuration', 'Review']
-const TOTAL_STEPS = STEPS.length
 
 type WizardState = {
   backend: string
+  backendRuntime: string
+  backendVersion: string
   frontend: string
+  frontendRuntime: string
+  frontendVersion: string
   pipeline: string
   projectName: string
   includeDocker: boolean
@@ -19,67 +29,118 @@ type WizardState = {
 
 type GenerationStatus =
   | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'success' }
-  | { kind: 'error'; message: string }
+  | { kind: 'loading'; job?: InitJob }
+  | { kind: 'success'; job: InitJob }
+  | { kind: 'error'; message: string; job?: InitJob }
 
 const initialState: WizardState = {
-  backend: 'spring-boot',
-  frontend: 'angular',
+  backend: '',
+  backendRuntime: '',
+  backendVersion: '',
+  frontend: '',
+  frontendRuntime: '',
+  frontendVersion: '',
   pipeline: '',
   projectName: '',
   includeDocker: false,
 }
 
 export function Initializer() {
-  const [step, setStep] = useState(1)
+  const [catalog, setCatalog] = useState<InitCatalog | null>(null)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   const [state, setState] = useState<WizardState>(initialState)
   const [status, setStatus] = useState<GenerationStatus>({ kind: 'idle' })
 
+  useEffect(() => {
+    let mounted = true
+
+    getInitCatalog()
+      .then((nextCatalog) => {
+        if (!mounted) return
+        setCatalog(nextCatalog)
+        setState((prev) => withCatalogDefaults(prev, nextCatalog))
+      })
+      .catch((err) => {
+        if (!mounted) return
+        setCatalogError(err instanceof Error ? err.message : 'Could not load initializer catalog.')
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const projectNameError = useMemo(() => validateProjectName(state.projectName), [state.projectName])
 
-  const canAdvance = useMemo(() => {
-    if (step === 1) return Boolean(state.frontend && state.backend)
-    if (step === 2) return Boolean(state.pipeline)
-    if (step === 3) return Boolean(state.projectName) && projectNameError === null
-    return true
-  }, [step, state, projectNameError])
+  const canGenerate = useMemo(() => {
+    if (!catalog) return false
+    if (status.kind === 'loading') return false
+    return Boolean(
+      state.frontend &&
+        state.frontendVersion &&
+        state.frontendRuntime &&
+        state.backend &&
+        state.backendVersion &&
+        state.backendRuntime &&
+        state.pipeline &&
+        state.projectName &&
+        projectNameError === null,
+    )
+  }, [catalog, state, projectNameError, status.kind])
 
   function update<K extends keyof WizardState>(key: K, value: WizardState[K]) {
-    setState((prev) => ({ ...prev, [key]: value }))
-  }
+    setStatus((prev) => (prev.kind === 'error' ? { kind: 'idle' } : prev))
+    setState((prev) => {
+      const next = { ...prev, [key]: value }
+      if (!catalog) return next
 
-  function next() {
-    if (canAdvance && step < TOTAL_STEPS) setStep(step + 1)
-  }
-
-  function back() {
-    if (step > 1) setStep(step - 1)
-    if (status.kind === 'error') setStatus({ kind: 'idle' })
-  }
-
-  function jump(target: number) {
-    if (target <= step) setStep(target)
+      if (key === 'frontend') return withStackDefaults(next, catalog.frontends, 'frontend')
+      if (key === 'frontendVersion') return withRuntimeDefault(next, catalog.frontends, 'frontend')
+      if (key === 'backend') return withStackDefaults(next, catalog.backends, 'backend')
+      if (key === 'backendVersion') return withRuntimeDefault(next, catalog.backends, 'backend')
+      return next
+    })
   }
 
   function startOver() {
-    setState(initialState)
+    setState(catalog ? withCatalogDefaults(initialState, catalog) : initialState)
     setStatus({ kind: 'idle' })
-    setStep(1)
   }
 
   async function generate() {
+    if (!catalog) return
     setStatus({ kind: 'loading' })
     try {
-      const blob = await initProject({
+      const created = await createInitJob({
         projectName: state.projectName,
         frontend: state.frontend,
+        frontendVersion: state.frontendVersion,
+        frontendRuntime: state.frontendRuntime,
         backend: state.backend,
+        backendVersion: state.backendVersion,
+        backendRuntime: state.backendRuntime,
         pipeline: state.pipeline,
         includeDocker: state.includeDocker,
       })
-      downloadBlob(blob, `${state.projectName}.zip`)
-      setStatus({ kind: 'success' })
+      setStatus({ kind: 'loading', job: created })
+
+      let current = created
+      while (current.status === 'queued' || current.status === 'running') {
+        await delay(1400)
+        current = await getInitJob(created.jobId)
+        setStatus({ kind: 'loading', job: current })
+      }
+
+      if (current.status === 'succeeded') {
+        setStatus({ kind: 'success', job: current })
+        return
+      }
+
+      setStatus({
+        kind: 'error',
+        job: current,
+        message: current.errorMessage || 'Generation failed.',
+      })
     } catch (err) {
       setStatus({
         kind: 'error',
@@ -88,74 +149,135 @@ export function Initializer() {
     }
   }
 
+  async function downloadGeneratedJob(job: InitJob) {
+    try {
+      const blob = await downloadInitJob(job.jobId)
+      downloadBlob(blob, `${state.projectName}.zip`)
+    } catch (err) {
+      setStatus({
+        kind: 'error',
+        job,
+        message: err instanceof Error ? err.message : 'Download failed.',
+      })
+    }
+  }
+
   return (
     <AppFrame>
-      <section aria-labelledby="wizard-title" className="wizard-band">
-        <header className="wizard-header">
-          <Eyebrow>Project initializer</Eyebrow>
-          <h1 id="wizard-title">Scaffold a new project with a working pipeline.</h1>
+      <section aria-labelledby="wizard-title" className="init-band">
+        <header className="init-hero">
+          <span className="init-hero__kicker">Project initializer</span>
+          <h1 id="wizard-title">Scaffold a new project in four steps.</h1>
           <p>
-            Pick a stack, a CI provider, and a project name. Scaffy returns a ZIP with the
-            scaffold, a Dockerfile, and the pipeline configuration ready to push.
+            Pick a stack, runtime, and pipeline. Scaffy queues the build and hands you back a ready-to-run
+            ZIP — no boilerplate hunting.
           </p>
         </header>
 
-        <StepIndicator current={step} onJump={jump} steps={STEPS} />
-
-        <div className="wizard-panel">
-          {step === 1 && <StackStep state={state} update={update} />}
-          {step === 2 && <PipelineStep state={state} update={update} />}
-          {step === 3 && (
-            <ConfigStep error={projectNameError} state={state} update={update} />
-          )}
-          {step === 4 && <ReviewStep onGenerate={generate} state={state} status={status} />}
-        </div>
-
-        {step === 4 && status.kind === 'success' && (
-          <div className="wizard-result">
-            <StateRow
-              detail={`${state.projectName}.zip is downloading. Unzip and follow the README.`}
-              icon="✓"
-              label="Project generated"
-              tone="success"
-            />
-            <button className="text-link" onClick={startOver} type="button">
-              Start over
-            </button>
-          </div>
+        {catalogError && (
+          <StateRow detail={catalogError} icon="!" label="Catalog unavailable" tone="error" />
         )}
 
-        {status.kind === 'error' && (
-          <div className="wizard-result">
-            <StateRow detail={status.message} icon="!" label="Generation failed" tone="error" />
-          </div>
+        {!catalog && !catalogError && (
+          <StateRow
+            detail="Loading supported stack and version presets."
+            label="Loading catalog"
+            tone="loading"
+          />
         )}
 
-        <div className="wizard-footer">
-          <Button
-            disabled={step === 1}
-            onClick={back}
-            variant="secondary"
-          >
-            Back
-          </Button>
-          {step < TOTAL_STEPS ? (
-            <Button disabled={!canAdvance} onClick={next}>
-              Continue
-            </Button>
-          ) : (
-            <Button
-              disabled={status.kind === 'loading'}
-              onClick={generate}
-              variant="download"
-            >
-              {status.kind === 'loading' ? 'Generating…' : 'Generate project'}
-            </Button>
-          )}
-        </div>
+        {catalog && (
+          <div className="init-layout">
+            <div className="init-config">
+              <WizardStep
+                index={1}
+                title="Project details"
+                hint="What should we call your repository?"
+              >
+                <ProjectDetailsStep error={projectNameError} state={state} update={update} />
+              </WizardStep>
+
+              <WizardStep
+                index={2}
+                title="Frontend"
+                hint="Pick a UI framework, version, and runtime."
+              >
+                <StackPresetGroup
+                  options={catalog.frontends}
+                  selectedId={state.frontend}
+                  selectedRuntimeId={state.frontendRuntime}
+                  selectedVersionId={state.frontendVersion}
+                  onSelect={(id) => update('frontend', id)}
+                  onRuntimeSelect={(id) => update('frontendRuntime', id)}
+                  onVersionSelect={(id) => update('frontendVersion', id)}
+                  group="frontend"
+                />
+              </WizardStep>
+
+              <WizardStep
+                index={3}
+                title="Backend"
+                hint="Choose the API framework that fits your team."
+              >
+                <StackPresetGroup
+                  options={catalog.backends}
+                  selectedId={state.backend}
+                  selectedRuntimeId={state.backendRuntime}
+                  selectedVersionId={state.backendVersion}
+                  onSelect={(id) => update('backend', id)}
+                  onRuntimeSelect={(id) => update('backendRuntime', id)}
+                  onVersionSelect={(id) => update('backendVersion', id)}
+                  group="backend"
+                />
+              </WizardStep>
+
+              <WizardStep
+                index={4}
+                title="CI / CD pipeline"
+                hint="We'll wire up a starter workflow that builds and tests both apps."
+              >
+                <PipelineStep catalog={catalog} state={state} update={update} />
+              </WizardStep>
+            </div>
+
+            <aside className="init-summary">
+              <ReviewPanel
+                canGenerate={canGenerate}
+                catalog={catalog}
+                onGenerate={generate}
+                onDownload={downloadGeneratedJob}
+                onRetry={generate}
+                onStartOver={startOver}
+                state={state}
+                status={status}
+              />
+            </aside>
+          </div>
+        )}
       </section>
-
     </AppFrame>
+  )
+}
+
+type WizardStepProps = {
+  index: number
+  title: string
+  hint: string
+  children: React.ReactNode
+}
+
+function WizardStep({ index, title, hint, children }: WizardStepProps) {
+  return (
+    <section className="init-step">
+      <header className="init-step__head">
+        <span className="init-step__index">{String(index).padStart(2, '0')}</span>
+        <div>
+          <h2 className="init-step__title">{title}</h2>
+          <p className="init-step__hint">{hint}</p>
+        </div>
+      </header>
+      <div className="init-step__body">{children}</div>
+    </section>
   )
 }
 
@@ -173,160 +295,539 @@ type StepProps = {
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void
 }
 
-function StackStep({ state, update }: StepProps) {
-  return (
-    <div className="wizard-step">
-      <div className="wizard-step__group">
-        <Eyebrow>Frontend</Eyebrow>
-        <div className="choice-grid" role="radiogroup" aria-label="Frontend framework">
-          {FRONTENDS.map((option) => (
-            <ChoiceCard
-              available={option.available}
-              description={option.description}
-              key={option.id}
-              name={option.name}
-              onSelect={() => update('frontend', option.id)}
-              selected={state.frontend === option.id}
-            />
-          ))}
-        </div>
-      </div>
+type CatalogStepProps = StepProps & { catalog: InitCatalog }
 
-      <div className="wizard-step__group">
-        <Eyebrow>Backend</Eyebrow>
-        <div className="choice-grid" role="radiogroup" aria-label="Backend framework">
-          {BACKENDS.map((option) => (
-            <ChoiceCard
-              available={option.available}
-              description={option.description}
-              key={option.id}
-              name={option.name}
-              onSelect={() => update('backend', option.id)}
-              selected={state.backend === option.id}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+type StackPresetGroupProps = {
+  options: StackCatalogOption[]
+  selectedId: string
+  selectedVersionId: string
+  selectedRuntimeId: string
+  onSelect: (id: string) => void
+  onVersionSelect: (id: string) => void
+  onRuntimeSelect: (id: string) => void
+  group: 'frontend' | 'backend'
 }
 
-function PipelineStep({ state, update }: StepProps) {
+function StackPresetGroup({
+  options,
+  selectedId,
+  selectedVersionId,
+  selectedRuntimeId,
+  onSelect,
+  onVersionSelect,
+  onRuntimeSelect,
+  group,
+}: StackPresetGroupProps) {
+  const selected = findById(options, selectedId)
+  const selectedVersion = findById(selected?.versions ?? [], selectedVersionId)
+
   return (
-    <div className="wizard-step">
-      <div className="wizard-step__group">
-        <Eyebrow>CI / CD pipeline</Eyebrow>
-        <div className="choice-grid choice-grid--two" role="radiogroup" aria-label="Pipeline provider">
-          {PIPELINES.map((option) => (
-            <ChoiceCard
-              available={option.available}
-              description={option.description}
+    <div className="stack-group">
+      <div className="stack-cards" role="radiogroup" aria-label={`${group} framework`}>
+        {options.map((option) => {
+          const isSelected = selectedId === option.id
+          const defaultVersion =
+            findById(option.versions, option.defaultVersionId) ?? option.versions[0]
+          const defaultRuntime =
+            findById(defaultVersion?.runtimes ?? [], defaultVersion?.defaultRuntimeId ?? '') ??
+            defaultVersion?.runtimes[0]
+
+          return (
+            <button
+              aria-checked={isSelected}
+              className={`stack-card${isSelected ? ' stack-card--selected' : ''}`}
               key={option.id}
-              name={option.name}
-              onSelect={() => update('pipeline', option.id)}
-              selected={state.pipeline === option.id}
-            />
-          ))}
-        </div>
+              onClick={() => onSelect(option.id)}
+              role="radio"
+              type="button"
+            >
+              <span className="stack-card__icon" aria-hidden="true">
+                <StackIcon id={option.id} />
+              </span>
+              <span className="stack-card__body">
+                <span className="stack-card__name">{option.name}</span>
+                <span className="stack-card__meta">
+                  {[defaultVersion?.label, defaultRuntime?.label].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              <span className="stack-card__mark" aria-hidden="true">
+                {isSelected ? <CheckIcon /> : null}
+              </span>
+            </button>
+          )
+        })}
       </div>
-    </div>
-  )
-}
 
-type ConfigStepProps = StepProps & { error: string | null }
-
-function ConfigStep({ error, state, update }: ConfigStepProps) {
-  return (
-    <div className="wizard-step">
-      <div className="wizard-step__group">
-        <Eyebrow>Project name</Eyebrow>
-        <Card as="form" className="config-form" onSubmit={(event) => event.preventDefault()}>
-          <label htmlFor="project-name">Project identifier</label>
-          <TextInput
-            aria-describedby="project-name-help"
-            aria-invalid={error !== null}
-            autoComplete="off"
-            id="project-name"
-            onChange={(event) => update('projectName', event.target.value)}
-            placeholder="my-app"
-            value={state.projectName}
+      {selected && selectedVersion && (
+        <div className="stack-detail">
+          <p className="stack-detail__copy">{selected.description}</p>
+          <ChipRow
+            label="Version"
+            options={selected.versions.map((v) => ({ id: v.id, label: v.label }))}
+            selectedId={selectedVersionId}
+            onSelect={onVersionSelect}
+            ariaLabel={`${group} version`}
           />
-          <p
-            className={error ? 'config-form__hint config-form__hint--error' : 'config-form__hint'}
-            id="project-name-help"
-          >
-            {error ??
-              'Lowercase letters, digits, hyphens. 2–64 chars. Must start with a letter and end with a letter or digit.'}
-          </p>
-        </Card>
-      </div>
+          <ChipRow
+            label="Runtime"
+            options={selectedVersion.runtimes.map((r) => ({
+              id: r.id,
+              label: r.label,
+              lts: r.lts,
+            }))}
+            selectedId={selectedRuntimeId}
+            onSelect={onRuntimeSelect}
+            ariaLabel={`${group} runtime`}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
 
-      <div className="wizard-step__group">
-        <Eyebrow>Docker</Eyebrow>
-        <Card as="div" className="config-form config-form--toggle">
-          <div className="config-form__toggle-row">
-            <div>
-              <label htmlFor="include-docker">Include Docker support</label>
-              <p className="config-form__hint">Adds a Dockerfile for each service and a docker-compose.yml to your project.</p>
-            </div>
-            <input
-              checked={state.includeDocker}
-              id="include-docker"
-              onChange={(event) => update('includeDocker', event.target.checked)}
-              type="checkbox"
-            />
-          </div>
-        </Card>
+type ChipRowProps = {
+  label: string
+  options: { id: string; label: string; lts?: boolean }[]
+  selectedId: string
+  onSelect: (id: string) => void
+  ariaLabel: string
+}
+
+function ChipRow({ label, options, selectedId, onSelect, ariaLabel }: ChipRowProps) {
+  return (
+    <div className="chip-row">
+      <span className="chip-row__label">{label}</span>
+      <div className="chip-row__chips" role="radiogroup" aria-label={ariaLabel}>
+        {options.map((option) => {
+          const isSelected = option.id === selectedId
+          return (
+            <button
+              aria-checked={isSelected}
+              className={`chip${isSelected ? ' chip--selected' : ''}`}
+              key={option.id}
+              onClick={() => onSelect(option.id)}
+              role="radio"
+              type="button"
+            >
+              {option.label}
+              {option.lts && (
+                <span className="chip__badge" aria-label="Long-term support">
+                  LTS
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-type ReviewStepProps = {
+function PipelineStep({ catalog, state, update }: CatalogStepProps) {
+  return (
+    <div className="pipeline-cards" role="radiogroup" aria-label="Pipeline provider">
+      {catalog.pipelines.map((option) => {
+        const isSelected = state.pipeline === option.id
+        return (
+          <button
+            aria-checked={isSelected}
+            className={`pipeline-card${isSelected ? ' pipeline-card--selected' : ''}`}
+            key={option.id}
+            onClick={() => update('pipeline', option.id)}
+            role="radio"
+            type="button"
+          >
+            <span className="pipeline-card__icon" aria-hidden="true">
+              <StackIcon id={option.id} />
+            </span>
+            <span className="pipeline-card__body">
+              <span className="pipeline-card__name">{option.name}</span>
+              <span className="pipeline-card__desc">{option.description}</span>
+            </span>
+            <span className="pipeline-card__mark" aria-hidden="true">
+              {isSelected ? <CheckIcon /> : null}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+type ProjectDetailsProps = StepProps & { error: string | null }
+
+function ProjectDetailsStep({ error, state, update }: ProjectDetailsProps) {
+  return (
+    <div className="project-details">
+      <div className="project-details__field">
+        <label htmlFor="project-name">Project name</label>
+        <TextInput
+          aria-describedby="project-name-help"
+          aria-invalid={error !== null}
+          autoComplete="off"
+          id="project-name"
+          onChange={(event) => update('projectName', event.target.value)}
+          placeholder="my-awesome-app"
+          value={state.projectName}
+        />
+        <p
+          className={`project-details__hint${error ? ' project-details__hint--error' : ''}`}
+          id="project-name-help"
+        >
+          {error ??
+            'Lowercase letters, digits, hyphens · 2–64 characters · must start with a letter.'}
+        </p>
+      </div>
+
+      <label className="docker-toggle" htmlFor="include-docker">
+        <span className="docker-toggle__copy">
+          <span className="docker-toggle__title">Include Docker support</span>
+          <span className="docker-toggle__desc">
+            Adds a Dockerfile per service and a docker-compose.yml at the root.
+          </span>
+        </span>
+        <input
+          checked={state.includeDocker}
+          id="include-docker"
+          onChange={(event) => update('includeDocker', event.target.checked)}
+          type="checkbox"
+        />
+        <span className="docker-toggle__switch" aria-hidden="true" />
+      </label>
+    </div>
+  )
+}
+
+type ReviewPanelProps = {
+  canGenerate: boolean
+  catalog: InitCatalog
+  onDownload: (job: InitJob) => void
   onGenerate: () => void
+  onRetry: () => void
+  onStartOver: () => void
   state: WizardState
   status: GenerationStatus
 }
 
-function ReviewStep({ state, status }: ReviewStepProps) {
-  const frontend = findOption(FRONTENDS, state.frontend)
-  const backend = findOption(BACKENDS, state.backend)
-  const pipeline = findOption(PIPELINES, state.pipeline)
+function ReviewPanel({
+  canGenerate,
+  catalog,
+  onDownload,
+  onGenerate,
+  onRetry,
+  onStartOver,
+  state,
+  status,
+}: ReviewPanelProps) {
+  const frontend = findById(catalog.frontends, state.frontend)
+  const frontendVersion = findById(frontend?.versions ?? [], state.frontendVersion)
+  const frontendRuntime = findById(frontendVersion?.runtimes ?? [], state.frontendRuntime)
+  const backend = findById(catalog.backends, state.backend)
+  const backendVersion = findById(backend?.versions ?? [], state.backendVersion)
+  const backendRuntime = findById(backendVersion?.runtimes ?? [], state.backendRuntime)
+  const pipeline = findById<PipelineCatalogOption>(catalog.pipelines, state.pipeline)
 
   return (
-    <div className="wizard-step">
-      <div className="wizard-step__group">
-        <Eyebrow>Review</Eyebrow>
-        <Card className="review-card">
-          <dl className="review-list">
-            <div>
-              <dt>Project name</dt>
-              <dd>
-                <code>{state.projectName}</code>
-              </dd>
-            </div>
-            <div>
-              <dt>Frontend</dt>
-              <dd>{frontend?.name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Backend</dt>
-              <dd>{backend?.name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Pipeline</dt>
-              <dd>{pipeline?.name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Docker</dt>
-              <dd>{state.includeDocker ? 'Yes' : 'No'}</dd>
-            </div>
-          </dl>
-        </Card>
-        {status.kind === 'loading' && (
-          <StateRow detail="Calling /api/init…" label="Generating ZIP" tone="loading" />
+    <div className="review">
+      <div className="review__head">
+        <span className="review__eyebrow">Summary</span>
+        <div className="review__name">{state.projectName || 'unnamed-project'}</div>
+      </div>
+
+      <ul className="review__rows">
+        <ReviewRow label="Frontend" iconId={frontend?.id}>
+          {frontend ? (
+            <>
+              <strong>{frontend.name}</strong>
+              <span>
+                {[frontendVersion?.label, frontendRuntime?.label].filter(Boolean).join(' · ') || '—'}
+              </span>
+            </>
+          ) : (
+            <span className="review__placeholder">Not selected</span>
+          )}
+        </ReviewRow>
+
+        <ReviewRow label="Backend" iconId={backend?.id}>
+          {backend ? (
+            <>
+              <strong>{backend.name}</strong>
+              <span>
+                {[backendVersion?.label, backendRuntime?.label].filter(Boolean).join(' · ') || '—'}
+              </span>
+            </>
+          ) : (
+            <span className="review__placeholder">Not selected</span>
+          )}
+        </ReviewRow>
+
+        <ReviewRow label="Pipeline" iconId={pipeline?.id}>
+          {pipeline ? <strong>{pipeline.name}</strong> : <span className="review__placeholder">Not selected</span>}
+        </ReviewRow>
+
+        <li className="review__row review__row--inline">
+          <span className="review__label">Docker</span>
+          <span className={`review__pill${state.includeDocker ? ' review__pill--on' : ''}`}>
+            {state.includeDocker ? 'Included' : 'Off'}
+          </span>
+        </li>
+      </ul>
+
+      <div className="review__actions">
+        {status.kind === 'success' ? (
+          <>
+            <Button onClick={() => onDownload(status.job)} variant="download">
+              Download ZIP
+            </Button>
+            <Button onClick={onStartOver} variant="secondary">
+              Start over
+            </Button>
+          </>
+        ) : status.kind === 'error' ? (
+          <>
+            <Button disabled={!canGenerate} onClick={onRetry} variant="download">
+              Retry generation
+            </Button>
+            <Button onClick={onStartOver} variant="secondary">
+              Reset
+            </Button>
+          </>
+        ) : (
+          <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
+            {status.kind === 'loading' ? 'Generating…' : 'Generate project'}
+          </Button>
         )}
       </div>
+
+      <GenerationPanel status={status} />
     </div>
+  )
+}
+
+type ReviewRowProps = {
+  label: string
+  iconId?: string
+  children: React.ReactNode
+}
+
+function ReviewRow({ label, iconId, children }: ReviewRowProps) {
+  return (
+    <li className="review__row">
+      <span className="review__label">{label}</span>
+      <span className="review__value">
+        {iconId ? (
+          <span className="review__icon" aria-hidden="true">
+            <StackIcon id={iconId} />
+          </span>
+        ) : (
+          <span className="review__icon review__icon--empty" aria-hidden="true" />
+        )}
+        <span className="review__value-text">{children}</span>
+      </span>
+    </li>
+  )
+}
+
+type GenerationPanelProps = {
+  status: GenerationStatus
+}
+
+function GenerationPanel({ status }: GenerationPanelProps) {
+  if (status.kind === 'idle') {
+    return (
+      <div className="gen gen--idle">
+        <p className="gen__hint">
+          When you're ready, we'll queue a worker, stream the build log, and surface the ZIP.
+        </p>
+      </div>
+    )
+  }
+
+  const job = status.kind === 'loading' || status.kind === 'success' || status.kind === 'error'
+    ? status.job
+    : undefined
+  const error = status.kind === 'error' ? formatGenerationError(status.message) : null
+  const progress = error?.summary
+    ?? job?.progress
+    ?? (status.kind === 'loading' ? 'Waiting for the generator worker…' : 'Artifact is ready.')
+  const percent = generationPercent(status)
+
+  return (
+    <div className={`gen gen--${status.kind}`}>
+      <div className="gen__head">
+        <span className={`gen__dot gen__dot--${status.kind}`} aria-hidden="true" />
+        <div>
+          <strong>{generationTitle(status)}</strong>
+          <p>{progress}</p>
+        </div>
+      </div>
+
+      <div className="gen__progress" aria-label="Generation progress">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+
+      {error?.details && (
+        <details className="gen__error">
+          <summary>Technical details</summary>
+          <pre>{error.details}</pre>
+        </details>
+      )}
+
+      {job?.logs?.length ? <GenerationLog logs={job.logs} /> : null}
+
+      <dl className="gen__meta">
+        <div>
+          <dt>Job</dt>
+          <dd>{job?.jobId ?? '—'}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{job?.status ?? status.kind}</dd>
+        </div>
+        <div>
+          <dt>Download</dt>
+          <dd>{job?.downloadAvailable ? 'Ready' : 'Pending'}</dd>
+        </div>
+      </dl>
+    </div>
+  )
+}
+
+function GenerationLog({ logs }: { logs: InitJob['logs'] }) {
+  return (
+    <div className="gen__log" aria-label="Generation log">
+      <div className="gen__log-bar">
+        <span>Build log</span>
+        <span>{logs.length} lines</span>
+      </div>
+      <pre>
+        {logs.map((line) => (
+          <span className={`gen__log-line gen__log-line--${line.stream}`} key={line.id}>
+            <span className="gen__log-stream">{line.stream}</span>
+            {line.message}
+            {'\n'}
+          </span>
+        ))}
+      </pre>
+    </div>
+  )
+}
+
+function generationTitle(status: GenerationStatus): string {
+  if (status.kind === 'loading') {
+    if (status.job?.status === 'queued') return 'Queued for generation'
+    return 'Generating project'
+  }
+  if (status.kind === 'success') return 'Artifact ready'
+  if (status.kind === 'error') return 'Generation failed'
+  return 'Ready to generate'
+}
+
+function generationPercent(status: GenerationStatus): number {
+  if (status.kind === 'success') return 100
+  if (status.kind === 'error') return 100
+  if (status.kind !== 'loading') return 0
+  if (status.job?.status === 'running') return 62
+  if (status.job?.status === 'queued') return 18
+  return 8
+}
+
+function formatGenerationError(message: string): { summary: string; details?: string } {
+  const trimmed = message.trim()
+  if (!trimmed) return { summary: 'Generation failed.' }
+
+  const knownSummary = knownGenerationErrorSummary(trimmed)
+  if (knownSummary) {
+    return { summary: knownSummary, details: trimmed }
+  }
+
+  const [firstLine, ...rest] = trimmed.split(/\n+/)
+  const summary = compactSummary(firstLine)
+  const details = rest.join('\n').trim() || (trimmed.length > summary.length ? trimmed : '')
+  return details ? { summary, details } : { summary }
+}
+
+function knownGenerationErrorSummary(message: string): string | null {
+  if (/_cacache|npm error code EACCES|npm error code EEXIST|permission denied, rename/i.test(message)) {
+    return 'npm failed while writing its package cache. Restart the generator so it uses the isolated per-job cache, then run generation again.'
+  }
+  if (/ENOTFOUND|ECONNRESET|ETIMEDOUT|network request|registry\.npmjs\.org/i.test(message)) {
+    return 'The generator could not reach the npm registry. Check network access from the generator process.'
+  }
+  if (/command not found|ENOENT/i.test(message)) {
+    return 'The generator host is missing a required CLI or runtime for this stack.'
+  }
+  return null
+}
+
+function compactSummary(value: string): string {
+  const cleaned = value
+    .replace(/\s+/g, ' ')
+    .replace(/^Command failed with exit code \d+:\s*/i, 'Command failed: ')
+    .trim()
+  return cleaned.length > 180 ? `${cleaned.slice(0, 177)}…` : cleaned
+}
+
+function withCatalogDefaults(state: WizardState, catalog: InitCatalog): WizardState {
+  const frontend = catalog.frontends[0]
+  const backend = catalog.backends[0]
+  const pipeline = catalog.pipelines[0]
+  const next = {
+    ...state,
+    frontend: state.frontend || frontend?.id || '',
+    backend: state.backend || backend?.id || '',
+    pipeline: state.pipeline || pipeline?.id || '',
+  }
+  return withStackDefaults(withStackDefaults(next, catalog.frontends, 'frontend'), catalog.backends, 'backend')
+}
+
+function withStackDefaults(
+  state: WizardState,
+  options: StackCatalogOption[],
+  kind: 'frontend' | 'backend',
+): WizardState {
+  const stack = findById(options, state[kind])
+  const versionKey = `${kind}Version` as const
+  const versionId = stack?.versions.some((version) => version.id === state[versionKey])
+    ? state[versionKey]
+    : stack?.defaultVersionId || stack?.versions[0]?.id || ''
+  const next = { ...state, [versionKey]: versionId }
+  return withRuntimeDefault(next, options, kind)
+}
+
+function withRuntimeDefault(
+  state: WizardState,
+  options: StackCatalogOption[],
+  kind: 'frontend' | 'backend',
+): WizardState {
+  const stack = findById(options, state[kind])
+  const version = findById(stack?.versions ?? [], state[`${kind}Version`])
+  const runtimeKey = `${kind}Runtime` as const
+  const runtimeId = version?.runtimes.some((runtime) => runtime.id === state[runtimeKey])
+    ? state[runtimeKey]
+    : version?.defaultRuntimeId || version?.runtimes[0]?.id || ''
+  return { ...state, [runtimeKey]: runtimeId }
+}
+
+function findById<T extends { id: string }>(items: T[], id: string): T | undefined {
+  return items.find((item) => item.id === id)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path
+        d="M3.5 8.5l3 3 6-7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }

@@ -4,7 +4,7 @@ Docker Compose setup for deploying Scaffy frontend and backend together behind T
 
 ## Local development
 
-Use the local Compose file when you want only PostgreSQL from Docker and want to run Spring Boot/Vite directly from source:
+Use the local Compose file when you want PostgreSQL, Redis, MinIO, and the initializer generator from Docker while running Spring Boot/Vite directly from source:
 
 ```sh
 cd scaffy-ops
@@ -34,6 +34,8 @@ Frontend: http://localhost:5173
 Backend:  http://localhost:8080
 Health:   http://localhost:8080/api/health
 Postgres: localhost:5432/scaffy
+Redis:    localhost:6379
+MinIO:    http://localhost:9001
 ```
 
 For local OAuth apps, configure callback URLs:
@@ -50,6 +52,9 @@ Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT
 - `traefik`: public edge router on ports `80` and `443`, with Let's Encrypt TLS.
 - `scaffy-fe`: builds the Vite React app and serves static assets internally on port `4173`.
 - `scaffy-be`: builds the Spring Boot app and exposes it only inside the Compose network on port `8080`.
+- `scaffy-generator`: consumes initializer jobs from Redis, runs the stack CLIs, and uploads ZIP artifacts to MinIO/S3-compatible storage.
+- `redis`: queue used by async initializer generation.
+- `minio`: local S3-compatible artifact storage for generated ZIP files.
 
 Traefik routes `https://$SCAFFY_DOMAIN/api/*` to `scaffy-be:8080` and all other paths to `scaffy-fe:4173`, so browser requests can use same-origin API paths such as `/api/health`.
 

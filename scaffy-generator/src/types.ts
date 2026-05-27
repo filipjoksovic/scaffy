@@ -1,0 +1,73 @@
+export type InitJobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+
+export type InitJobRequest = {
+  projectName: string
+  frontend: string
+  frontendVersion: string
+  frontendRuntime: string
+  backend: string
+  backendVersion: string
+  backendRuntime: string
+  pipeline: string
+  includeDocker?: boolean
+}
+
+export type InitSelection = {
+  frontend: SelectedStack
+  backend: SelectedStack
+  pipeline: SelectedPipeline
+  includeDocker: boolean
+}
+
+export type SelectedStack = {
+  id: string
+  name: string
+  versionId: string
+  versionLabel: string
+  version: string
+  runtimeId: string
+  runtimeLabel: string
+  runtime: string
+  runtimeVersion: string
+}
+
+export type SelectedPipeline = {
+  id: string
+  name: string
+}
+
+export type InitGenerationJob = {
+  id: string
+  status: InitJobStatus
+  projectName: string
+  request: InitJobRequest
+  selection: InitSelection
+}
+
+export type CommandSpec = {
+  executable: string
+  args: string[]
+  cwd: string
+  env?: Record<string, string>
+  timeoutMs: number
+  label: string
+}
+
+export type CommandLogLine = {
+  stream: 'stdout' | 'stderr'
+  message: string
+}
+
+export type GeneratorConfig = {
+  databaseUrl: string
+  redisUrl: string
+  queueName: string
+  s3Endpoint?: string
+  s3Region: string
+  s3Bucket: string
+  s3AccessKey: string
+  s3SecretKey: string
+  s3PathStyle: boolean
+  jobTimeoutMs: number
+  mode: 'runtime' | 'fixture'
+}

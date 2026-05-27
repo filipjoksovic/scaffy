@@ -16,5 +16,63 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - scaffy-redis-local:/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-scaffy}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scaffy-secret}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - scaffy-minio-local:/data
+
+  minio-bucket:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-scaffy} ${MINIO_ROOT_PASSWORD:-scaffy-secret}; do sleep 2; done
+        mc mb --ignore-existing local/${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
+
+  scaffy-generator:
+    build:
+      context: ../scaffy-generator
+      dockerfile: ../scaffy-ops/docker/scaffy-generator.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-bucket:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-scaffy}:${POSTGRES_PASSWORD:-scaffy}@postgres:5432/${POSTGRES_DB:-scaffy}
+      REDIS_URL: redis://redis:6379
+      SCAFFY_INIT_QUEUE_NAME: ${SCAFFY_INIT_QUEUE_NAME:-scaffy:init-jobs}
+      SCAFFY_INIT_STORAGE_ENDPOINT: http://minio:9000
+      SCAFFY_INIT_STORAGE_BUCKET: ${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
+      SCAFFY_INIT_STORAGE_REGION: ${SCAFFY_INIT_STORAGE_REGION:-us-east-1}
+      SCAFFY_INIT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-scaffy}
+      SCAFFY_INIT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-scaffy-secret}
+      SCAFFY_INIT_STORAGE_PATH_STYLE: "true"
+      SCAFFY_GENERATOR_MODE: ${SCAFFY_GENERATOR_MODE:-runtime}
+
 volumes:
   scaffy-postgres-local:
+  scaffy-redis-local:
+  scaffy-minio-local:

@@ -38,6 +38,18 @@ public class InitExceptionHandler {
 				.body(body("Project generation failed", ex.getMessage()));
 	}
 
+	@ExceptionHandler(InitJobNotFoundException.class)
+	public ResponseEntity<Map<String, Object>> handleJobNotFound(InitJobNotFoundException ex) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+				.body(body("Initializer job not found", ex.getMessage()));
+	}
+
+	@ExceptionHandler(InitJobUnavailableException.class)
+	public ResponseEntity<Map<String, Object>> handleJobUnavailable(InitJobUnavailableException ex) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(body("Initializer job unavailable", ex.getMessage()));
+	}
+
 	private Map<String, Object> body(String error, String message) {
 		Map<String, Object> body = new LinkedHashMap<>();
 		body.put("error", error);

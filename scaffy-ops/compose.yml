@@ -32,6 +32,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
+      minio-bucket:
+        condition: service_completed_successfully
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: 8080
@@ -49,6 +53,17 @@ services:
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      SCAFFY_REDIS_HOST: redis
+      SCAFFY_REDIS_PORT: 6379
+      SCAFFY_INIT_QUEUE_ENABLED: "true"
+      SCAFFY_INIT_QUEUE_NAME: ${SCAFFY_INIT_QUEUE_NAME:-scaffy:init-jobs}
+      SCAFFY_INIT_STORAGE_ENABLED: "true"
+      SCAFFY_INIT_STORAGE_ENDPOINT: http://minio:9000
+      SCAFFY_INIT_STORAGE_BUCKET: ${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
+      SCAFFY_INIT_STORAGE_REGION: ${SCAFFY_INIT_STORAGE_REGION:-us-east-1}
+      SCAFFY_INIT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-scaffy}
+      SCAFFY_INIT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-scaffy-secret}
+      SCAFFY_INIT_STORAGE_PATH_STYLE: "true"
     expose:
       - "8080"
     labels:
@@ -81,6 +96,66 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - scaffy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - scaffy-redis:/data
+    networks:
+      - scaffy
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-scaffy}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scaffy-secret}
+    volumes:
+      - scaffy-minio:/data
+    networks:
+      - scaffy
+
+  minio-bucket:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-scaffy} ${MINIO_ROOT_PASSWORD:-scaffy-secret}; do sleep 2; done
+        mc mb --ignore-existing local/${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
+    networks:
+      - scaffy
+
+  scaffy-generator:
+    build:
+      context: ../scaffy-generator
+      dockerfile: ../scaffy-ops/docker/scaffy-generator.Dockerfile
+    image: scaffy/scaffy-generator:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-bucket:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-scaffy}:${POSTGRES_PASSWORD:-scaffy}@postgres:5432/${POSTGRES_DB:-scaffy}
+      REDIS_URL: redis://redis:6379
+      SCAFFY_INIT_QUEUE_NAME: ${SCAFFY_INIT_QUEUE_NAME:-scaffy:init-jobs}
+      SCAFFY_INIT_STORAGE_ENDPOINT: http://minio:9000
+      SCAFFY_INIT_STORAGE_BUCKET: ${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
+      SCAFFY_INIT_STORAGE_REGION: ${SCAFFY_INIT_STORAGE_REGION:-us-east-1}
+      SCAFFY_INIT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-scaffy}
+      SCAFFY_INIT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-scaffy-secret}
+      SCAFFY_INIT_STORAGE_PATH_STYLE: "true"
+      SCAFFY_GENERATOR_MODE: ${SCAFFY_GENERATOR_MODE:-runtime}
     networks:
       - scaffy
 
@@ -118,3 +193,5 @@ networks:
 volumes:
   traefik-letsencrypt:
   scaffy-postgres:
+  scaffy-redis:
+  scaffy-minio:

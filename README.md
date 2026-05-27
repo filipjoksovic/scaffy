@@ -11,14 +11,15 @@ This repository hosts the monorepo: backend, frontend, ops, and docs.
 
 | Directory                  | Contents                                                        |
 | -------------------------- | --------------------------------------------------------------- |
-| [scaffy-be/](scaffy-be/)   | Spring Boot REST API (Java 25) — generator + analyzer endpoints |
+| [scaffy-be/](scaffy-be/)   | Spring Boot REST API (Java 25) — initializer, auth, repository, and analyzer endpoints |
 | [scaffy-fe/](scaffy-fe/)   | React + Vite frontend — initializer wizard and analyzer UI      |
-| [scaffy-ops/](scaffy-ops/) | Docker Compose stack with Traefik routing the two services      |
+| [scaffy-generator/](scaffy-generator/) | Node/TypeScript worker for async initializer ZIP generation |
+| [scaffy-ops/](scaffy-ops/) | Docker Compose stack with app, queue, database, and object storage |
 | [docs/](docs/)             | Architecture diagrams (drawio + PNG)                            |
 
 ## Run locally
 
-For day-to-day development, run Postgres in Docker and run the apps from source:
+For day-to-day development, run Postgres, Redis, MinIO, and the initializer generator in Docker, then run the apps from source:
 
 ```sh
 cd scaffy-ops

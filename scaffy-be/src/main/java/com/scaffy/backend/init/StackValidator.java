@@ -26,4 +26,8 @@ public class StackValidator {
 							+ "Choose 'github-actions' or 'gitlab-ci'.");
 		}
 	}
+
+	public InitSelection validate(InitJobRequest request) {
+		return catalog.selectionFor(request);
+	}
 }
