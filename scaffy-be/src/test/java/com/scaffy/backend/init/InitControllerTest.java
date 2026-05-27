@@ -111,13 +111,13 @@ class InitControllerTest {
 		String frontendDockerfile = new String(entries.get("demo-app/frontend/Dockerfile"), StandardCharsets.UTF_8);
 		assertThat(frontendDockerfile)
 				.contains("dist/demo-app/browser")
-				.contains("EXPOSE 80")
+				.contains("EXPOSE 3000")
 				.doesNotContain("{{projectName}}");
 
 		String dockerCompose = new String(entries.get("demo-app/docker-compose.yml"), StandardCharsets.UTF_8);
 		assertThat(dockerCompose)
 				.contains("8080:8080")
-				.contains("80:80");
+				.contains("3000:3000");
 	}
 
 	@Test
@@ -213,7 +213,7 @@ class InitControllerTest {
 		String frontendDockerfile = new String(entries.get("vue-app/frontend/Dockerfile"), StandardCharsets.UTF_8);
 		assertThat(frontendDockerfile)
 				.contains("/workspace/dist ")
-				.contains("EXPOSE 80")
+				.contains("EXPOSE 3000")
 				.doesNotContain("{{")
 				.doesNotContain("browser");
 
@@ -273,7 +273,7 @@ class InitControllerTest {
 		String frontendDockerfile = new String(entries.get("react-app/frontend/Dockerfile"), StandardCharsets.UTF_8);
 		assertThat(frontendDockerfile)
 				.contains("/workspace/dist ")
-				.contains("EXPOSE 80")
+				.contains("EXPOSE 3000")
 				.doesNotContain("{{")
 				.doesNotContain("browser");
 
