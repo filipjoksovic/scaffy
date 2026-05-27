@@ -10,7 +10,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.scaffy.backend.analyze.PipelineAnalysisException;
 
-@RestControllerAdvice(assignableTypes = RepositoryConnectionController.class)
+@RestControllerAdvice(assignableTypes = {
+		RepositoryConnectionController.class,
+		RepositoryPublicationController.class
+})
 public class RepositoryConnectionExceptionHandler {
 
 	@ExceptionHandler(PipelineAnalysisException.class)

@@ -21,20 +21,22 @@ public class InitGenerationJobRepository {
 
 	public InitGenerationJob insert(
 			UUID id,
+			UUID userId,
 			InitJobRequest request,
 			String requestJson,
 			String selectionJson) {
 		jdbcTemplate.update("""
 				INSERT INTO initializer_generation_jobs (
 					id,
+					user_id,
 					status,
 					project_name,
 					request_json,
 					selection_json,
 					progress_message
 				)
-				VALUES (?, 'queued', ?, ?, ?, 'Waiting for generator')
-				""", id, request.projectName(), requestJson, selectionJson);
+				VALUES (?, ?, 'queued', ?, ?, ?, 'Waiting for generator')
+				""", id, userId, request.projectName(), requestJson, selectionJson);
 		return findById(id).orElseThrow();
 	}
 
@@ -42,6 +44,7 @@ public class InitGenerationJobRepository {
 		return jdbcTemplate.query("""
 				SELECT
 					id,
+					user_id,
 					status,
 					project_name,
 					request_json,
@@ -74,6 +77,7 @@ public class InitGenerationJobRepository {
 	private InitGenerationJob mapJob(ResultSet rs, int rowNum) throws SQLException {
 		return new InitGenerationJob(
 				rs.getObject("id", UUID.class),
+				rs.getObject("user_id", UUID.class),
 				rs.getString("status"),
 				rs.getString("project_name"),
 				rs.getString("request_json"),

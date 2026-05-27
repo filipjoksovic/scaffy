@@ -1,4 +1,4 @@
-name: Deploy backend to VPS
+name: Deploy API stack to VPS
 
 on:
   push:
@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "scaffy-be/**"
+      - "scaffy-generator/**"
+      - "scaffy-publisher/**"
       - "scaffy-ops/**"
       - ".github/workflows/deploy-vps.yml"
       - ".github/workflows/scaffy-be-build.yml"
@@ -44,7 +46,7 @@ env:
 
 jobs:
   deploy:
-    name: Build, publish, and deploy API
+    name: Build, publish, and deploy API stack
     runs-on: ubuntu-latest
     environment: production
 
@@ -68,10 +70,15 @@ jobs:
         run: |
           set -euo pipefail
           repository="${GITHUB_REPOSITORY,,}"
-          image="ghcr.io/${repository}/scaffy-be"
-          echo "image=${image}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=${image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "latest_tag=${image}:latest" >> "$GITHUB_OUTPUT"
+          be_image="ghcr.io/${repository}/scaffy-be"
+          generator_image="ghcr.io/${repository}/scaffy-generator"
+          publisher_image="ghcr.io/${repository}/scaffy-publisher"
+          echo "be_sha_tag=${be_image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "be_latest_tag=${be_image}:latest" >> "$GITHUB_OUTPUT"
+          echo "generator_sha_tag=${generator_image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "generator_latest_tag=${generator_image}:latest" >> "$GITHUB_OUTPUT"
+          echo "publisher_sha_tag=${publisher_image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "publisher_latest_tag=${publisher_image}:latest" >> "$GITHUB_OUTPUT"
 
       - name: Validate required deployment config
         run: |
@@ -85,7 +92,9 @@ jobs:
 
       - name: Validate API Compose config
         env:
-          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.sha_tag }}
+          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.be_sha_tag }}
+          SCAFFY_GENERATOR_IMAGE: ${{ steps.image.outputs.generator_sha_tag }}
+          SCAFFY_PUBLISHER_IMAGE: ${{ steps.image.outputs.publisher_sha_tag }}
         run: docker compose -f scaffy-ops/compose.api.yml config >/dev/null
 
       - name: Log in to GHCR
@@ -105,8 +114,28 @@ jobs:
           file: ./scaffy-ops/docker/scaffy-be.Dockerfile
           push: true
           tags: |
-            ${{ steps.image.outputs.sha_tag }}
-            ${{ steps.image.outputs.latest_tag }}
+            ${{ steps.image.outputs.be_sha_tag }}
+            ${{ steps.image.outputs.be_latest_tag }}
+
+      - name: Build and push generator image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./scaffy-generator
+          file: ./scaffy-ops/docker/scaffy-generator.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.generator_sha_tag }}
+            ${{ steps.image.outputs.generator_latest_tag }}
+
+      - name: Build and push publisher image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./scaffy-publisher
+          file: ./scaffy-ops/docker/scaffy-publisher.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.publisher_sha_tag }}
+            ${{ steps.image.outputs.publisher_latest_tag }}
 
       - name: Configure SSH
         run: |
@@ -118,13 +147,17 @@ jobs:
 
       - name: Write production env file
         env:
-          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.sha_tag }}
+          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.be_sha_tag }}
+          SCAFFY_GENERATOR_IMAGE: ${{ steps.image.outputs.generator_sha_tag }}
+          SCAFFY_PUBLISHER_IMAGE: ${{ steps.image.outputs.publisher_sha_tag }}
         run: |
           set -euo pipefail
           umask 077
           {
             printf 'SCAFFY_DOMAIN=%s\n' "$SCAFFY_DOMAIN"
             printf 'SCAFFY_BE_IMAGE=%s\n' "$SCAFFY_BE_IMAGE"
+            printf 'SCAFFY_GENERATOR_IMAGE=%s\n' "$SCAFFY_GENERATOR_IMAGE"
+            printf 'SCAFFY_PUBLISHER_IMAGE=%s\n' "$SCAFFY_PUBLISHER_IMAGE"
             printf 'LETSENCRYPT_EMAIL=%s\n' "$LETSENCRYPT_EMAIL"
             printf 'SCAFFY_CORS_ALLOWED_ORIGINS=%s\n' "$SCAFFY_CORS_ALLOWED_ORIGINS"
             printf 'SCAFFY_APP_FRONTEND_URL=%s\n' "$SCAFFY_APP_FRONTEND_URL"
@@ -155,4 +188,4 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$GHCR_TOKEN" | ssh -i ~/.ssh/hetzner -p "$HETZNER_PORT" "$HETZNER_USER@$HETZNER_HOST" "docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
-          ssh -i ~/.ssh/hetzner -p "$HETZNER_PORT" "$HETZNER_USER@$HETZNER_HOST" "cd '$DEPLOY_PATH/scaffy-ops' && docker compose pull scaffy-be && docker compose up -d --remove-orphans traefik scaffy-be && docker compose ps"
+          ssh -i ~/.ssh/hetzner -p "$HETZNER_PORT" "$HETZNER_USER@$HETZNER_HOST" "cd '$DEPLOY_PATH/scaffy-ops' && docker compose pull scaffy-be scaffy-generator scaffy-publisher && docker compose up -d --remove-orphans traefik postgres redis minio minio-bucket scaffy-be scaffy-generator scaffy-publisher && docker compose ps"

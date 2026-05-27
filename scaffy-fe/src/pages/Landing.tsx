@@ -9,40 +9,53 @@ const initializerPoints = [
 ]
 
 const analyzerSignals = [
-  'Build and release management',
-  'Testing maturity and coverage',
-  'Security scanning and secret hygiene',
-  'Deployment automation and rollback',
-  'Workflow quality and reproducibility',
+  'Build & Release Management',
+  'Testing Maturity',
+  'Security Integration',
+  'Deployment Automation',
+  'Workflow Quality & Optimization',
 ]
 
 const modelSources = [
   {
-    name: 'DORA / Accelerate',
-    detail: 'Delivery maturity is judged through the same lens as modern DevOps research: fast feedback, repeatable deployment, and recovery-oriented practice.',
+    name: 'LADMF',
+    role: 'Maturity skeleton',
+    detail:
+      'Provides the five-dimension grouping (build, test, security, deployment, workflow) and the L1–L5 progression that Scaffy reports against.',
   },
   {
-    name: 'OWASP CI/CD guidance',
-    detail: 'Pipeline security checks look for secrets handling, dependency scanning, SAST signals, and safer automation boundaries.',
+    name: 'CIMMI',
+    role: 'Dimension sanity check',
+    detail:
+      'Cross-checks that Scaffy’s dimensions reflect a meaningful capability split and that signals are classified consistently.',
   },
   {
-    name: 'SLSA supply-chain ideas',
-    detail: 'Artifact scoring rewards traceable outputs, reuse, publishing, and evidence that a build result can move safely through a delivery path.',
+    name: 'Khatami & Zampetti',
+    role: 'Concrete YAML rules',
+    detail:
+      'Source of the workflow smells and positive practices Scaffy detects directly in GitHub Actions and GitLab CI files.',
+  },
+  {
+    name: 'AWS Cloud Adoption',
+    role: 'Level wording',
+    detail:
+      'Used only for the human-readable description of each maturity level. It does not contribute to scoring.',
   },
 ]
 
 const dimensionCapabilities = [
   {
-    dimension: 'Build & release management',
+    dimension: 'Build & Release Management',
     capabilities: [
-      'Build scripting',
-      'Packaging',
-      'Registry publish',
-      'Versioning',
+      'Build scripting maturity',
+      'Dependency handling',
+      'Packaging & artifacts',
+      'Registry / release publish',
+      'Versioning / tagging',
     ],
   },
   {
-    dimension: 'Testing maturity',
+    dimension: 'Testing Maturity',
     capabilities: [
       'Test presence',
       'CI-integrated tests',
@@ -51,46 +64,64 @@ const dimensionCapabilities = [
     ],
   },
   {
-    dimension: 'Security integration',
+    dimension: 'Security Integration',
     capabilities: [
       'Static analysis (SAST)',
-      'Dependency & container scanning',
+      'Dependency / container scanning',
       'Secret hygiene',
+      'Safe action / token usage',
+      'Policy as code',
     ],
   },
   {
-    dimension: 'Deployment automation',
+    dimension: 'Deployment Automation',
     capabilities: [
-      'Deployment stage',
+      'Deployment stage presence',
       'Environment targeting',
       'IaC usage',
-      'Orchestration',
-      'Rollback / controlled release',
+      'Orchestration maturity',
+      'Rollback / controlled rollout',
     ],
   },
   {
-    dimension: 'Workflow quality & optimization',
+    dimension: 'Workflow Quality & Optimization',
     capabilities: [
       'Execution safety',
       'Selective execution',
       'Maintainability',
       'Reproducibility',
       'Matrix / cache optimization',
-      'Lint & static analysis',
-      'Formatting',
-      'Type checking',
-      'Notification channel',
-      'Status alerting',
     ],
   },
 ]
 
+const capabilityScale = [
+  ['0', 'No evidence', 'No matching signal in the YAML for this capability.'],
+  ['1', 'Basic signal', 'Minimal presence — one command or one step, no discipline.'],
+  ['2', 'Repeatable', 'Structured, repeatable practice with clear jobs and stable steps.'],
+  ['3', 'Advanced / governed', 'Advanced or policy-driven configuration.'],
+  ['4', 'Mature & modular', 'Highly mature, modular, secure or heavily automated practice.'],
+]
+
 const maturityLevels = [
-  ['Level 1', '0%', 'Missing'],
-  ['Level 2', '1-39%', 'Early signal'],
-  ['Level 3', '40-59%', 'Developing'],
-  ['Level 4', '60-79%', 'Strong partial'],
-  ['Level 5', '80-100%', 'Complete'],
+  ['L1', 'Initial / Chaos', 'Almost everything is manual. No reliable build or test cycle.'],
+  ['L2', 'Basic CI', 'Build + test + basic artifacts. A pipeline exists but isn’t disciplined.'],
+  ['L3', 'Structured Delivery', 'Artifact/release discipline, multi-stage pipeline, versioning.'],
+  ['L4', 'Governed Automation', 'Security integration, deployment automation, rollback or policy signals.'],
+  ['L5', 'Advanced Pipeline', 'Reusable workflows, policy-as-code, advanced deployment strategies, strong workflow hygiene.'],
+]
+
+const promotionCriteria = [
+  ['Above L2', 'Build + test pipeline present (build stage detected, no missing-test-stage finding).'],
+  ['Above L3', 'Artifact discipline: versioned artifacts or an artifact publish step.'],
+  ['Above L4', 'Security Integration > 0 and Deployment Automation > 0 (at least one security scan and one deploy stage).'],
+]
+
+const notEvaluatedDimensions = [
+  'Collaboration',
+  'Telemetry & Observability',
+  'Architecture & Design',
+  'People & Process',
 ]
 
 export function Landing() {
@@ -144,14 +175,16 @@ export function Landing() {
       <section className="landing-analyzer" aria-labelledby="analyzer-heading">
         <div className="landing-section-heading">
           <Eyebrow>CI/CD analyzer</Eyebrow>
-          <h2 id="analyzer-heading">Upload a pipeline and see the practices it proves.</h2>
+          <h2 id="analyzer-heading">A three-layer model: dimensions, capabilities, YAML rules.</h2>
         </div>
         <div className="landing-analyzer__body">
           <div>
             <p>
-              The analyzer reads GitHub Actions and GitLab CI YAML files, detects concrete delivery
-              signals, and turns them into a maturity report. It is deterministic: the score comes from
-              explicit rules, evidence locations, missing practices, and weighted dimensions.
+              Scaffy reads GitHub Actions and GitLab CI YAML, detects concrete signals, and turns them
+              into a maturity report. The model has three layers: five <strong>dimensions</strong> say what
+              we measure, <strong>capabilities</strong> describe what higher maturity looks like inside each
+              dimension, and explicit <strong>rules</strong> (positive practices and code smells) map YAML
+              signals to capability scores.
             </p>
             <div className="signal-strip">
               {analyzerSignals.map((signal) => (
@@ -162,7 +195,10 @@ export function Landing() {
           <div className="model-explainer">
             {modelSources.map((source) => (
               <article key={source.name}>
-                <h3>{source.name}</h3>
+                <header className="model-explainer__head">
+                  <h3>{source.name}</h3>
+                  <span>{source.role}</span>
+                </header>
                 <p>{source.detail}</p>
               </article>
             ))}
@@ -173,19 +209,20 @@ export function Landing() {
       <section className="landing-methodology" aria-labelledby="methodology-heading">
         <div className="landing-section-heading">
           <Eyebrow>Scoring model</Eyebrow>
-          <h2 id="methodology-heading">Every score is evidence-based, weighted, and explainable.</h2>
+          <h2 id="methodology-heading">Capabilities score 0–4. Levels need both points and proof.</h2>
         </div>
 
         <div className="methodology-body">
           <div className="methodology-formula">
             <p>
-              Each dimension is composed of capabilities. A capability earns up to 4 points based on
-              detected positives, minus any code smells. The dimension score is the total points divided
-              by the maximum (4 × capability count). Dimensions without any matching signals are reported
-              as <em>not evaluated</em> and excluded from the overall average.
+              Each dimension is a set of capabilities. A capability earns a score from 0 to 4 based on
+              detected positive practices, reduced by code smells. The dimension score is the sum of
+              capability points divided by the maximum (4 × capability count). Dimensions with no matching
+              signals come back as <em>not evaluated</em> and are excluded from the average — not counted
+              as missing.
             </p>
             <code>dimension = sum(capability points) / (4 × capability count)</code>
-            <code>overall = average(score) over evaluated dimensions</code>
+            <code>overall = average(dimension scores) over evaluated dimensions</code>
           </div>
 
           <div className="metric-accordion" aria-label="Capabilities by dimension">
@@ -207,15 +244,56 @@ export function Landing() {
             ))}
           </div>
 
-          <div className="maturity-scale" aria-label="Scaffy evidence coverage levels">
-            <h3>Scaffy evidence coverage levels</h3>
-            {maturityLevels.map(([level, range, label]) => (
+          <div className="maturity-scale" aria-label="Capability score scale">
+            <h3>Capability score (0 – 4)</h3>
+            {capabilityScale.map(([level, label, detail]) => (
               <div key={level}>
                 <span>{level}</span>
-                <strong>{range}</strong>
-                <small>{label}</small>
+                <strong>{label}</strong>
+                <small>{detail}</small>
               </div>
             ))}
+          </div>
+
+          <div className="maturity-scale" aria-label="Pipeline maturity levels">
+            <h3>Maturity levels (L1 – L5)</h3>
+            {maturityLevels.map(([level, name, detail]) => (
+              <div key={level}>
+                <span>{level}</span>
+                <strong>{name}</strong>
+                <small>{detail}</small>
+              </div>
+            ))}
+          </div>
+
+          <div className="promotion-block" aria-label="Promotion criteria between maturity levels">
+            <h3>Promotion criteria</h3>
+            <p>
+              Score alone doesn’t move a project up a level. To clear specific thresholds Scaffy also
+              requires concrete signals to be present:
+            </p>
+            <dl>
+              {promotionCriteria.map(([gate, rule]) => (
+                <div key={gate}>
+                  <dt>{gate}</dt>
+                  <dd>{rule}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="not-evaluated-block">
+            <h3>What Scaffy deliberately doesn’t score</h3>
+            <p>
+              Some areas can’t be judged honestly from static YAML alone. Scaffy returns them as
+              <em> not evaluated</em>, not as missing, so the score isn’t penalised for evidence the
+              analyzer can’t see.
+            </p>
+            <ul>
+              {notEvaluatedDimensions.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>

@@ -101,6 +101,32 @@ export type FindingChange = {
   direction: DeltaDirection
 }
 
+export type RepositoryPublicationStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+
+export type RepositoryPublicationLogLine = {
+  id: number
+  stream: 'system' | 'stdout' | 'stderr'
+  message: string
+  createdAt: string
+}
+
+export type RepositoryPublication = {
+  publicationJobId: string
+  status: RepositoryPublicationStatus
+  progress?: string | null
+  errorMessage?: string | null
+  provider: 'github'
+  repositoryName: string
+  visibility: 'private'
+  repositoryOwner?: string | null
+  repositoryUrl?: string | null
+  repositoryConnection?: RepositoryConnection | null
+  logs: RepositoryPublicationLogLine[]
+  createdAt: string
+  startedAt?: string | null
+  completedAt?: string | null
+}
+
 export async function listRepositoryConnections(): Promise<RepositoryConnection[]> {
   const response = await apiFetch('/api/repositories')
   if (!response.ok) {
@@ -129,6 +155,32 @@ export async function connectRepository(repository: string): Promise<RepositoryC
     await throwApiError(response)
   }
   return (await response.json()) as RepositoryConnection
+}
+
+export async function createRepositoryPublication(request: {
+  initJobId: string
+  repositoryName: string
+  description?: string
+}): Promise<RepositoryPublication> {
+  const response = await apiFetch('/api/repositories/github/publications', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return (await response.json()) as RepositoryPublication
+}
+
+export async function getRepositoryPublication(id: string): Promise<RepositoryPublication> {
+  const response = await apiFetch(`/api/repositories/github/publications/${id}`)
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return (await response.json()) as RepositoryPublication
 }
 
 export async function disconnectRepository(id: string): Promise<void> {

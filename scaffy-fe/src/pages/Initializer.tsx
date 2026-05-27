@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AppFrame, Button, StateRow, TextInput, Tooltip } from '../components'
-import { StackIcon } from '../components/wizard/StackIcon'
+import { AppFrame, Button, StateRow, TextInput } from '../components'
+import {
+  CheckIcon,
+  MaturityPicker,
+  StackIcon,
+  StackPresetGroup,
+  WizardStep,
+} from '../components/wizard'
 import {
   createInitJob,
   downloadBlob,
@@ -273,28 +279,6 @@ export function Initializer() {
   )
 }
 
-type WizardStepProps = {
-  index: number
-  title: string
-  hint: string
-  children: React.ReactNode
-}
-
-function WizardStep({ index, title, hint, children }: WizardStepProps) {
-  return (
-    <section className="init-step">
-      <header className="init-step__head">
-        <span className="init-step__index">{String(index).padStart(2, '0')}</span>
-        <div>
-          <h2 className="init-step__title">{title}</h2>
-          <p className="init-step__hint">{hint}</p>
-        </div>
-      </header>
-      <div className="init-step__body">{children}</div>
-    </section>
-  )
-}
-
 function validateProjectName(name: string): string | null {
   if (!name) return null
   if (name.length < 2) return 'Must be at least 2 characters.'
@@ -310,132 +294,6 @@ type StepProps = {
 }
 
 type CatalogStepProps = StepProps & { catalog: InitCatalog }
-
-type StackPresetGroupProps = {
-  options: StackCatalogOption[]
-  selectedId: string
-  selectedVersionId: string
-  selectedRuntimeId: string
-  onSelect: (id: string) => void
-  onVersionSelect: (id: string) => void
-  onRuntimeSelect: (id: string) => void
-  group: 'frontend' | 'backend'
-}
-
-function StackPresetGroup({
-  options,
-  selectedId,
-  selectedVersionId,
-  selectedRuntimeId,
-  onSelect,
-  onVersionSelect,
-  onRuntimeSelect,
-  group,
-}: StackPresetGroupProps) {
-  const selected = findById(options, selectedId)
-  const selectedVersion = findById(selected?.versions ?? [], selectedVersionId)
-
-  return (
-    <div className="stack-group">
-      <div className="stack-cards" role="radiogroup" aria-label={`${group} framework`}>
-        {options.map((option) => {
-          const isSelected = selectedId === option.id
-          const defaultVersion =
-            findById(option.versions, option.defaultVersionId) ?? option.versions[0]
-          const defaultRuntime =
-            findById(defaultVersion?.runtimes ?? [], defaultVersion?.defaultRuntimeId ?? '') ??
-            defaultVersion?.runtimes[0]
-
-          return (
-            <button
-              aria-checked={isSelected}
-              className={`stack-card${isSelected ? ' stack-card--selected' : ''}`}
-              key={option.id}
-              onClick={() => onSelect(option.id)}
-              role="radio"
-              type="button"
-            >
-              <span className="stack-card__icon" aria-hidden="true">
-                <StackIcon id={option.id} />
-              </span>
-              <span className="stack-card__body">
-                <span className="stack-card__name">{option.name}</span>
-                <span className="stack-card__meta">
-                  {[defaultVersion?.label, defaultRuntime?.label].filter(Boolean).join(' · ')}
-                </span>
-              </span>
-              <span className="stack-card__mark" aria-hidden="true">
-                {isSelected ? <CheckIcon /> : null}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      {selected && selectedVersion && (
-        <div className="stack-detail">
-          <p className="stack-detail__copy">{selected.description}</p>
-          <ChipRow
-            label="Version"
-            options={selected.versions.map((v) => ({ id: v.id, label: v.label }))}
-            selectedId={selectedVersionId}
-            onSelect={onVersionSelect}
-            ariaLabel={`${group} version`}
-          />
-          <ChipRow
-            label="Runtime"
-            options={selectedVersion.runtimes.map((r) => ({
-              id: r.id,
-              label: r.label,
-              lts: r.lts,
-            }))}
-            selectedId={selectedRuntimeId}
-            onSelect={onRuntimeSelect}
-            ariaLabel={`${group} runtime`}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
-type ChipRowProps = {
-  label: string
-  options: { id: string; label: string; lts?: boolean }[]
-  selectedId: string
-  onSelect: (id: string) => void
-  ariaLabel: string
-}
-
-function ChipRow({ label, options, selectedId, onSelect, ariaLabel }: ChipRowProps) {
-  return (
-    <div className="chip-row">
-      <span className="chip-row__label">{label}</span>
-      <div className="chip-row__chips" role="radiogroup" aria-label={ariaLabel}>
-        {options.map((option) => {
-          const isSelected = option.id === selectedId
-          return (
-            <button
-              aria-checked={isSelected}
-              className={`chip${isSelected ? ' chip--selected' : ''}`}
-              key={option.id}
-              onClick={() => onSelect(option.id)}
-              role="radio"
-              type="button"
-            >
-              {option.label}
-              {option.lts && (
-                <span className="chip__badge" aria-label="Long-term support">
-                  LTS
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 function PipelineStep({ catalog, state, update }: CatalogStepProps) {
   return (
@@ -467,113 +325,12 @@ function PipelineStep({ catalog, state, update }: CatalogStepProps) {
         })}
       </div>
 
-      <div className="maturity-section">
-        <div className="maturity-section__head">
-          <span className="maturity-section__label">Maturity level</span>
-          <span className="maturity-section__hint">
-            How much delivery discipline Scaffy should generate.
-          </span>
-        </div>
-
-        <div className="maturity-picker" role="radiogroup" aria-label="Pipeline maturity level">
-          {catalog.maturityPresets.map((preset) => {
-            const isSelected = state.pipelineMaturity === preset.id
-            const name = preset.label.replace(/^L\d\s+/, '')
-            return (
-              <button
-                aria-checked={isSelected}
-                className={`maturity-card${isSelected ? ' maturity-card--selected' : ''}`}
-                key={preset.id}
-                onClick={() => update('pipelineMaturity', preset.id)}
-                role="radio"
-                type="button"
-              >
-                <span className="maturity-card__bars" aria-hidden="true">
-                  {[1, 2, 3, 4].map((i) => (
-                    <span
-                      className={`maturity-card__bar${i <= preset.level ? ' maturity-card__bar--on' : ''}`}
-                      key={i}
-                    />
-                  ))}
-                </span>
-                <span className="maturity-card__body">
-                  <span className="maturity-card__title-row">
-                    <span className="maturity-card__name">
-                      <span className="maturity-card__level">L{preset.level}</span>
-                      {name}
-                    </span>
-                    {preset.dockerRequired && (
-                      <span className="maturity-card__badge" title="Requires Docker">
-                        Docker
-                      </span>
-                    )}
-                  </span>
-                  <span className="maturity-card__desc">{preset.description}</span>
-                </span>
-                <span className="maturity-card__mark" aria-hidden="true">
-                  {isSelected ? <CheckIcon /> : null}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        <MaturityLockedCard />
-      </div>
+      <MaturityPicker
+        presets={catalog.maturityPresets}
+        selectedId={state.pipelineMaturity}
+        onSelect={(id) => update('pipelineMaturity', id)}
+      />
     </div>
-  )
-}
-
-function MaturityLockedCard() {
-  return (
-    <Tooltip
-      side="top"
-      align="start"
-      content={
-        <div className="tooltip__body">
-          <strong>Why no L5 yet?</strong>
-          <p>
-            Honest L5 needs choices Scaffy doesn&apos;t ask for: deployment target
-            (Kubernetes, Vercel, ECS…), registry, IaC tool (Terraform, Pulumi,
-            Helm), rollout strategy (canary, blue-green, rolling), secrets model,
-            and shared reusable workflows.
-          </p>
-          <p>
-            Generating it without those would produce YAML that &quot;looks mature&quot;
-            but doesn&apos;t actually run. It will land as a separate advanced flow.
-          </p>
-        </div>
-      }
-    >
-      <div
-        aria-disabled="true"
-        className="maturity-locked"
-        role="note"
-        tabIndex={0}
-      >
-        <span className="maturity-locked__bars" aria-hidden="true">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <span
-              className={`maturity-card__bar${i <= 5 ? ' maturity-card__bar--on' : ''}`}
-              key={i}
-            />
-          ))}
-        </span>
-        <div className="maturity-locked__body">
-          <div className="maturity-locked__title-row">
-            <span className="maturity-card__name">
-              <span className="maturity-card__level">L5</span>
-              Advanced Pipeline
-            </span>
-            <span className="maturity-locked__chip">Coming later</span>
-          </div>
-          <p className="maturity-locked__desc">
-            Canary / blue-green rollouts, policy-as-code, IaC, and reusable org
-            workflows — hover for why this isn&apos;t available yet.
-          </p>
-        </div>
-      </div>
-    </Tooltip>
   )
 }
 
@@ -961,19 +718,4 @@ function findById<T extends { id: string }>(items: T[], id: string): T | undefin
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-      <path
-        d="M3.5 8.5l3 3 6-7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
 }

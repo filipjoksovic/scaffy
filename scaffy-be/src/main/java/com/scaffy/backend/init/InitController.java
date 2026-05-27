@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.scaffy.backend.auth.ScaffyPrincipal;
 import com.scaffy.backend.init.generator.ProjectGenerator;
 
 import jakarta.validation.Valid;
@@ -45,8 +47,12 @@ public class InitController {
 	}
 
 	@PostMapping(path = "/jobs", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<InitJobResponse> createJob(@Valid @RequestBody InitJobRequest request) {
-		return ResponseEntity.accepted().body(initJobService.create(request));
+	public ResponseEntity<InitJobResponse> createJob(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@Valid @RequestBody InitJobRequest request) {
+		return ResponseEntity.accepted().body(initJobService.create(
+				request,
+				principal == null ? null : principal.userId()));
 	}
 
 	@GetMapping("/jobs/{jobId}")

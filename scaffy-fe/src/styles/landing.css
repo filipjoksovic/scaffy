@@ -207,8 +207,25 @@
 }
 
 .model-explainer h3 {
-  margin-bottom: var(--space-xs);
+  margin: 0;
   font-size: 20px;
+}
+
+.model-explainer__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-base);
+  margin-bottom: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.model-explainer__head span {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .model-explainer p {
@@ -375,6 +392,93 @@
 
 .maturity-scale small {
   color: rgba(247, 247, 244, 0.58);
+}
+
+.promotion-block,
+.not-evaluated-block {
+  display: grid;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  padding: var(--space-lg);
+}
+
+.promotion-block h3,
+.not-evaluated-block h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.promotion-block p,
+.not-evaluated-block p {
+  margin: 0;
+  color: var(--color-body);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.promotion-block dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.promotion-block dl > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--space-base);
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--color-hairline-soft);
+}
+
+.promotion-block dl > div:first-of-type {
+  border-top: 0;
+  padding-top: var(--space-xs);
+}
+
+.promotion-block dt {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.promotion-block dd {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.not-evaluated-block ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.not-evaluated-block li {
+  display: inline-flex;
+  align-items: center;
+  border: 1px dashed var(--color-hairline-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas-soft);
+  color: var(--color-muted);
+  padding: 4px 12px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 720px) {
+  .promotion-block dl > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 @media (max-width: 1024px) {

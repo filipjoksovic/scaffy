@@ -12,12 +12,15 @@ import { oauthLoginUrl } from "../api/auth";
 import {
   analyzeRepository,
   connectRepository,
+  createRepositoryPublication,
   disconnectRepository,
+  getRepositoryPublication,
   getRepositoryAnalysis,
   getRepositoryAnalysisDelta,
   listGitHubRepositories,
   listRepositoryConnections,
   type GitHubRepository,
+  type RepositoryPublication,
   type RepositoryAnalysis,
   type RepositoryAnalysisDelta,
   type RepositoryAnalysisSummary,
@@ -32,6 +35,20 @@ import {
   StateRow,
   TextInput,
 } from "../components";
+import {
+  MaturityPicker,
+  StackIcon,
+  StackPresetGroup,
+  WizardStep,
+} from "../components/wizard";
+import {
+  createInitJob,
+  getInitCatalog,
+  getInitJob,
+  type InitCatalog,
+  type InitJob,
+  type StackCatalogOption,
+} from "../api/init";
 import { useAuth } from "../lib/auth";
 import {
   capabilityMeta,
@@ -69,6 +86,7 @@ export function Dashboard() {
   const [filter, setFilter] = useState("");
   const [githubFilter, setGithubFilter] = useState("");
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [githubAccess, setGithubAccess] =
     useState<GitHubAccessState>("unknown");
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<
@@ -94,6 +112,7 @@ export function Dashboard() {
       setGitHubRepositories([]);
       setSelectedRepositoryId(null);
       setConnectDialogOpen(false);
+      setCreatingProject(false);
       setAnalysisByRepository({});
       setDeltaByRepository({});
       setLoadingAnalysisId(null);
@@ -524,6 +543,9 @@ export function Dashboard() {
             <Button onClick={() => setConnectDialogOpen(true)}>
               Connect repository
             </Button>
+            <Button onClick={() => setCreatingProject(true)}>
+              {creatingProject ? "Creating…" : "Create project"}
+            </Button>
           </div>
         </header>
 
@@ -574,26 +596,60 @@ export function Dashboard() {
           />
 
           <div className="project-workspace">
-            <ProjectDetail
-              analysis={selectedAnalysis}
-              connection={selectedConnection}
-              delta={selectedDelta}
-              error={selectedAnalysisError}
-              loading={
-                selectedConnection
-                  ? analyzingId === selectedConnection.id
-                  : false
-              }
-              loadingStored={
-                selectedConnection
-                  ? loadingAnalysisId === selectedConnection.id
-                  : false
-              }
-              onAnalyze={handleAnalyzeRepository}
-              onConnect={() => setConnectDialogOpen(true)}
-              onDisconnect={handleDisconnect}
-            />
-
+            {creatingProject ? (
+              <CreateProjectPanel
+                onCancel={() => setCreatingProject(false)}
+                onCreated={(connection, analysis) => {
+                  setConnections((current) => [
+                    connection,
+                    ...current.filter((item) => item.id !== connection.id),
+                  ]);
+                  setSelectedRepositoryId(connection.id);
+                  if (analysis) {
+                    setAnalysisByRepository((current) => ({
+                      ...current,
+                      [connection.id]: analysis,
+                    }));
+                    setConnections((current) =>
+                      current.map((item) =>
+                        item.id === connection.id
+                          ? {
+                              ...item,
+                              analysisRunCount: Math.max(
+                                item.analysisRunCount ?? 0,
+                                analysis.runNumber,
+                              ),
+                              analysisSummary: summaryFromAnalysis(analysis),
+                            }
+                          : item,
+                      ),
+                    );
+                  }
+                  setCreatingProject(false);
+                }}
+              />
+            ) : (
+              <ProjectDetail
+                analysis={selectedAnalysis}
+                connection={selectedConnection}
+                delta={selectedDelta}
+                error={selectedAnalysisError}
+                loading={
+                  selectedConnection
+                    ? analyzingId === selectedConnection.id
+                    : false
+                }
+                loadingStored={
+                  selectedConnection
+                    ? loadingAnalysisId === selectedConnection.id
+                    : false
+                }
+                onAnalyze={handleAnalyzeRepository}
+                onConnect={() => setConnectDialogOpen(true)}
+                onCreate={() => setCreatingProject(true)}
+                onDisconnect={handleDisconnect}
+              />
+            )}
           </div>
         </div>
 
@@ -732,6 +788,7 @@ type ProjectDetailProps = Readonly<{
   loadingStored: boolean;
   onAnalyze: (connection: RepositoryConnection) => Promise<void>;
   onConnect: () => void;
+  onCreate: () => void;
   onDisconnect: (id: string) => void;
 }>;
 
@@ -744,6 +801,7 @@ function ProjectDetail({
   loadingStored,
   onAnalyze,
   onConnect,
+  onCreate,
   onDisconnect,
 }: ProjectDetailProps) {
   if (!connection) {
@@ -755,9 +813,14 @@ function ProjectDetail({
           Connected projects appear in the sidebar. Select one to inspect its
           analysis state.
         </p>
-        <button className="button button--primary" onClick={onConnect} type="button">
-          Connect repository
-        </button>
+        <div className="dashboard-empty-actions">
+          <button className="button button--primary" onClick={onCreate} type="button">
+            Create project
+          </button>
+          <button className="button button--secondary" onClick={onConnect} type="button">
+            Connect repository
+          </button>
+        </div>
       </Card>
     );
   }
@@ -1308,8 +1371,7 @@ function FindingsTable({
   workflowContent,
   workflowPath,
 }: FindingsTableProps) {
-  const [selectedFinding, setSelectedFinding] =
-    useState<FlattenedAnalysisFinding | null>(null);
+  const [selectedFindingKey, setSelectedFindingKey] = useState<string | null>(null);
   const scopedFindings = dimensionFilter
     ? findings.filter(
         (finding) => finding.dimension.dimension === dimensionFilter,
@@ -1341,22 +1403,13 @@ function FindingsTable({
     ? dimensionMeta(dimensionFilter)
     : null;
 
-  useEffect(() => {
-    if (!selectedFinding) {
-      return;
-    }
-
-    const nextSelectedFinding = findings.find(
-      (finding) => findingKey(finding) === findingKey(selectedFinding),
-    );
-    if (!nextSelectedFinding) {
-      setSelectedFinding(null);
-      return;
-    }
-    if (nextSelectedFinding !== selectedFinding) {
-      setSelectedFinding(nextSelectedFinding);
-    }
-  }, [findings, selectedFinding]);
+  const selectedFinding = useMemo(
+    () =>
+      selectedFindingKey
+        ? findings.find((finding) => findingKey(finding) === selectedFindingKey) ?? null
+        : null,
+    [findings, selectedFindingKey],
+  );
 
   return (
     <section className="findings-panel">
@@ -1425,14 +1478,14 @@ function FindingsTable({
           dimensionFilter={dimensionFilter}
           filter={filter}
           findings={filteredFindings}
-          onSelectFinding={setSelectedFinding}
+          onSelectFinding={(finding) => setSelectedFindingKey(findingKey(finding))}
         />
       )}
       <FindingSourceDialog
         finding={selectedFinding}
         onOpenChange={(open) => {
           if (!open) {
-            setSelectedFinding(null);
+            setSelectedFindingKey(null);
           }
         }}
         onReanalyze={onReanalyze}
@@ -2027,6 +2080,665 @@ function RepositoryConnectDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+type CreateProjectPanelProps = Readonly<{
+  onCancel: () => void;
+  onCreated: (
+    connection: RepositoryConnection,
+    analysis: RepositoryAnalysis | null,
+  ) => void;
+}>;
+
+type CreateProjectState = {
+  backend: string;
+  backendRuntime: string;
+  backendVersion: string;
+  frontend: string;
+  frontendRuntime: string;
+  frontendVersion: string;
+  pipelineMaturity: string;
+  projectName: string;
+};
+
+type CreateProjectStatus =
+  | { kind: "idle" }
+  | { kind: "generating"; job?: InitJob }
+  | { kind: "publishing"; initJob: InitJob; publication?: RepositoryPublication }
+  | { kind: "analyzing"; initJob: InitJob; publication: RepositoryPublication }
+  | {
+      kind: "success";
+      initJob: InitJob;
+      publication: RepositoryPublication;
+      analysis: RepositoryAnalysis | null;
+    }
+  | { kind: "error"; message: string; job?: InitJob; publication?: RepositoryPublication };
+
+const createProjectInitialState: CreateProjectState = {
+  backend: "",
+  backendRuntime: "",
+  backendVersion: "",
+  frontend: "",
+  frontendRuntime: "",
+  frontendVersion: "",
+  pipelineMaturity: "",
+  projectName: "",
+};
+
+function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
+  const [catalog, setCatalog] = useState<InitCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [state, setState] = useState<CreateProjectState>(createProjectInitialState);
+  const [status, setStatus] = useState<CreateProjectStatus>({ kind: "idle" });
+
+  useEffect(() => {
+    let mounted = true;
+    getInitCatalog()
+      .then((next) => {
+        if (!mounted) return;
+        setCatalog(next);
+        setState((current) => withCreateCatalogDefaults(current, next));
+      })
+      .catch((err: unknown) => {
+        if (!mounted) return;
+        setCatalogError(
+          err instanceof Error ? err.message : "Could not load initializer catalog.",
+        );
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const projectNameError = useMemo(
+    () => validateCreateProjectName(state.projectName),
+    [state.projectName],
+  );
+
+  const inFlight =
+    status.kind === "generating" || status.kind === "publishing" || status.kind === "analyzing";
+
+  const canSubmit = Boolean(
+    catalog &&
+      !inFlight &&
+      state.projectName &&
+      !projectNameError &&
+      state.frontend &&
+      state.frontendVersion &&
+      state.frontendRuntime &&
+      state.backend &&
+      state.backendVersion &&
+      state.backendRuntime &&
+      state.pipelineMaturity,
+  );
+
+  function update<K extends keyof CreateProjectState>(
+    key: K,
+    value: CreateProjectState[K],
+  ) {
+    setStatus((current) => (current.kind === "error" ? { kind: "idle" } : current));
+    setState((current) => {
+      const next = { ...current, [key]: value };
+      if (!catalog) return next;
+      if (key === "frontend") {
+        return withCreateStackDefaults(next, catalog.frontends, "frontend");
+      }
+      if (key === "frontendVersion") {
+        return withCreateRuntimeDefault(next, catalog.frontends, "frontend");
+      }
+      if (key === "backend") {
+        return withCreateStackDefaults(next, catalog.backends, "backend");
+      }
+      if (key === "backendVersion") {
+        return withCreateRuntimeDefault(next, catalog.backends, "backend");
+      }
+      return next;
+    });
+  }
+
+  async function startCreateProject() {
+    if (!catalog || !canSubmit) return;
+    setStatus({ kind: "generating" });
+    try {
+      const maturity = catalog.maturityPresets.find(
+        (preset) => preset.id === state.pipelineMaturity,
+      );
+      const created = await createInitJob({
+        projectName: state.projectName,
+        frontend: state.frontend,
+        frontendVersion: state.frontendVersion,
+        frontendRuntime: state.frontendRuntime,
+        backend: state.backend,
+        backendVersion: state.backendVersion,
+        backendRuntime: state.backendRuntime,
+        pipeline: "github-actions",
+        pipelineMaturity: state.pipelineMaturity,
+        includeDocker: Boolean(maturity?.dockerRequired),
+      });
+
+      let initJob = created;
+      setStatus({ kind: "generating", job: initJob });
+      while (initJob.status === "queued" || initJob.status === "running") {
+        await delay(1400);
+        initJob = await getInitJob(created.jobId);
+        setStatus({ kind: "generating", job: initJob });
+      }
+      if (initJob.status !== "succeeded") {
+        throw new Error(initJob.errorMessage || "Project generation failed.");
+      }
+
+      const publicationCreated = await createRepositoryPublication({
+        initJobId: initJob.jobId,
+        repositoryName: state.projectName,
+        description: "Generated by Scaffy.",
+      });
+      let publication = publicationCreated;
+      setStatus({ kind: "publishing", initJob, publication });
+      while (publication.status === "queued" || publication.status === "running") {
+        await delay(1400);
+        publication = await getRepositoryPublication(publicationCreated.publicationJobId);
+        setStatus({ kind: "publishing", initJob, publication });
+      }
+      if (publication.status !== "succeeded" || !publication.repositoryConnection) {
+        throw new Error(publication.errorMessage || "GitHub publication failed.");
+      }
+
+      setStatus({ kind: "analyzing", initJob, publication });
+      let analysis: RepositoryAnalysis | null = null;
+      try {
+        analysis = await analyzeRepository(publication.repositoryConnection.id);
+      } catch {
+        analysis = null;
+      }
+      setStatus({ kind: "success", initJob, publication, analysis });
+      onCreated(publication.repositoryConnection, analysis);
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Project creation failed.",
+      });
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="create-project-title"
+      className="init-band create-project-band"
+    >
+      <header className="create-project-header">
+        <div>
+          <Eyebrow>Create project</Eyebrow>
+          <h2 id="create-project-title">
+            Generate a project and publish it to GitHub.
+          </h2>
+          <p>
+            Pick a stack and a maturity target. Scaffy generates the repository,
+            publishes it under your GitHub account, connects it here, and runs the first
+            analysis.
+          </p>
+        </div>
+        <Button
+          disabled={inFlight}
+          onClick={onCancel}
+          variant="secondary"
+        >
+          Cancel
+        </Button>
+      </header>
+
+      {catalogError && (
+        <StateRow detail={catalogError} icon="!" label="Catalog unavailable" tone="error" />
+      )}
+
+      {!catalog && !catalogError && <CreateProjectSkeleton />}
+
+      {catalog && (
+        <div className="create-project-stack">
+          <div className="init-config">
+            <WizardStep
+              index={1}
+              title="Project details"
+              hint="The name of the new GitHub repository (created private)."
+            >
+              <div className="project-details">
+                <div className="project-details__field">
+                  <label htmlFor="create-project-name">Repository name</label>
+                  <TextInput
+                    aria-describedby="create-project-name-help"
+                    aria-invalid={projectNameError !== null}
+                    autoComplete="off"
+                    id="create-project-name"
+                    onChange={(event) => update("projectName", event.target.value)}
+                    placeholder="my-scaffy-app"
+                    value={state.projectName}
+                  />
+                  <p
+                    className={`project-details__hint${
+                      projectNameError ? " project-details__hint--error" : ""
+                    }`}
+                    id="create-project-name-help"
+                  >
+                    {projectNameError ??
+                      "Lowercase letters, digits, hyphens · 2–64 characters · must start with a letter."}
+                  </p>
+                </div>
+              </div>
+            </WizardStep>
+
+            <WizardStep
+              index={2}
+              title="Frontend"
+              hint="Pick a UI framework, version, and runtime."
+            >
+              <StackPresetGroup
+                group="frontend"
+                onRuntimeSelect={(id) => update("frontendRuntime", id)}
+                onSelect={(id) => update("frontend", id)}
+                onVersionSelect={(id) => update("frontendVersion", id)}
+                options={catalog.frontends}
+                selectedId={state.frontend}
+                selectedRuntimeId={state.frontendRuntime}
+                selectedVersionId={state.frontendVersion}
+              />
+            </WizardStep>
+
+            <WizardStep
+              index={3}
+              title="Backend"
+              hint="Choose the API framework that fits your team."
+            >
+              <StackPresetGroup
+                group="backend"
+                onRuntimeSelect={(id) => update("backendRuntime", id)}
+                onSelect={(id) => update("backend", id)}
+                onVersionSelect={(id) => update("backendVersion", id)}
+                options={catalog.backends}
+                selectedId={state.backend}
+                selectedRuntimeId={state.backendRuntime}
+                selectedVersionId={state.backendVersion}
+              />
+            </WizardStep>
+
+            <WizardStep
+              index={4}
+              title="Maturity target"
+              hint="Scaffy generates a GitHub Actions pipeline at this discipline level."
+            >
+              <MaturityPicker
+                onSelect={(id) => update("pipelineMaturity", id)}
+                presets={catalog.maturityPresets}
+                selectedId={state.pipelineMaturity}
+              />
+            </WizardStep>
+          </div>
+
+          <CreateProjectReview
+            canSubmit={canSubmit}
+            catalog={catalog}
+            inFlight={inFlight}
+            onCancel={onCancel}
+            onStart={startCreateProject}
+            state={state}
+            status={status}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+type CreateProjectReviewProps = {
+  canSubmit: boolean;
+  catalog: InitCatalog;
+  inFlight: boolean;
+  onCancel: () => void;
+  onStart: () => void;
+  state: CreateProjectState;
+  status: CreateProjectStatus;
+};
+
+function CreateProjectReview({
+  canSubmit,
+  catalog,
+  inFlight,
+  onCancel,
+  onStart,
+  state,
+  status,
+}: CreateProjectReviewProps) {
+  const frontend = catalog.frontends.find((item) => item.id === state.frontend);
+  const frontendVersion = frontend?.versions.find((v) => v.id === state.frontendVersion);
+  const frontendRuntime = frontendVersion?.runtimes.find((r) => r.id === state.frontendRuntime);
+  const backend = catalog.backends.find((item) => item.id === state.backend);
+  const backendVersion = backend?.versions.find((v) => v.id === state.backendVersion);
+  const backendRuntime = backendVersion?.runtimes.find((r) => r.id === state.backendRuntime);
+  const maturity = catalog.maturityPresets.find((p) => p.id === state.pipelineMaturity);
+  const dockerIncluded = Boolean(maturity?.dockerRequired);
+
+  return (
+    <div className="review">
+      <div className="review__head">
+        <span className="review__eyebrow">New project</span>
+        <div className="review__name">{state.projectName || "unnamed-project"}</div>
+      </div>
+
+      <ul className="review__rows">
+        <CreateReviewRow label="Frontend" iconId={frontend?.id}>
+          {frontend ? (
+            <>
+              <strong>{frontend.name}</strong>
+              <span>
+                {[frontendVersion?.label, frontendRuntime?.label]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </span>
+            </>
+          ) : (
+            <span className="review__placeholder">Not selected</span>
+          )}
+        </CreateReviewRow>
+
+        <CreateReviewRow label="Backend" iconId={backend?.id}>
+          {backend ? (
+            <>
+              <strong>{backend.name}</strong>
+              <span>
+                {[backendVersion?.label, backendRuntime?.label]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </span>
+            </>
+          ) : (
+            <span className="review__placeholder">Not selected</span>
+          )}
+        </CreateReviewRow>
+
+        <CreateReviewRow label="Pipeline" iconId="github-actions">
+          <strong>GitHub Actions</strong>
+          <span>{maturity ? maturity.label : "Pick a maturity level"}</span>
+        </CreateReviewRow>
+
+        <li className="review__row review__row--inline">
+          <span className="review__label">Docker</span>
+          <span className={`review__pill${dockerIncluded ? " review__pill--on" : ""}`}>
+            {dockerIncluded ? "Included" : "Off"}
+          </span>
+        </li>
+      </ul>
+
+      <div className="review__actions">
+        {status.kind === "success" ? (
+          <Button onClick={onCancel} variant="secondary">
+            Back to projects
+          </Button>
+        ) : status.kind === "error" ? (
+          <>
+            <Button disabled={!canSubmit} onClick={onStart} variant="download">
+              Retry
+            </Button>
+            <Button onClick={onCancel} variant="secondary">
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button disabled={!canSubmit} onClick={onStart} variant="download">
+            {inFlight
+              ? status.kind === "generating"
+                ? "Generating…"
+                : status.kind === "publishing"
+                  ? "Publishing…"
+                  : "Analyzing…"
+              : "Generate and publish"}
+          </Button>
+        )}
+      </div>
+
+      <CreateProjectStatusPanel status={status} />
+    </div>
+  );
+}
+
+type CreateReviewRowProps = {
+  label: string;
+  iconId?: string;
+  children: React.ReactNode;
+};
+
+function CreateReviewRow({ label, iconId, children }: CreateReviewRowProps) {
+  return (
+    <li className="review__row">
+      <span className="review__label">{label}</span>
+      <span className="review__value">
+        {iconId ? (
+          <span className="review__icon" aria-hidden="true">
+            <StackIcon id={iconId} />
+          </span>
+        ) : (
+          <span className="review__icon review__icon--empty" aria-hidden="true" />
+        )}
+        <span className="review__value-text">{children}</span>
+      </span>
+    </li>
+  );
+}
+
+function CreateProjectStatusPanel({ status }: { status: CreateProjectStatus }) {
+  if (status.kind === "idle") {
+    return (
+      <div className="gen gen--idle">
+        <p className="gen__hint">
+          When you start, Scaffy will queue the generator, push to GitHub, and run the
+          first analysis. You can leave this open and watch the live log.
+        </p>
+      </div>
+    );
+  }
+
+  const title = createProjectStatusTitle(status);
+  const copy = createProjectStatusCopy(status);
+  const percent = createProjectPercent(status);
+  const logs =
+    status.kind === "generating"
+      ? status.job?.logs
+      : status.kind === "publishing" || status.kind === "analyzing" || status.kind === "success"
+        ? status.publication?.logs
+        : status.kind === "error"
+          ? status.publication?.logs || status.job?.logs
+          : undefined;
+
+  const dotKind =
+    status.kind === "success"
+      ? "success"
+      : status.kind === "error"
+        ? "error"
+        : "loading";
+
+  return (
+    <div className={`gen gen--${status.kind === "error" ? "error" : status.kind === "success" ? "success" : "loading"}`}>
+      <div className="gen__head">
+        <span className={`gen__dot gen__dot--${dotKind}`} aria-hidden="true" />
+        <div>
+          <strong>{title}</strong>
+          <p>{copy}</p>
+        </div>
+      </div>
+
+      <div className="gen__progress" aria-label="Project creation progress">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+
+      {logs && logs.length > 0 && (
+        <div className="gen__log" aria-label="Project creation log">
+          <div className="gen__log-bar">
+            <span>Live log</span>
+            <span>{logs.length} lines</span>
+          </div>
+          <pre>
+            {logs.slice(-40).map((line) => (
+              <span
+                className={`gen__log-line gen__log-line--${line.stream}`}
+                key={`${line.stream}-${line.id}`}
+              >
+                <span className="gen__log-stream">{line.stream}</span>
+                {line.message}
+                {"\n"}
+              </span>
+            ))}
+          </pre>
+        </div>
+      )}
+
+      {status.kind === "success" && status.publication.repositoryConnection && (
+        <dl className="gen__meta">
+          <div>
+            <dt>Repo</dt>
+            <dd>
+              {status.publication.repositoryConnection.owner}/
+              {status.publication.repositoryConnection.name}
+            </dd>
+          </div>
+          <div>
+            <dt>Analysis</dt>
+            <dd>{status.analysis ? "Ready" : "Pending"}</dd>
+          </div>
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function CreateProjectSkeleton() {
+  return (
+    <div className="create-project-stack create-project-skeleton" aria-hidden="true">
+      <div className="init-config">
+        {[1, 2, 3, 4].map((i) => (
+          <div className="init-step create-project-skeleton__step" key={i}>
+            <div className="create-project-skeleton__head">
+              <span className="create-project-skeleton__index" />
+              <span className="create-project-skeleton__title" />
+            </div>
+            <div className="create-project-skeleton__row" />
+            <div className="create-project-skeleton__row create-project-skeleton__row--short" />
+          </div>
+        ))}
+      </div>
+      <div className="review create-project-skeleton__summary">
+        <div className="create-project-skeleton__row" />
+        <div className="create-project-skeleton__row" />
+        <div className="create-project-skeleton__row create-project-skeleton__row--short" />
+      </div>
+    </div>
+  );
+}
+
+function createProjectStatusTitle(status: CreateProjectStatus): string {
+  if (status.kind === "generating") {
+    if (status.job?.status === "queued") return "Queued for generation";
+    return "Generating project";
+  }
+  if (status.kind === "publishing") return "Publishing to GitHub";
+  if (status.kind === "analyzing") return "Running first analysis";
+  if (status.kind === "success") return "Project ready";
+  if (status.kind === "error") return "Needs attention";
+  return "Ready";
+}
+
+function createProjectStatusCopy(status: CreateProjectStatus): string {
+  if (status.kind === "generating") {
+    return status.job?.progress || "Waiting for the generator worker…";
+  }
+  if (status.kind === "publishing") {
+    return status.publication?.progress || "Pushing the generated repo to GitHub…";
+  }
+  if (status.kind === "analyzing") {
+    return "The repository is connected. Running Scaffy on the new workflow.";
+  }
+  if (status.kind === "success") {
+    return status.analysis
+      ? "Repository connected and the first analysis is ready."
+      : "Repository connected. Analysis can be retried from the project view.";
+  }
+  if (status.kind === "error") return status.message;
+  return "Configure the project and start the GitHub creation flow.";
+}
+
+function createProjectPercent(status: CreateProjectStatus): number {
+  if (status.kind === "idle") return 0;
+  if (status.kind === "generating") {
+    if (status.job?.status === "queued") return 12;
+    if (status.job?.status === "running") return 38;
+    return 6;
+  }
+  if (status.kind === "publishing") return 64;
+  if (status.kind === "analyzing") return 86;
+  if (status.kind === "success") return 100;
+  if (status.kind === "error") return 100;
+  return 0;
+}
+
+function validateCreateProjectName(name: string): string | null {
+  if (!name.trim()) return null;
+  if (name.length < 2) return "Must be at least 2 characters.";
+  if (name.length > 64) return "Must be 64 characters or fewer.";
+  if (!/^[a-z][a-z0-9-]*[a-z0-9]$/.test(name)) {
+    return "Lowercase letters, digits, hyphens only. Must start with a letter and end with a letter or digit.";
+  }
+  return null;
+}
+
+function withCreateCatalogDefaults(
+  state: CreateProjectState,
+  catalog: InitCatalog,
+): CreateProjectState {
+  const maturity =
+    catalog.maturityPresets.find((preset) => preset.id === "l2") ??
+    catalog.maturityPresets[0];
+  const next = {
+    ...state,
+    frontend: state.frontend || catalog.frontends[0]?.id || "",
+    backend: state.backend || catalog.backends[0]?.id || "",
+    pipelineMaturity: state.pipelineMaturity || maturity?.id || "",
+  };
+  return withCreateStackDefaults(
+    withCreateStackDefaults(next, catalog.frontends, "frontend"),
+    catalog.backends,
+    "backend",
+  );
+}
+
+function withCreateStackDefaults(
+  state: CreateProjectState,
+  options: StackCatalogOption[],
+  kind: "frontend" | "backend",
+): CreateProjectState {
+  const stack = findById(options, state[kind]);
+  const versionKey = `${kind}Version` as const;
+  const versionId = stack?.versions.some((version) => version.id === state[versionKey])
+    ? state[versionKey]
+    : stack?.defaultVersionId || stack?.versions[0]?.id || "";
+  return withCreateRuntimeDefault({ ...state, [versionKey]: versionId }, options, kind);
+}
+
+function withCreateRuntimeDefault(
+  state: CreateProjectState,
+  options: StackCatalogOption[],
+  kind: "frontend" | "backend",
+): CreateProjectState {
+  const stack = findById(options, state[kind]);
+  const version = findById(stack?.versions ?? [], state[`${kind}Version`]);
+  const runtimeKey = `${kind}Runtime` as const;
+  const runtimeId = version?.runtimes.some((runtime) => runtime.id === state[runtimeKey])
+    ? state[runtimeKey]
+    : version?.defaultRuntimeId || version?.runtimes[0]?.id || "";
+  return { ...state, [runtimeKey]: runtimeId };
+}
+
+function findById<T extends { id: string }>(items: T[], id: string): T | undefined {
+  return items.find((item) => item.id === id);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 type SearchInputProps = Readonly<{

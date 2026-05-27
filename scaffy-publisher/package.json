@@ -1,0 +1,26 @@
+{
+  "name": "scaffy-publisher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "dev:local": "node --env-file=.env.local --import tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.583.0",
+    "adm-zip": "^0.5.16",
+    "ioredis": "^5.4.1",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^20.14.2",
+    "@types/pg": "^8.11.6",
+    "tsx": "^4.15.6",
+    "typescript": "^5.5.2"
+  }
+}

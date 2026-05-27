@@ -26,11 +26,12 @@ public class InitJobService {
 		this.objectMapper = objectMapper;
 	}
 
-	public InitJobResponse create(InitJobRequest request) {
+	public InitJobResponse create(InitJobRequest request, UUID userId) {
 		InitSelection selection = stackValidator.validate(request);
 		UUID id = UUID.randomUUID();
 		InitGenerationJob job = repository.insert(
 				id,
+				userId,
 				request,
 				writeJson(request),
 				writeJson(selection));

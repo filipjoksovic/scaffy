@@ -54,6 +54,8 @@ services:
       SCAFFY_REDIS_PORT: 6379
       SCAFFY_INIT_QUEUE_ENABLED: "true"
       SCAFFY_INIT_QUEUE_NAME: ${SCAFFY_INIT_QUEUE_NAME:-scaffy:init-jobs}
+      SCAFFY_REPOSITORY_PUBLICATION_QUEUE_ENABLED: "true"
+      SCAFFY_REPOSITORY_PUBLICATION_QUEUE_NAME: ${SCAFFY_REPOSITORY_PUBLICATION_QUEUE_NAME:-scaffy:repo-publication-jobs}
       SCAFFY_INIT_STORAGE_ENABLED: "true"
       SCAFFY_INIT_STORAGE_ENDPOINT: http://minio:9000
       SCAFFY_INIT_STORAGE_BUCKET: ${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
@@ -150,6 +152,31 @@ services:
       SCAFFY_INIT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
       SCAFFY_INIT_STORAGE_PATH_STYLE: "true"
       SCAFFY_GENERATOR_MODE: ${SCAFFY_GENERATOR_MODE:-runtime}
+    networks:
+      - scaffy
+
+  scaffy-publisher:
+    image: ${SCAFFY_PUBLISHER_IMAGE:?Set SCAFFY_PUBLISHER_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-bucket:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-scaffy}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-scaffy}
+      REDIS_URL: redis://redis:6379
+      SCAFFY_REPOSITORY_PUBLICATION_QUEUE_NAME: ${SCAFFY_REPOSITORY_PUBLICATION_QUEUE_NAME:-scaffy:repo-publication-jobs}
+      SCAFFY_INIT_STORAGE_ENDPOINT: http://minio:9000
+      SCAFFY_INIT_STORAGE_BUCKET: ${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
+      SCAFFY_INIT_STORAGE_REGION: ${SCAFFY_INIT_STORAGE_REGION:-us-east-1}
+      SCAFFY_INIT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-scaffy}
+      SCAFFY_INIT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+      SCAFFY_INIT_STORAGE_PATH_STYLE: "true"
+      SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET: ${SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET:-${SCAFFY_JWT_SECRET:?Set SCAFFY_JWT_SECRET}}
+      GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
     networks:
       - scaffy
 

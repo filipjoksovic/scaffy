@@ -26,7 +26,7 @@ public class OAuthClientConfig {
 			registrations.put("github", CommonOAuth2Provider.GITHUB.getBuilder("github")
 					.clientId(properties.github().clientId())
 					.clientSecret(properties.github().clientSecret())
-					.scope("repo", "read:user", "user:email")
+					.scope("repo", "workflow", "read:user", "user:email")
 					.build());
 		}
 		return registrations::get;

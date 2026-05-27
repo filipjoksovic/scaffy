@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record InitGenerationJob(
 		UUID id,
+		UUID userId,
 		String status,
 		String projectName,
 		String requestJson,
