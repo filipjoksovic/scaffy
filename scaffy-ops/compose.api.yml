@@ -67,7 +67,7 @@ services:
       - "8080"
     labels:
       - traefik.enable=true
-      - traefik.http.routers.scaffy-be.rule=Host(`${SCAFFY_DOMAIN:?Set SCAFFY_DOMAIN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.scaffy-be.rule=Host(`${SCAFFY_DOMAIN:?Set SCAFFY_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/oauth2`) || PathPrefix(`/login/oauth2`))
       - traefik.http.routers.scaffy-be.entrypoints=websecure
       - traefik.http.routers.scaffy-be.priority=100
       - traefik.http.routers.scaffy-be.tls.certresolver=letsencrypt

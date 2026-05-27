@@ -136,7 +136,10 @@ SCAFFY_HTTP_PORT=80
 SCAFFY_HTTPS_PORT=443
 POSTGRES_DB=scaffy
 POSTGRES_USER=scaffy
+MINIO_ROOT_USER=scaffy
 ```
+
+`MINIO_ROOT_USER` can also be stored as a secret if you do not want the object storage username in repository variables.
 
 ## OAuth callbacks
 
