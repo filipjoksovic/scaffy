@@ -29,6 +29,7 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 	private final OAuthProfileExtractor profileExtractor;
 	private final ProviderTokenCrypto providerTokenCrypto;
 	private final UserRepository userRepository;
+	private final OAuthInstanceRepository instanceRepository;
 
 	public OAuthLoginSuccessHandler(
 			AppProperties appProperties,
@@ -37,7 +38,8 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 			OAuth2AuthorizedClientService authorizedClientService,
 			OAuthProfileExtractor profileExtractor,
 			ProviderTokenCrypto providerTokenCrypto,
-			UserRepository userRepository) {
+			UserRepository userRepository,
+			OAuthInstanceRepository instanceRepository) {
 		this.appProperties = appProperties;
 		this.authCookieService = authCookieService;
 		this.jwtService = jwtService;
@@ -45,14 +47,17 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 		this.profileExtractor = profileExtractor;
 		this.providerTokenCrypto = providerTokenCrypto;
 		this.userRepository = userRepository;
+		this.instanceRepository = instanceRepository;
 	}
 
 	@Override
 	public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
 			Authentication authentication) throws IOException, ServletException {
 		OAuth2AuthenticationToken oauth = (OAuth2AuthenticationToken) authentication;
+		String registrationId = oauth.getAuthorizedClientRegistrationId();
 		OAuthProfile profile = profileExtractor.extract(
-				oauth.getAuthorizedClientRegistrationId(),
+				registrationId,
+				resolveInstanceHost(registrationId),
 				(OAuth2User) oauth.getPrincipal());
 		AppUser user = userRepository.upsertOAuthUser(profile);
 		log.info(
@@ -84,6 +89,7 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 		int updatedRows = userRepository.updateOAuthAccessToken(
 				user.id(),
 				profile.provider(),
+				profile.instance(),
 				profile.providerUserId(),
 				providerTokenCrypto.encrypt(accessToken.getTokenValue()),
 				accessToken.getExpiresAt(),
@@ -96,5 +102,20 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 				updatedRows,
 				accessToken.getExpiresAt(),
 				accessToken.getScopes());
+	}
+
+	private String resolveInstanceHost(String registrationId) {
+		if (registrationId == null) {
+			return "";
+		}
+		if (OAuthClientConfig.GITLAB_COM_REGISTRATION_ID.equals(registrationId)) {
+			return "gitlab.com";
+		}
+		if (registrationId.startsWith("gitlab-")) {
+			return instanceRepository.findByRegistrationId(registrationId)
+					.map(OAuthInstance::host)
+					.orElse("");
+		}
+		return "";
 	}
 }

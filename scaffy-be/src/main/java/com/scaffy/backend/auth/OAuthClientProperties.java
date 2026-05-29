@@ -3,7 +3,7 @@ package com.scaffy.backend.auth;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "scaffy.oauth")
-public record OAuthClientProperties(Provider google, Provider github) {
+public record OAuthClientProperties(Provider google, Provider github, Provider gitlab) {
 
 	public record Provider(String clientId, String clientSecret) {
 

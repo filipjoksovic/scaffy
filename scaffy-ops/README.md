@@ -43,9 +43,10 @@ For local OAuth apps, configure callback URLs:
 ```txt
 http://localhost:8080/login/oauth2/code/google
 http://localhost:8080/login/oauth2/code/github
+http://localhost:8080/login/oauth2/code/gitlab
 ```
 
-Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_ID`, and `GITHUB_OAUTH_CLIENT_SECRET` in your shell or IDE run configuration before starting the backend. The `local` Spring profile uses `SCAFFY_AUTH_COOKIE_SECURE=false` and `SCAFFY_AUTH_COOKIE_SAME_SITE=Lax`, which is appropriate for plain `http://localhost` development.
+Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_ID`, and `GITHUB_OAUTH_CLIENT_SECRET` (optionally `GITLAB_OAUTH_CLIENT_ID` / `GITLAB_OAUTH_CLIENT_SECRET` for gitlab.com) in your shell or IDE run configuration before starting the backend. The `local` Spring profile uses `SCAFFY_AUTH_COOKIE_SECURE=false` and `SCAFFY_AUTH_COOKIE_SAME_SITE=Lax`, which is appropriate for plain `http://localhost` development.
 
 ## Services
 
@@ -148,6 +149,7 @@ Configure OAuth applications with backend callback URLs:
 ```txt
 https://api.scaffy.fijol.io/login/oauth2/code/google
 https://api.scaffy.fijol.io/login/oauth2/code/github
+https://api.scaffy.fijol.io/login/oauth2/code/gitlab
 ```
 
 For local development, use:
@@ -155,9 +157,16 @@ For local development, use:
 ```txt
 http://localhost:8080/login/oauth2/code/google
 http://localhost:8080/login/oauth2/code/github
+http://localhost:8080/login/oauth2/code/gitlab
 ```
 
 Google should request `openid profile email`. GitHub should request identity scopes only: `read:user` and `user:email`. Repository scopes are intentionally excluded until repository analysis is implemented.
+
+### GitLab (gitlab.com and self-hosted)
+
+Setting `GITLAB_OAUTH_CLIENT_ID` / `GITLAB_OAUTH_CLIENT_SECRET` enables a built-in **gitlab.com** login at registration id `gitlab` (callback `.../login/oauth2/code/gitlab`).
+
+**Self-hosted instances are added by users at runtime** — no env config. A user opens the login menu, chooses "Add GitLab instance", and enters the instance URL plus a client id/secret from an OAuth application they registered on that instance. Scaffy derives a stable registration id `gitlab-<host>`; the corresponding callback URL the user must register on their instance is shown after submitting (e.g. `https://api.scaffy.fijol.io/login/oauth2/code/gitlab-gitlab-example-com`). GitLab OAuth apps must be granted the `read_user read_api read_repository` scopes.
 
 The VPS user must be able to run Docker Compose in `DEPLOY_PATH`. If the user is not `root`, add it to the `docker` group or configure passwordless Docker access for deployments.
 

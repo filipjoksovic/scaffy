@@ -24,7 +24,7 @@ public class UserRepository {
 
 	@Transactional
 	public AppUser upsertOAuthUser(OAuthProfile profile) {
-		Optional<AppUser> existing = findByOAuthAccount(profile.provider(), profile.providerUserId());
+		Optional<AppUser> existing = findByOAuthAccount(profile.provider(), profile.instance(), profile.providerUserId());
 		if (existing.isPresent()) {
 			AppUser user = merge(existing.get(), profile);
 			updateUser(user);
@@ -49,6 +49,7 @@ public class UserRepository {
 	public int updateOAuthAccessToken(
 			UUID userId,
 			String provider,
+			String providerInstance,
 			String providerUserId,
 			String encryptedAccessToken,
 			Instant expiresAt,
@@ -59,13 +60,14 @@ public class UserRepository {
 					access_token_expires_at = ?,
 					scopes = ?,
 					updated_at = CURRENT_TIMESTAMP
-				WHERE user_id = ? AND provider = ? AND provider_user_id = ?
+				WHERE user_id = ? AND provider = ? AND provider_instance = ? AND provider_user_id = ?
 				""",
 				encryptedAccessToken,
 				expiresAt == null ? null : OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC),
 				scopes == null ? null : String.join(" ", scopes),
 				userId,
 				provider,
+				providerInstance,
 				providerUserId);
 	}
 
@@ -79,13 +81,13 @@ public class UserRepository {
 				""", this::mapToken, userId, provider).stream().findFirst();
 	}
 
-	private Optional<AppUser> findByOAuthAccount(String provider, String providerUserId) {
+	private Optional<AppUser> findByOAuthAccount(String provider, String providerInstance, String providerUserId) {
 		return jdbcTemplate.query("""
 				SELECT u.id, u.email, u.display_name, u.avatar_url
 				FROM users u
 				JOIN oauth_accounts oa ON oa.user_id = u.id
-				WHERE oa.provider = ? AND oa.provider_user_id = ?
-				""", this::mapUser, provider, providerUserId).stream().findFirst();
+				WHERE oa.provider = ? AND oa.provider_instance = ? AND oa.provider_user_id = ?
+				""", this::mapUser, provider, providerInstance, providerUserId).stream().findFirst();
 	}
 
 	private AppUser merge(AppUser existing, OAuthProfile profile) {
@@ -117,12 +119,14 @@ public class UserRepository {
 
 	private void insertOAuthAccount(UUID id, UUID userId, OAuthProfile profile) {
 		jdbcTemplate.update("""
-				INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, email, display_name, avatar_url)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO oauth_accounts
+					(id, user_id, provider, provider_instance, provider_user_id, email, display_name, avatar_url)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				""",
 				id,
 				userId,
 				profile.provider(),
+				profile.instance(),
 				profile.providerUserId(),
 				profile.email(),
 				profile.displayName(),
@@ -133,13 +137,14 @@ public class UserRepository {
 		jdbcTemplate.update("""
 				UPDATE oauth_accounts
 				SET email = ?, display_name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
-				WHERE user_id = ? AND provider = ? AND provider_user_id = ?
+				WHERE user_id = ? AND provider = ? AND provider_instance = ? AND provider_user_id = ?
 				""",
 				profile.email(),
 				profile.displayName(),
 				profile.avatarUrl(),
 				userId,
 				profile.provider(),
+				profile.instance(),
 				profile.providerUserId());
 	}
 

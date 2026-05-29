@@ -116,8 +116,69 @@
   text-decoration: none;
 }
 
+button.text-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .text-link:hover {
   color: var(--color-ink);
+}
+
+.gitlab-instance-dialog__form {
+  display: grid;
+  gap: var(--space-base);
+}
+
+.gitlab-instance-dialog__form label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.gitlab-instance-dialog__form input {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-card);
+  padding: 10px 12px;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.gitlab-instance-dialog__form input:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 1px;
+}
+
+.gitlab-instance-dialog__actions,
+.gitlab-instance-dialog__success {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.gitlab-instance-dialog__actions {
+  justify-content: flex-end;
+}
+
+.gitlab-instance-dialog__success {
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+.gitlab-instance-dialog__callback {
+  display: block;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-base);
+  background: var(--color-surface-muted, var(--color-surface-card));
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
 .card {

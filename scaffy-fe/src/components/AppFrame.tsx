@@ -3,6 +3,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { Link, NavLink } from 'react-router-dom'
 import { oauthLoginUrl } from '../api/auth'
 import { useAuth } from '../lib/auth'
+import { GitlabLoginMenu } from './GitlabLoginMenu'
 
 type AppFrameProps = {
   children: ReactNode
@@ -103,6 +104,7 @@ export function AppFrame({ children }: AppFrameProps) {
               <a className="text-link" href={oauthLoginUrl.github}>
                 GitHub login
               </a>
+              <GitlabLoginMenu />
             </div>
           )}
         </div>

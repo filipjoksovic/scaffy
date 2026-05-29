@@ -5,5 +5,6 @@ public record OAuthProfile(
 		String providerUserId,
 		String email,
 		String displayName,
-		String avatarUrl) {
+		String avatarUrl,
+		String instance) {
 }

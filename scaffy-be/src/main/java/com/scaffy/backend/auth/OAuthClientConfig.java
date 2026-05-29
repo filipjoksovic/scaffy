@@ -12,8 +12,13 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 @Configuration
 public class OAuthClientConfig {
 
+	static final String GITLAB_COM_REGISTRATION_ID = "gitlab";
+	static final String GITLAB_COM_BASE_URL = "https://gitlab.com";
+
 	@Bean
-	ClientRegistrationRepository clientRegistrationRepository(OAuthClientProperties properties) {
+	ClientRegistrationRepository clientRegistrationRepository(
+			OAuthClientProperties properties,
+			OAuthInstanceRepository instanceRepository) {
 		Map<String, ClientRegistration> registrations = new LinkedHashMap<>();
 		if (properties.google() != null && properties.google().configured()) {
 			registrations.put("google", CommonOAuth2Provider.GOOGLE.getBuilder("google")
@@ -29,6 +34,13 @@ public class OAuthClientConfig {
 					.scope("repo", "workflow", "read:user", "user:email")
 					.build());
 		}
-		return registrations::get;
+		if (properties.gitlab() != null && properties.gitlab().configured()) {
+			registrations.put(GITLAB_COM_REGISTRATION_ID, GitLabClientRegistrations.build(
+					GITLAB_COM_REGISTRATION_ID,
+					GITLAB_COM_BASE_URL,
+					properties.gitlab().clientId(),
+					properties.gitlab().clientSecret()));
+		}
+		return new DynamicClientRegistrationRepository(registrations, instanceRepository);
 	}
 }

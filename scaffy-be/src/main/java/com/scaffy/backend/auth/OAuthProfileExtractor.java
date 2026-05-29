@@ -8,23 +8,36 @@ import org.springframework.stereotype.Component;
 @Component
 public class OAuthProfileExtractor {
 
-	public OAuthProfile extract(String provider, OAuth2User user) {
+	public OAuthProfile extract(String registrationId, String instance, OAuth2User user) {
 		Map<String, Object> attributes = user.getAttributes();
-		return switch (provider) {
-			case "google" -> new OAuthProfile(
-					provider,
+		if ("google".equals(registrationId)) {
+			return new OAuthProfile(
+					"google",
 					required(attributes, "sub"),
 					string(attributes.get("email")),
 					string(attributes.get("name")),
-					string(attributes.get("picture")));
-			case "github" -> new OAuthProfile(
-					provider,
+					string(attributes.get("picture")),
+					"");
+		}
+		if ("github".equals(registrationId)) {
+			return new OAuthProfile(
+					"github",
 					required(attributes, "id"),
 					string(attributes.get("email")),
 					prefer(string(attributes.get("name")), string(attributes.get("login"))),
-					string(attributes.get("avatar_url")));
-			default -> throw new IllegalArgumentException("Unsupported OAuth provider: " + provider);
-		};
+					string(attributes.get("avatar_url")),
+					"");
+		}
+		if (registrationId != null && registrationId.startsWith("gitlab")) {
+			return new OAuthProfile(
+					"gitlab",
+					required(attributes, "id"),
+					string(attributes.get("email")),
+					prefer(string(attributes.get("name")), string(attributes.get("username"))),
+					string(attributes.get("avatar_url")),
+					instance == null ? "" : instance);
+		}
+		throw new IllegalArgumentException("Unsupported OAuth provider: " + registrationId);
 	}
 
 	private String required(Map<String, Object> attributes, String key) {
