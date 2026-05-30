@@ -9,11 +9,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.scaffy.backend.auth.ScaffyPrincipal;
+import com.scaffy.backend.workspace.WorkspaceService;
 
 import jakarta.validation.Valid;
 
@@ -21,18 +23,26 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/repositories/github/publications")
 public class RepositoryPublicationController {
 
-	private final RepositoryPublicationService publicationService;
+	private static final String WORKSPACE_HEADER = "X-Workspace-Id";
 
-	public RepositoryPublicationController(RepositoryPublicationService publicationService) {
+	private final RepositoryPublicationService publicationService;
+	private final WorkspaceService workspaceService;
+
+	public RepositoryPublicationController(
+			RepositoryPublicationService publicationService,
+			WorkspaceService workspaceService) {
 		this.publicationService = publicationService;
+		this.workspaceService = workspaceService;
 	}
 
 	@PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
 	@ResponseStatus(HttpStatus.ACCEPTED)
 	public RepositoryPublicationResponse create(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
 			@Valid @RequestBody CreateRepositoryPublicationRequest request) {
-		return publicationService.create(principal.userId(), request);
+		UUID activeWorkspace = workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId);
+		return publicationService.create(principal.userId(), activeWorkspace, request);
 	}
 
 	@GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

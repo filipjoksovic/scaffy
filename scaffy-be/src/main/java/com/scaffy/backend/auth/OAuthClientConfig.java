@@ -14,6 +14,7 @@ public class OAuthClientConfig {
 
 	static final String GITLAB_COM_REGISTRATION_ID = "gitlab";
 	static final String GITLAB_COM_BASE_URL = "https://gitlab.com";
+	static final String GITHUB_CONNECT_REGISTRATION_ID = "github-repos";
 
 	@Bean
 	ClientRegistrationRepository clientRegistrationRepository(
@@ -28,11 +29,19 @@ public class OAuthClientConfig {
 					.build());
 		}
 		if (properties.github() != null && properties.github().configured()) {
+			// Login: identity only. Repository access is granted later via the explicit connect flow.
 			registrations.put("github", CommonOAuth2Provider.GITHUB.getBuilder("github")
 					.clientId(properties.github().clientId())
 					.clientSecret(properties.github().clientSecret())
-					.scope("repo", "workflow", "read:user", "user:email")
+					.scope("read:user", "user:email")
 					.build());
+			// Connect: same GitHub app, but requests repository + workflow access.
+			registrations.put(GITHUB_CONNECT_REGISTRATION_ID,
+					CommonOAuth2Provider.GITHUB.getBuilder(GITHUB_CONNECT_REGISTRATION_ID)
+							.clientId(properties.github().clientId())
+							.clientSecret(properties.github().clientSecret())
+							.scope("repo", "workflow", "read:user", "user:email")
+							.build());
 		}
 		if (properties.gitlab() != null && properties.gitlab().configured()) {
 			registrations.put(GITLAB_COM_REGISTRATION_ID, GitLabClientRegistrations.build(

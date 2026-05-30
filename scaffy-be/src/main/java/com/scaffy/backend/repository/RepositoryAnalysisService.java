@@ -40,28 +40,28 @@ public class RepositoryAnalysisService {
 		this.analysisRepository = analysisRepository;
 	}
 
-	public RepositoryAnalysisResponse analyze(UUID userId, UUID repositoryId) {
-		RepositoryConnection connection = repository.findByIdForUser(userId, repositoryId)
+	public RepositoryAnalysisResponse analyze(UUID workspaceId, UUID repositoryId) {
+		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
-		return runAndPersist(connection, userId);
+		return runAndPersist(connection);
 	}
 
-	public RepositoryAnalysisResponse getStoredAnalysis(UUID userId, UUID repositoryId) {
-		RepositoryConnection connection = repository.findByIdForUser(userId, repositoryId)
+	public RepositoryAnalysisResponse getStoredAnalysis(UUID workspaceId, UUID repositoryId) {
+		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
 		return analysisRepository.findLatestByRepositoryConnectionId(connection.id())
 				.map(persisted -> RepositoryAnalysisResponse.from(connection, persisted))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository analysis not found."));
 	}
 
-	public List<RepositoryAnalysisSummary> getAnalysisRuns(UUID userId, UUID repositoryId) {
-		RepositoryConnection connection = repository.findByIdForUser(userId, repositoryId)
+	public List<RepositoryAnalysisSummary> getAnalysisRuns(UUID workspaceId, UUID repositoryId) {
+		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
 		return analysisRepository.findSummariesByRepositoryConnectionId(connection.id());
 	}
 
-	public RepositoryAnalysisDeltaResponse getAnalysisDelta(UUID userId, UUID repositoryId) {
-		RepositoryConnection connection = repository.findByIdForUser(userId, repositoryId)
+	public RepositoryAnalysisDeltaResponse getAnalysisDelta(UUID workspaceId, UUID repositoryId) {
+		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
 		List<PersistedRepositoryAnalysis> latestPair = analysisRepository.findLatestPairByRepositoryConnectionId(connection.id());
 		if (latestPair.isEmpty()) {
@@ -82,11 +82,13 @@ public class RepositoryAnalysisService {
 		return compare(base, current);
 	}
 
-	private RepositoryAnalysisResponse runAndPersist(RepositoryConnection connection, UUID userId) {
+	private RepositoryAnalysisResponse runAndPersist(RepositoryConnection connection) {
 		if (!"github".equals(connection.provider())) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only GitHub repositories can be analyzed right now.");
+			throw new ResponseStatusException(
+					HttpStatus.CONFLICT,
+					"GitLab analysis is coming soon — only GitHub projects can be analyzed right now.");
 		}
-		GitHubWorkflowFile workflow = gitHubWorkflowClient.findWorkflow(userId, connection);
+		GitHubWorkflowFile workflow = gitHubWorkflowClient.findWorkflow(connection.userId(), connection);
 		AnalysisResponse analysis = pipelineAnalyzer.analyze(workflow.path(), workflow.content());
 		PersistedRepositoryAnalysis persisted = analysisRepository.insert(connection.id(), workflow.path(), workflow.content(), analysis);
 		return RepositoryAnalysisResponse.from(connection, persisted);

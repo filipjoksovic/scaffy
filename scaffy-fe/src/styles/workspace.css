@@ -1,0 +1,515 @@
+/* Workspace app shell: global top bar + contextual section sidebar
+   ----------------------------------------------------------------- */
+
+/* Higher specificity than .app-shell so the marketing container hairlines
+   (a tiled vertical-line background) never bleed into the app layout. */
+.app-shell.ws-shell {
+  background: var(--color-canvas);
+  background-image: none;
+}
+
+.ws-body {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  align-items: start;
+  min-height: calc(100svh - var(--nav-height));
+}
+
+.ws-sidebar {
+  position: sticky;
+  top: var(--nav-height);
+  display: grid;
+  align-content: start;
+  gap: var(--space-base);
+  height: calc(100svh - var(--nav-height));
+  padding: var(--space-lg) var(--space-base);
+  border-right: 1px solid var(--color-hairline);
+  background: var(--color-canvas-soft);
+}
+
+.ws-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-xs) var(--space-base);
+  border-bottom: 1px solid var(--color-hairline-soft);
+}
+
+.ws-identity__avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ws-identity__copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.ws-identity__copy strong {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-identity__copy span {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ws-nav {
+  display: grid;
+  gap: 2px;
+}
+
+.ws-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border-radius: var(--radius-md);
+  padding: 9px 10px;
+  color: var(--color-body);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ws-nav__item svg {
+  color: var(--color-muted);
+  transition: color 140ms ease;
+}
+
+.ws-nav__item:hover {
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+}
+
+.ws-nav__item.active {
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-hairline);
+}
+
+.ws-nav__item.active svg {
+  color: var(--color-primary);
+}
+
+.ws-content {
+  min-width: 0;
+  padding: var(--space-xl) var(--space-xl) var(--space-section);
+}
+
+/* Workspace page header
+   ----------------------------------------------------------------- */
+
+.ws-page {
+  display: grid;
+  align-content: start;
+  gap: var(--space-lg);
+}
+
+.ws-page__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-base);
+  flex-wrap: wrap;
+}
+
+.ws-page__heading {
+  display: grid;
+  gap: var(--space-xxs);
+  min-width: 0;
+}
+
+.ws-page__heading h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+}
+
+.ws-page__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+
+.ws-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.ws-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.ws-back svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ws-back:hover {
+  color: var(--color-ink);
+}
+
+.project-detail-page {
+  gap: var(--space-base);
+}
+
+/* Stacked settings/members cards
+   ----------------------------------------------------------------- */
+
+.ws-stack {
+  display: grid;
+  gap: var(--space-base);
+  max-width: 720px;
+}
+
+/* Projects grid
+   ----------------------------------------------------------------- */
+
+.projects-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-base);
+}
+
+.projects-toolbar .search-input {
+  min-width: 0;
+  flex: 1;
+  max-width: 360px;
+}
+
+.projects-toolbar .search-input input {
+  height: 40px;
+}
+
+.projects-toolbar__count {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(264px, 1fr));
+  gap: var(--space-base);
+}
+
+.project-card-wrap {
+  position: relative;
+}
+
+.project-card-wrap .project-card {
+  width: 100%;
+}
+
+.project-card__quick {
+  position: absolute;
+  top: var(--space-base);
+  right: var(--space-base);
+  z-index: 1;
+  display: flex;
+  gap: var(--space-xxs);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.project-card__quick .icon-button {
+  background: var(--color-surface-card);
+}
+
+.project-card-wrap:hover .project-card__quick,
+.project-card-wrap:focus-within .project-card__quick {
+  opacity: 1;
+}
+
+.project-card__runs--error {
+  color: var(--color-error);
+}
+
+/* Swap the score pill out for the delete affordance on hover so they don't overlap. */
+.project-card-wrap:hover .project-card__score,
+.project-card-wrap:focus-within .project-card__score {
+  opacity: 0;
+}
+
+.project-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  padding: var(--space-base);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.project-card:hover {
+  border-color: var(--color-hairline-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+.project-card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.project-card__head {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.project-card__avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-strong);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.project-card__id {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.project-card__id strong {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card__id span {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card__score {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.project-card__score--pending {
+  color: var(--color-muted-soft);
+  border-style: dashed;
+}
+
+.project-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.project-card__meta > span:not(:last-child)::after {
+  content: "·";
+  padding-left: var(--space-xs);
+  color: var(--color-muted-soft);
+}
+
+.project-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-hairline-soft);
+}
+
+.project-card__runs {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.projects-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-sm);
+  border: 1px dashed var(--color-hairline-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-canvas-soft);
+  padding: var(--space-xxl) var(--space-xl);
+}
+
+.projects-empty--compact {
+  padding: var(--space-xl);
+}
+
+.projects-empty h3 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.projects-empty p {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--color-body);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* Settings / members card extras
+   ----------------------------------------------------------------- */
+
+.workspace-card--accent {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-hairline));
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface-card));
+}
+
+.workspace-detail-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.workspace-detail-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-base);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-hairline-soft);
+}
+
+.workspace-detail-list > div:last-child {
+  border-bottom: 0;
+}
+
+.workspace-detail-list dt {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.workspace-detail-list dd {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.workspace-detail-list code {
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas-soft);
+  color: var(--color-body);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.workspace-tag {
+  display: inline-block;
+  margin-left: var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-strong);
+  color: var(--color-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+@media (max-width: 1024px) {
+  .ws-body {
+    grid-template-columns: 1fr;
+  }
+
+  .ws-sidebar {
+    position: static;
+    height: auto;
+    gap: var(--space-sm);
+    border-right: 0;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .ws-nav {
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: var(--space-xxs);
+    overflow-x: auto;
+  }
+
+  .ws-content {
+    padding: var(--space-lg);
+  }
+}
+
+@media (max-width: 640px) {
+  .ws-page__header {
+    align-items: flex-start;
+  }
+
+  .projects-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .projects-toolbar .search-input {
+    max-width: none;
+  }
+}

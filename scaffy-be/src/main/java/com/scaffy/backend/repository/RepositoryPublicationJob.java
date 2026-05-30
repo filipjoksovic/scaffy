@@ -6,6 +6,7 @@ import java.util.UUID;
 public record RepositoryPublicationJob(
 		UUID id,
 		UUID userId,
+		UUID workspaceId,
 		UUID initJobId,
 		String provider,
 		String repositoryName,

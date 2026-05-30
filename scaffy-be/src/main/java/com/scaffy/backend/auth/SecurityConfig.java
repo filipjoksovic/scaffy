@@ -32,7 +32,12 @@ public class SecurityConfig {
 				.formLogin(AbstractHttpConfigurer::disable)
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/auth/me", "/api/repositories/**").authenticated()
+						.requestMatchers(
+								"/api/auth/me",
+								"/api/auth/connect/**",
+								"/api/auth/connections/**",
+								"/api/repositories/**",
+								"/api/workspaces/**").authenticated()
 						.anyRequest().permitAll())
 				.oauth2Login(oauth -> oauth
 						.userInfoEndpoint(userInfo -> userInfo.userService(oauth2UserService))

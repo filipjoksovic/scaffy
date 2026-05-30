@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -79,6 +80,91 @@ public class UserRepository {
 				ORDER BY updated_at DESC
 				LIMIT 1
 				""", this::mapToken, userId, provider).stream().findFirst();
+	}
+
+	public Optional<OAuthAccessTokenRecord> findOAuthAccessToken(UUID userId, String provider, String instance) {
+		return jdbcTemplate.query("""
+				SELECT access_token_encrypted, access_token_expires_at, scopes
+				FROM oauth_accounts
+				WHERE user_id = ? AND provider = ? AND provider_instance = ? AND access_token_encrypted IS NOT NULL
+				ORDER BY updated_at DESC
+				LIMIT 1
+				""", this::mapToken, userId, provider, instance == null ? "" : instance).stream().findFirst();
+	}
+
+	/**
+	 * Links an OAuth provider account to an already-authenticated Scaffy user (account linking),
+	 * attaching the freshly captured access token. Reassigns the account to this user if it was
+	 * previously linked elsewhere (the unique key is provider+instance+providerUserId).
+	 */
+	@Transactional
+	public void linkOAuthAccount(
+			UUID userId,
+			OAuthProfile profile,
+			String encryptedAccessToken,
+			Instant expiresAt,
+			Set<String> scopes) {
+		OffsetDateTime expires = expiresAt == null ? null : OffsetDateTime.ofInstant(expiresAt, ZoneOffset.UTC);
+		String scopeText = scopes == null ? null : String.join(" ", scopes);
+		int updated = jdbcTemplate.update("""
+				UPDATE oauth_accounts
+				SET user_id = ?, email = ?, display_name = ?, avatar_url = ?,
+					access_token_encrypted = ?, access_token_expires_at = ?, scopes = ?,
+					updated_at = CURRENT_TIMESTAMP
+				WHERE provider = ? AND provider_instance = ? AND provider_user_id = ?
+				""",
+				userId,
+				profile.email(),
+				profile.displayName(),
+				profile.avatarUrl(),
+				encryptedAccessToken,
+				expires,
+				scopeText,
+				profile.provider(),
+				profile.instance(),
+				profile.providerUserId());
+		if (updated == 0) {
+			jdbcTemplate.update("""
+					INSERT INTO oauth_accounts
+						(id, user_id, provider, provider_instance, provider_user_id, email, display_name,
+						 avatar_url, access_token_encrypted, access_token_expires_at, scopes)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					""",
+					UUID.randomUUID(),
+					userId,
+					profile.provider(),
+					profile.instance(),
+					profile.providerUserId(),
+					profile.email(),
+					profile.displayName(),
+					profile.avatarUrl(),
+					encryptedAccessToken,
+					expires,
+					scopeText);
+		}
+	}
+
+	public List<ProviderConnectionRecord> listProviderConnections(UUID userId) {
+		return jdbcTemplate.query("""
+				SELECT provider, provider_instance, display_name, scopes, updated_at,
+					(access_token_encrypted IS NOT NULL) AS has_token
+				FROM oauth_accounts
+				WHERE user_id = ?
+				ORDER BY provider, provider_instance
+				""", (rs, rowNum) -> new ProviderConnectionRecord(
+				rs.getString("provider"),
+				rs.getString("provider_instance"),
+				rs.getString("display_name"),
+				rs.getString("scopes"),
+				rs.getBoolean("has_token"),
+				rs.getObject("updated_at", OffsetDateTime.class)), userId);
+	}
+
+	public int deleteProviderConnection(UUID userId, String provider, String instance) {
+		return jdbcTemplate.update("""
+				DELETE FROM oauth_accounts
+				WHERE user_id = ? AND provider = ? AND provider_instance = ?
+				""", userId, provider, instance == null ? "" : instance);
 	}
 
 	private Optional<AppUser> findByOAuthAccount(String provider, String providerInstance, String providerUserId) {

@@ -13,12 +13,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.scaffy.backend.auth.ScaffyPrincipal;
+import com.scaffy.backend.workspace.WorkspaceService;
 
 import jakarta.validation.Valid;
 
@@ -26,28 +29,39 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/repositories")
 public class RepositoryConnectionController {
 
+	static final String WORKSPACE_HEADER = "X-Workspace-Id";
+
 	private final RepositoryConnectionRepository repository;
 	private final RepositoryAnalysisService repositoryAnalysisService;
 	private final RepositoryAnalysisRepository repositoryAnalysisRepository;
 	private final GitHubRepositoryClient gitHubRepositoryClient;
+	private final GitLabRepositoryClient gitLabRepositoryClient;
 	private final GitHubRepositoryRefParser parser;
+	private final WorkspaceService workspaceService;
 
 	public RepositoryConnectionController(
 			RepositoryConnectionRepository repository,
 			RepositoryAnalysisService repositoryAnalysisService,
 			RepositoryAnalysisRepository repositoryAnalysisRepository,
 			GitHubRepositoryClient gitHubRepositoryClient,
-			GitHubRepositoryRefParser parser) {
+			GitLabRepositoryClient gitLabRepositoryClient,
+			GitHubRepositoryRefParser parser,
+			WorkspaceService workspaceService) {
 		this.repository = repository;
 		this.repositoryAnalysisService = repositoryAnalysisService;
 		this.repositoryAnalysisRepository = repositoryAnalysisRepository;
 		this.gitHubRepositoryClient = gitHubRepositoryClient;
+		this.gitLabRepositoryClient = gitLabRepositoryClient;
 		this.parser = parser;
+		this.workspaceService = workspaceService;
 	}
 
 	@GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-	public List<RepositoryConnectionResponse> list(@AuthenticationPrincipal ScaffyPrincipal principal) {
-		List<RepositoryConnection> connections = repository.findByUserId(principal.userId());
+	public List<RepositoryConnectionResponse> list(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId) {
+		UUID activeWorkspace = workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId);
+		List<RepositoryConnection> connections = repository.findByWorkspaceId(activeWorkspace);
 		Map<UUID, RepositoryAnalysisSummary> summaries = repositoryAnalysisRepository.findLatestSummariesByRepositoryConnectionIds(
 				connections.stream().map(RepositoryConnection::id).toList());
 		Map<UUID, Integer> runCounts = repositoryAnalysisRepository.countByRepositoryConnectionIds(
@@ -69,34 +83,82 @@ public class RepositoryConnectionController {
 				.toList();
 	}
 
+	@GetMapping(path = "/gitlab", produces = MediaType.APPLICATION_JSON_VALUE)
+	public List<GitLabRepositoryResponse> listGitLabRepositories(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestParam(value = "instance", required = false) String instance) {
+		return gitLabRepositoryClient.findProjects(principal.userId(), instance)
+				.stream()
+				.map(GitLabRepositoryResponse::from)
+				.toList();
+	}
+
 	@PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
 	@ResponseStatus(HttpStatus.CREATED)
 	public RepositoryConnectionResponse connect(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
-		@Valid @RequestBody ConnectRepositoryRequest request) {
-		GitHubRepositoryRef ref = parser.parse(request.repository());
-		return RepositoryConnectionResponse.from(repository.connectGitHub(principal.userId(), ref), null, 0);
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
+			@Valid @RequestBody ConnectRepositoryRequest request) {
+		UUID activeWorkspace = workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId);
+		String provider = request.providerOrDefault();
+		RepositoryConnection connection;
+		if ("gitlab".equals(provider)) {
+			connection = connectGitLab(activeWorkspace, principal.userId(), request);
+		}
+		else if ("github".equals(provider)) {
+			GitHubRepositoryRef ref = parser.parse(request.repository());
+			connection = repository.connect(
+					activeWorkspace, principal.userId(), "github", "", ref.owner(), ref.name(), ref.url());
+		}
+		else {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported provider: " + provider);
+		}
+		return RepositoryConnectionResponse.from(connection, null, 0);
+	}
+
+	private RepositoryConnection connectGitLab(UUID workspaceId, UUID userId, ConnectRepositoryRequest request) {
+		String host = request.instanceOrEmpty();
+		if (host.isBlank()) {
+			host = "gitlab.com";
+		}
+		String baseUrl = gitLabRepositoryClient.resolveBaseUrl(host)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown GitLab instance."));
+		String path = request.repository().trim().replaceAll("^/+", "").replaceAll("/+$", "");
+		if (path.isBlank() || !path.contains("/")) {
+			throw new ResponseStatusException(
+					HttpStatus.BAD_REQUEST, "Enter a GitLab project as group/project path.");
+		}
+		String owner = path.substring(0, path.lastIndexOf('/'));
+		String name = path.substring(path.lastIndexOf('/') + 1);
+		String url = baseUrl + "/" + path;
+		return repository.connect(workspaceId, userId, "gitlab", host, owner, name, url);
 	}
 
 	@PostMapping(path = "/{id}/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
 	public RepositoryAnalysisResponse analyzeRepository(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
 			@PathVariable UUID id) {
-		return repositoryAnalysisService.analyze(principal.userId(), id);
+		return repositoryAnalysisService.analyze(
+				workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId), id);
 	}
 
 	@GetMapping(path = "/{id}/analysis", produces = MediaType.APPLICATION_JSON_VALUE)
 	public RepositoryAnalysisResponse getRepositoryAnalysis(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
 			@PathVariable UUID id) {
-		return repositoryAnalysisService.getStoredAnalysis(principal.userId(), id);
+		return repositoryAnalysisService.getStoredAnalysis(
+				workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId), id);
 	}
 
 	@GetMapping(path = "/{id}/analysis/runs", produces = MediaType.APPLICATION_JSON_VALUE)
 	public List<RepositoryAnalysisRunSummaryResponse> getRepositoryAnalysisRuns(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
 			@PathVariable UUID id) {
-		return repositoryAnalysisService.getAnalysisRuns(principal.userId(), id)
+		return repositoryAnalysisService.getAnalysisRuns(
+				workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId), id)
 				.stream()
 				.map(RepositoryAnalysisRunSummaryResponse::from)
 				.toList();
@@ -105,14 +167,20 @@ public class RepositoryConnectionController {
 	@GetMapping(path = "/{id}/analysis/delta", produces = MediaType.APPLICATION_JSON_VALUE)
 	public RepositoryAnalysisDeltaResponse getRepositoryAnalysisDelta(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
 			@PathVariable UUID id) {
-		return repositoryAnalysisService.getAnalysisDelta(principal.userId(), id);
+		return repositoryAnalysisService.getAnalysisDelta(
+				workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId), id);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void disconnect(@AuthenticationPrincipal ScaffyPrincipal principal, @PathVariable UUID id) {
-		if (!repository.deleteForUser(principal.userId(), id)) {
+	public void disconnect(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
+			@PathVariable UUID id) {
+		UUID activeWorkspace = workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId);
+		if (!repository.deleteForWorkspace(activeWorkspace, id)) {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found.");
 		}
 	}
@@ -120,6 +188,7 @@ public class RepositoryConnectionController {
 	public record RepositoryConnectionResponse(
 			String id,
 			String provider,
+			String instance,
 			String owner,
 			String name,
 			String url,
@@ -134,6 +203,7 @@ public class RepositoryConnectionController {
 			return new RepositoryConnectionResponse(
 					connection.id().toString(),
 					connection.provider(),
+					connection.providerInstance(),
 					connection.owner(),
 					connection.name(),
 					connection.url(),
@@ -214,6 +284,23 @@ public class RepositoryConnectionController {
 					repository.name(),
 					repository.url(),
 					repository.privateRepository());
+		}
+	}
+
+	public record GitLabRepositoryResponse(
+			String fullName,
+			String owner,
+			String name,
+			String url,
+			boolean privateRepository) {
+
+		static GitLabRepositoryResponse from(GitLabProjectOption project) {
+			return new GitLabRepositoryResponse(
+					project.pathWithNamespace(),
+					project.owner(),
+					project.name(),
+					project.url(),
+					project.privateRepository());
 		}
 	}
 }

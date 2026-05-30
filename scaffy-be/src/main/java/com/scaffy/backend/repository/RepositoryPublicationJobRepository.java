@@ -22,6 +22,7 @@ public class RepositoryPublicationJobRepository {
 	public RepositoryPublicationJob insert(
 			UUID id,
 			UUID userId,
+			UUID workspaceId,
 			UUID initJobId,
 			String repositoryName,
 			String description) {
@@ -29,6 +30,7 @@ public class RepositoryPublicationJobRepository {
 				INSERT INTO repository_publication_jobs (
 					id,
 					user_id,
+					workspace_id,
 					initializer_generation_job_id,
 					provider,
 					repository_name,
@@ -37,8 +39,8 @@ public class RepositoryPublicationJobRepository {
 					status,
 					progress_message
 				)
-				VALUES (?, ?, ?, 'github', ?, ?, 'private', 'queued', 'Waiting for publisher')
-				""", id, userId, initJobId, repositoryName, blankToNull(description));
+				VALUES (?, ?, ?, ?, 'github', ?, ?, 'private', 'queued', 'Waiting for publisher')
+				""", id, userId, workspaceId, initJobId, repositoryName, blankToNull(description));
 		return findByIdForUser(userId, id).orElseThrow();
 	}
 
@@ -47,6 +49,7 @@ public class RepositoryPublicationJobRepository {
 				SELECT
 					id,
 					user_id,
+					workspace_id,
 					initializer_generation_job_id,
 					provider,
 					repository_name,
@@ -84,6 +87,7 @@ public class RepositoryPublicationJobRepository {
 		return new RepositoryPublicationJob(
 				rs.getObject("id", UUID.class),
 				rs.getObject("user_id", UUID.class),
+				rs.getObject("workspace_id", UUID.class),
 				rs.getObject("initializer_generation_job_id", UUID.class),
 				rs.getString("provider"),
 				rs.getString("repository_name"),

@@ -83,7 +83,10 @@ async function handleJob(jobId: string): Promise<void> {
       job.repositoryDescription,
       files,
     )
-    await store.succeed(jobId, job.userId, published.owner, published.name, published.url)
+    if (!job.workspaceId) {
+      throw new Error('Publication job is not associated with a workspace.')
+    }
+    await store.succeed(jobId, job.userId, job.workspaceId, published.owner, published.name, published.url)
     console.log(`[publisher] job=${jobId} succeeded url=${published.url}`)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Publication failed.'

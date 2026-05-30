@@ -38,7 +38,7 @@ public class RepositoryPublicationService {
 		this.userRepository = userRepository;
 	}
 
-	public RepositoryPublicationResponse create(UUID userId, CreateRepositoryPublicationRequest request) {
+	public RepositoryPublicationResponse create(UUID userId, UUID workspaceId, CreateRepositoryPublicationRequest request) {
 		InitGenerationJob initJob = initGenerationJobRepository.findById(request.initJobId())
 				.orElseThrow(() -> new InitJobNotFoundException(request.initJobId()));
 		if (initJob.userId() == null || !initJob.userId().equals(userId)) {
@@ -65,6 +65,7 @@ public class RepositoryPublicationService {
 		RepositoryPublicationJob job = publicationJobRepository.insert(
 				id,
 				userId,
+				workspaceId,
 				request.initJobId(),
 				request.repositoryName().trim(),
 				request.description());
@@ -80,8 +81,8 @@ public class RepositoryPublicationService {
 
 	private RepositoryPublicationResponse toResponse(RepositoryPublicationJob job) {
 		RepositoryConnectionController.RepositoryConnectionResponse connection = null;
-		if (job.repositoryConnectionId() != null) {
-			connection = connectionRepository.findByIdForUser(job.userId(), job.repositoryConnectionId())
+		if (job.repositoryConnectionId() != null && job.workspaceId() != null) {
+			connection = connectionRepository.findByIdForWorkspace(job.workspaceId(), job.repositoryConnectionId())
 					.map(repositoryConnection -> RepositoryConnectionController.RepositoryConnectionResponse.from(
 							repositoryConnection,
 							null,

@@ -4,21 +4,28 @@ import { DesignSystem } from './pages/DesignSystem'
 import { Analyzer } from './pages/Analyzer'
 import { Dashboard } from './pages/Dashboard'
 import { Landing } from './pages/Landing'
+import { WorkspaceMembers } from './pages/WorkspaceMembers'
+import { WorkspaceSettings } from './pages/WorkspaceSettings'
 import { AuthProvider } from './lib/auth'
+import { WorkspaceProvider } from './lib/workspace'
 import './App.css'
 
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/init" element={<Initializer />} />
-          <Route path="/analyze" element={<Analyzer />} />
-          <Route path="/design" element={<DesignSystem />} />
-        </Routes>
-      </BrowserRouter>
+      <WorkspaceProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/init" element={<Initializer />} />
+            <Route path="/analyze" element={<Analyzer />} />
+            <Route path="/design" element={<DesignSystem />} />
+            <Route path="/workspace" element={<WorkspaceSettings />} />
+            <Route path="/workspace/members" element={<WorkspaceMembers />} />
+          </Routes>
+        </BrowserRouter>
+      </WorkspaceProvider>
     </AuthProvider>
   )
 }

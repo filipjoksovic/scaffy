@@ -184,6 +184,15 @@ class RepositoryAnalysisPersistenceControllerTest {
 					INSERT INTO users (id, email, display_name, avatar_url)
 					VALUES (?, ?, ?, ?)
 					""", user.id(), user.email(), user.displayName(), user.avatarUrl());
+			UUID workspaceId = UUID.randomUUID();
+			jdbcTemplate.update("""
+					INSERT INTO workspaces (id, name, slug)
+					VALUES (?, ?, ?)
+					""", workspaceId, "Dev workspace", "ws-" + workspaceId.toString().replace("-", ""));
+			jdbcTemplate.update("""
+					INSERT INTO workspace_members (id, workspace_id, user_id, role)
+					VALUES (?, ?, ?, 'owner')
+					""", UUID.randomUUID(), workspaceId, user.id());
 		}
 		return new Cookie(AuthProperties.ACCESS_COOKIE, jwtService.createAccessToken(user));
 	}

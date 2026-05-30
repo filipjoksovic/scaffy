@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { Link } from "react-router-dom";
 import type * as Monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker.js?worker";
 import type {
@@ -11,15 +11,12 @@ import type {
 import { oauthLoginUrl } from "../api/auth";
 import {
   analyzeRepository,
-  connectRepository,
   createRepositoryPublication,
   disconnectRepository,
   getRepositoryPublication,
   getRepositoryAnalysis,
   getRepositoryAnalysisDelta,
-  listGitHubRepositories,
   listRepositoryConnections,
-  type GitHubRepository,
   type RepositoryPublication,
   type RepositoryAnalysis,
   type RepositoryAnalysisDelta,
@@ -27,14 +24,15 @@ import {
   type RepositoryConnection,
 } from "../api/repositories";
 import {
-  AppFrame,
   Badge,
   Button,
   Card,
   Eyebrow,
   StateRow,
   TextInput,
+  WorkspaceFrame,
 } from "../components";
+import { ConnectRepositoryDialog } from "../components/ConnectRepositoryDialog";
 import {
   MaturityPicker,
   StackIcon,
@@ -49,7 +47,9 @@ import {
   type InitJob,
   type StackCatalogOption,
 } from "../api/init";
+import { listConnections } from "../api/auth";
 import { useAuth } from "../lib/auth";
+import { useWorkspace } from "../lib/workspace";
 import {
   capabilityMeta,
   dimensionMeta,
@@ -70,25 +70,20 @@ monacoGlobal.MonacoEnvironment ??= {
   getWorker: () => new EditorWorker(),
 };
 
-type GitHubAccessState = "connected" | "needs-reconnect" | "unknown";
-
 export function Dashboard() {
-  const { user, loading } = useAuth();
-  const [repository, setRepository] = useState("");
+  const { user } = useAuth();
+  const { activeWorkspace } = useWorkspace();
+  const activeWorkspaceId = activeWorkspace?.id ?? null;
   const [connections, setConnections] = useState<RepositoryConnection[]>([]);
-  const [githubRepositories, setGitHubRepositories] = useState<
-    GitHubRepository[]
-  >([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
-  const [githubLoading, setGitHubLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
-  const [githubFilter, setGithubFilter] = useState("");
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [connectInitialKey, setConnectInitialKey] = useState<string | null>(null);
+  const [hasProviderConnections, setHasProviderConnections] = useState<
+    boolean | null
+  >(null);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [githubAccess, setGithubAccess] =
-    useState<GitHubAccessState>("unknown");
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<
     string | null
   >(null);
@@ -109,7 +104,6 @@ export function Dashboard() {
   useEffect(() => {
     if (!user) {
       setConnections([]);
-      setGitHubRepositories([]);
       setSelectedRepositoryId(null);
       setConnectDialogOpen(false);
       setCreatingProject(false);
@@ -123,6 +117,21 @@ export function Dashboard() {
     let mounted = true;
     setConnectionsLoading(true);
     setError(null);
+    setSelectedRepositoryId(null);
+    setAnalysisByRepository({});
+    setDeltaByRepository({});
+    setAnalysisErrorByRepository({});
+    listConnections()
+      .then((items) => {
+        if (mounted) {
+          setHasProviderConnections(items.length > 0);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setHasProviderConnections(false);
+        }
+      });
     listRepositoryConnections()
       .then((items) => {
         if (mounted) {
@@ -147,26 +156,16 @@ export function Dashboard() {
     return () => {
       mounted = false;
     };
-  }, [user]);
+  }, [user, activeWorkspaceId]);
 
   useEffect(() => {
-    if (connections.length === 0) {
-      if (selectedRepositoryId) {
-        setSelectedRepositoryId(null);
-      }
-      return;
-    }
-
     if (
-      !selectedRepositoryId ||
+      selectedRepositoryId &&
       !connections.some((connection) => connection.id === selectedRepositoryId)
     ) {
-      setSelectedRepositoryId(connections[0].id);
+      setSelectedRepositoryId(null);
     }
   }, [connections, selectedRepositoryId]);
-
-  const needsGitHubReconnect =
-    error?.toLowerCase().includes("reconnect with github") ?? false;
 
   const filteredConnections = useMemo(() => {
     if (!filter.trim()) return connections;
@@ -288,65 +287,30 @@ export function Dashboard() {
   ]);
 
   useEffect(() => {
-    if (
-      !connectDialogOpen ||
-      !user ||
-      githubLoading ||
-      githubRepositories.length > 0 ||
-      githubAccess === "needs-reconnect"
-    ) {
+    if (!user) {
       return;
     }
-
-    void handleFetchGitHubRepositories();
-  }, [
-    connectDialogOpen,
-    githubAccess,
-    githubLoading,
-    githubRepositories.length,
-    user,
-  ]);
-
-  const accessState: GitHubAccessState = needsGitHubReconnect
-    ? "needs-reconnect"
-    : githubAccess;
-  const githubAccessLabel =
-    accessState === "needs-reconnect"
-      ? "Reconnect needed"
-      : accessState === "connected"
-        ? "Connected"
-        : "Not checked";
-  const githubAccessDot =
-    accessState === "needs-reconnect"
-      ? "error"
-      : accessState === "connected"
-        ? "success"
-        : "warn";
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!repository.trim()) {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    if (!connected) {
       return;
     }
+    const instance = params.get("instance");
+    setConnectInitialKey(
+      connected === "gitlab" ? (instance ?? "gitlab.com") : connected,
+    );
+    setConnectDialogOpen(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("connected");
+    url.searchParams.delete("instance");
+    window.history.replaceState({}, "", url.toString());
+  }, [user]);
 
-    setSubmitting(true);
-    setError(null);
-    try {
-      const connection = await connectRepository(repository);
-      setConnections((current) => [
-        connection,
-        ...current.filter((item) => item.id !== connection.id),
-      ]);
-      setSelectedRepositoryId(connection.id);
-      setRepository("");
-      setConnectDialogOpen(false);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not connect repository.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
+  function handleConnected(connection: RepositoryConnection) {
+    setConnections((current) => [
+      connection,
+      ...current.filter((item) => item.id !== connection.id),
+    ]);
   }
 
   async function handleDisconnect(id: string) {
@@ -378,7 +342,6 @@ export function Dashboard() {
   }
 
   async function handleAnalyzeRepository(connection: RepositoryConnection) {
-    setSelectedRepositoryId(connection.id);
     setAnalyzingId(connection.id);
     setAnalysisErrorByRepository((current) => {
       const next = { ...current };
@@ -429,311 +392,304 @@ export function Dashboard() {
     }
   }
 
-  async function handleFetchGitHubRepositories() {
-    setGitHubLoading(true);
-    setError(null);
-    try {
-      setGitHubRepositories(await listGitHubRepositories());
-      setGithubAccess("connected");
-    } catch (err) {
-      setGithubAccess("needs-reconnect");
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not fetch GitHub repositories.",
+  function handleCreated(
+    connection: RepositoryConnection,
+    analysis: RepositoryAnalysis | null,
+  ) {
+    setConnections((current) => [
+      connection,
+      ...current.filter((item) => item.id !== connection.id),
+    ]);
+    if (analysis) {
+      setAnalysisByRepository((current) => ({
+        ...current,
+        [connection.id]: analysis,
+      }));
+      setConnections((current) =>
+        current.map((item) =>
+          item.id === connection.id
+            ? {
+                ...item,
+                analysisRunCount: Math.max(
+                  item.analysisRunCount ?? 0,
+                  analysis.runNumber,
+                ),
+                analysisSummary: summaryFromAnalysis(analysis),
+              }
+            : item,
+        ),
       );
-    } finally {
-      setGitHubLoading(false);
     }
+    setCreatingProject(false);
+    setSelectedRepositoryId(connection.id);
   }
 
-  async function handleConnectGitHubRepository(repo: GitHubRepository) {
-    setSubmitting(true);
-    setError(null);
-    try {
-      const connection = await connectRepository(repo.fullName);
-      setConnections((current) => [
-        connection,
-        ...current.filter((item) => item.id !== connection.id),
-      ]);
-      setSelectedRepositoryId(connection.id);
-      setConnectDialogOpen(false);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not connect repository.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <AppFrame>
-        <section className="dashboard-signin">
-          <Card className="dashboard-signin__card">
-            <Eyebrow>Workspace</Eyebrow>
-            <h2>Checking session</h2>
-            <p>
-              Verifying the current browser session before loading the
-              workspace.
-            </p>
-          </Card>
-        </section>
-      </AppFrame>
+  let body: React.ReactNode;
+  if (creatingProject) {
+    body = (
+      <CreateProjectPanel
+        onCancel={() => setCreatingProject(false)}
+        onCreated={handleCreated}
+      />
     );
-  }
-
-  if (!user) {
-    return (
-      <AppFrame>
-        <section className="dashboard-signin">
-          <Card className="dashboard-signin__card">
-            <Eyebrow>Workspace</Eyebrow>
-            <h2>Sign in to view your projects</h2>
-            <p>
-              Connect a GitHub account to discover repositories and queue them
-              for analysis.
-            </p>
-            <div className="dashboard-signin__actions">
-              <a className="button button--primary" href={oauthLoginUrl.github}>
-                Continue with GitHub
-              </a>
-              <a
-                className="button button--secondary"
-                href={oauthLoginUrl.google}
-              >
-                Continue with Google
-              </a>
-            </div>
-          </Card>
-        </section>
-      </AppFrame>
+  } else if (selectedConnection) {
+    body = (
+      <section className="ws-page project-detail-page">
+        <button
+          className="ws-back"
+          onClick={() => setSelectedRepositoryId(null)}
+          type="button"
+        >
+          <IconBack />
+          Back to projects
+        </button>
+        <ProjectDetail
+          analysis={selectedAnalysis}
+          connection={selectedConnection}
+          delta={selectedDelta}
+          error={selectedAnalysisError}
+          loading={analyzingId === selectedConnection.id}
+          loadingStored={loadingAnalysisId === selectedConnection.id}
+          onAnalyze={handleAnalyzeRepository}
+          onConnect={() => setConnectDialogOpen(true)}
+          onCreate={() => setCreatingProject(true)}
+          onDisconnect={handleDisconnect}
+        />
+      </section>
     );
-  }
-
-  return (
-    <AppFrame>
-      <section className="dashboard-band" aria-labelledby="dashboard-title">
-        <header className="dashboard-header">
-          <div className="dashboard-header__copy">
-            <h2 id="dashboard-title">Projects</h2>
-            <p className="dashboard-header__status">
-              <span
-                aria-hidden="true"
-                className={`dot dot--${githubAccessDot}`}
-              />
-              <span>{githubAccessLabel}</span>
+  } else {
+    body = (
+      <section className="ws-page projects-page" aria-labelledby="projects-title">
+        <header className="ws-page__header">
+          <div className="ws-page__heading">
+            <Eyebrow>{activeWorkspace?.name ?? "Workspace"}</Eyebrow>
+            <h2 id="projects-title">Projects</h2>
+            <p className="ws-page__status">
+              <span>Connect GitHub or GitLab repositories to this workspace.</span>
             </p>
           </div>
-          <div className="dashboard-header__actions">
+          <div className="ws-page__actions">
             <Button
-              disabled={githubLoading}
               onClick={() => {
+                setConnectInitialKey(null);
                 setConnectDialogOpen(true);
-                void handleFetchGitHubRepositories();
               }}
               variant="secondary"
             >
-              {githubLoading ? "Syncing…" : "Connect repository"}
+              Connect repository
             </Button>
-            <Button onClick={() => setCreatingProject(true)}>
-              {creatingProject ? "Creating…" : "Create project"}
-            </Button>
+            <Button onClick={() => setCreatingProject(true)}>Create project</Button>
           </div>
         </header>
 
-        <div className="dashboard-layout">
-          <ProjectSidebar
-            analysisByRepository={analysisByRepository}
-            connections={connections}
-            filter={filter}
-            filteredConnections={filteredConnections}
-            loading={connectionsLoading}
-            onFilterChange={setFilter}
-            onSelect={setSelectedRepositoryId}
-            selectedRepositoryId={selectedRepositoryId}
-          />
+        {error && (
+          <StateRow detail={error} icon="!" label="Something went wrong" tone="error" />
+        )}
 
-          <div className="project-workspace">
-            {creatingProject ? (
-              <CreateProjectPanel
-                onCancel={() => setCreatingProject(false)}
-                onCreated={(connection, analysis) => {
-                  setConnections((current) => [
-                    connection,
-                    ...current.filter((item) => item.id !== connection.id),
-                  ]);
-                  setSelectedRepositoryId(connection.id);
-                  if (analysis) {
-                    setAnalysisByRepository((current) => ({
-                      ...current,
-                      [connection.id]: analysis,
-                    }));
-                    setConnections((current) =>
-                      current.map((item) =>
-                        item.id === connection.id
-                          ? {
-                              ...item,
-                              analysisRunCount: Math.max(
-                                item.analysisRunCount ?? 0,
-                                analysis.runNumber,
-                              ),
-                              analysisSummary: summaryFromAnalysis(analysis),
-                            }
-                          : item,
-                      ),
-                    );
-                  }
-                  setCreatingProject(false);
-                }}
-              />
-            ) : (
-              <ProjectDetail
-                analysis={selectedAnalysis}
-                connection={selectedConnection}
-                delta={selectedDelta}
-                error={selectedAnalysisError}
-                loading={
-                  selectedConnection
-                    ? analyzingId === selectedConnection.id
-                    : false
-                }
-                loadingStored={
-                  selectedConnection
-                    ? loadingAnalysisId === selectedConnection.id
-                    : false
-                }
-                onAnalyze={handleAnalyzeRepository}
-                onConnect={() => setConnectDialogOpen(true)}
-                onCreate={() => setCreatingProject(true)}
-                onDisconnect={handleDisconnect}
-              />
-            )}
+        {connections.length > 0 && (
+          <div className="projects-toolbar">
+            <SearchInput
+              onChange={setFilter}
+              placeholder="Search projects"
+              value={filter}
+            />
+            <span className="projects-toolbar__count">
+              {connections.length}{" "}
+              {connections.length === 1 ? "project" : "projects"}
+            </span>
           </div>
-        </div>
+        )}
 
-        <RepositoryConnectDialog
-          connections={connections}
-          error={error}
-          githubFilter={githubFilter}
-          githubLoading={githubLoading}
-          githubRepositories={githubRepositories}
-          needsGitHubReconnect={needsGitHubReconnect}
-          onConnectGithubRepository={handleConnectGitHubRepository}
-          onFetchGithubRepositories={handleFetchGitHubRepositories}
-          onGithubFilterChange={setGithubFilter}
-          onOpenChange={setConnectDialogOpen}
-          onRepositoryChange={setRepository}
-          onSubmit={handleSubmit}
-          open={connectDialogOpen}
-          repository={repository}
-          submitting={submitting}
-        />
+        {connectionsLoading ? (
+          <StateRow
+            detail="Loading repositories connected to this workspace."
+            label="Loading projects"
+            tone="loading"
+          />
+        ) : connections.length === 0 && hasProviderConnections === false ? (
+          <div className="projects-empty">
+            <Eyebrow>No accounts connected</Eyebrow>
+            <h3>Connect GitHub or GitLab to get started</h3>
+            <p>
+              No repository providers are connected yet. Open workspace settings to
+              connect your GitHub or GitLab account — then you can add projects here.
+            </p>
+            <div className="dashboard-empty-actions">
+              <Link className="button button--primary" to="/workspace">
+                Go to settings
+              </Link>
+              <Button
+                onClick={() => {
+                  setConnectInitialKey(null);
+                  setConnectDialogOpen(true);
+                }}
+                variant="secondary"
+              >
+                Connect now
+              </Button>
+            </div>
+          </div>
+        ) : connections.length === 0 ? (
+          <div className="projects-empty">
+            <Eyebrow>No projects yet</Eyebrow>
+            <h3>Add your first repository</h3>
+            <p>
+              Your accounts are connected. Add an existing repository, or generate a
+              brand new project and publish it.
+            </p>
+            <div className="dashboard-empty-actions">
+              <Button
+                onClick={() => {
+                  setConnectInitialKey(null);
+                  setConnectDialogOpen(true);
+                }}
+              >
+                Add repository
+              </Button>
+              <Button onClick={() => setCreatingProject(true)} variant="secondary">
+                Create project
+              </Button>
+            </div>
+          </div>
+        ) : filteredConnections.length === 0 ? (
+          <div className="projects-empty projects-empty--compact">
+            <h3>No matches</h3>
+            <p>No connected project matches “{filter}”.</p>
+          </div>
+        ) : (
+          <div className="projects-grid">
+            {filteredConnections.map((connection) => (
+              <ProjectCard
+                analysisError={analysisErrorByRepository[connection.id] ?? null}
+                analyzing={analyzingId === connection.id}
+                connection={connection}
+                key={connection.id}
+                onAnalyze={() => void handleAnalyzeRepository(connection)}
+                onDelete={() => void handleDisconnect(connection.id)}
+                onOpen={() => setSelectedRepositoryId(connection.id)}
+              />
+            ))}
+          </div>
+        )}
       </section>
-    </AppFrame>
+    );
+  }
+
+  return (
+    <WorkspaceFrame active="projects">
+      {body}
+      <ConnectRepositoryDialog
+        existingConnections={connections}
+        initialProviderKey={connectInitialKey}
+        onConnected={handleConnected}
+        onOpenChange={(open) => {
+          setConnectDialogOpen(open);
+          if (!open) {
+            listConnections()
+              .then((items) => setHasProviderConnections(items.length > 0))
+              .catch(() => undefined);
+          }
+        }}
+        open={connectDialogOpen}
+      />
+    </WorkspaceFrame>
   );
 }
 
-type ProjectSidebarProps = Readonly<{
-  analysisByRepository: Record<string, RepositoryAnalysis>;
-  connections: RepositoryConnection[];
-  filter: string;
-  filteredConnections: RepositoryConnection[];
-  loading: boolean;
-  onFilterChange: (value: string) => void;
-  onSelect: (id: string) => void;
-  selectedRepositoryId: string | null;
+type ProjectCardProps = Readonly<{
+  connection: RepositoryConnection;
+  analyzing: boolean;
+  analysisError: string | null;
+  onOpen: () => void;
+  onAnalyze: () => void;
+  onDelete: () => void;
 }>;
 
-function ProjectSidebar({
-  analysisByRepository,
-  connections,
-  filter,
-  filteredConnections,
-  loading,
-  onFilterChange,
-  onSelect,
-  selectedRepositoryId,
-}: ProjectSidebarProps) {
+function ProjectCard({
+  connection,
+  analyzing,
+  analysisError,
+  onOpen,
+  onAnalyze,
+  onDelete,
+}: ProjectCardProps) {
+  const summary = connection.analysisSummary;
+  const canAnalyze = connection.provider === "github";
   return (
-    <Card
-      as="section"
-      className="project-sidebar"
-      aria-label="Connected projects"
-    >
-      <div className="project-sidebar__header">
-        <SearchInput
-          onChange={onFilterChange}
-          placeholder="Search projects"
-          value={filter}
-        />
-        <span className="project-sidebar__count">{connections.length}</span>
+    <div className="project-card-wrap">
+      <button className="project-card" onClick={onOpen} type="button">
+        <div className="project-card__head">
+          <span aria-hidden="true" className="project-card__avatar">
+            {connection.owner.charAt(0).toUpperCase()}
+          </span>
+          <div className="project-card__id">
+            <strong>{connection.name}</strong>
+            <span>{connection.owner}</span>
+          </div>
+          {summary ? (
+            <span
+              className={`project-card__score ${statusBadgeClassName(summary.overallStatus)}`}
+            >
+              {formatScore(summary.overallScore)}
+            </span>
+          ) : (
+            <span className="project-card__score project-card__score--pending">—</span>
+          )}
+        </div>
+        <div className="project-card__meta">
+          <span>{formatProvider(connection.provider)}</span>
+          <span>
+            {summary
+              ? `Analyzed ${formatRelative(summary.analyzedAt)}`
+              : `Connected ${formatRelative(connection.connectedAt)}`}
+          </span>
+        </div>
+        <div className="project-card__footer">
+          {analyzing ? (
+            <span className="project-card__runs">Analyzing…</span>
+          ) : analysisError ? (
+            <span className="project-card__runs project-card__runs--error">
+              Analysis failed
+            </span>
+          ) : summary ? (
+            <>
+              <Badge className={statusBadgeClassName(summary.overallStatus)}>
+                {statusMeta(summary.overallStatus).label}
+              </Badge>
+              <span className="project-card__runs">
+                {connection.analysisRunCount}{" "}
+                {connection.analysisRunCount === 1 ? "run" : "runs"}
+              </span>
+            </>
+          ) : (
+            <span className="project-card__runs">Not analyzed yet</span>
+          )}
+        </div>
+      </button>
+      <div className="project-card__quick">
+        {canAnalyze && (
+          <button
+            aria-label={`Analyze ${connection.owner}/${connection.name}`}
+            className="icon-button project-card__action"
+            disabled={analyzing}
+            onClick={onAnalyze}
+            title={summary ? "Re-analyze" : "Analyze"}
+            type="button"
+          >
+            <IconAnalyze />
+          </button>
+        )}
+        <button
+          aria-label={`Remove ${connection.owner}/${connection.name}`}
+          className="icon-button icon-button--danger project-card__action"
+          onClick={onDelete}
+          title="Remove project"
+          type="button"
+        >
+          <IconTrash />
+        </button>
       </div>
-
-      {loading ? (
-        <StateRow
-          detail="Loading repositories from /api/repositories."
-          label="Loading connected projects"
-          tone="loading"
-        />
-      ) : connections.length === 0 ? (
-        <div className="empty-state empty-state--sidebar">
-          <h4>No projects yet</h4>
-          <p>
-            Connect a GitHub repository to start building an analysis history.
-          </p>
-        </div>
-      ) : filteredConnections.length === 0 ? (
-        <div className="empty-state empty-state--sidebar">
-          <h4>No matches</h4>
-          <p>No connected project matches “{filter}”.</p>
-        </div>
-      ) : (
-        <ul className="project-list">
-          {filteredConnections.map((connection) => {
-            const selected = selectedRepositoryId === connection.id;
-            const summary =
-              connection.analysisSummary ||
-              (analysisByRepository[connection.id]
-                ? summaryFromAnalysis(analysisByRepository[connection.id])
-                : null);
-            return (
-              <li key={connection.id}>
-                <button
-                  className={`project-list__button${selected ? " project-list__button--active" : ""}`}
-                  onClick={() => onSelect(connection.id)}
-                  type="button"
-                >
-                  <span aria-hidden="true" className="repo-cell__avatar">
-                    {connection.owner.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="project-list__copy">
-                    <strong>
-                      {connection.owner}/{connection.name}
-                    </strong>
-                    <span>
-                      {summary
-                        ? formatRelative(summary.analyzedAt)
-                        : `Connected ${formatRelative(connection.connectedAt)}`}
-                    </span>
-                  </span>
-                  {summary ? (
-                    <span className="project-list__score">
-                      {formatScore(summary.overallScore)}
-                    </span>
-                  ) : (
-                    <span className="project-list__score project-list__score--pending">
-                      —
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Card>
+    </div>
   );
 }
 
@@ -842,6 +798,17 @@ function ProjectDetail({
           onReanalyze={() => onAnalyze(connection)}
           reanalyzing={loading}
         />
+      ) : connection.provider !== "github" ? (
+        <div className="analysis-empty">
+          <div>
+            <Eyebrow>Analysis</Eyebrow>
+            <h3>GitLab analysis is coming soon</h3>
+            <p>
+              This GitLab project is connected to the workspace. Pipeline analysis for
+              GitLab is on the way — GitHub projects can be analyzed today.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="analysis-empty">
           <div>
@@ -909,21 +876,25 @@ function ProjectDetailHeader({
       </div>
       <div className="project-detail__side">
         <div className="project-detail__actions">
-          <Button
-            className="button--small"
-            disabled={loading}
-            onClick={() => onAnalyze(connection)}
-            variant="secondary"
-          >
-            {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
-          </Button>
+          {connection.provider === "github" ? (
+            <Button
+              className="button--small"
+              disabled={loading}
+              onClick={() => onAnalyze(connection)}
+              variant="secondary"
+            >
+              {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
+            </Button>
+          ) : (
+            <Badge title="GitLab analysis is coming soon.">Analysis coming soon</Badge>
+          )}
           <a
-            aria-label={`Open ${connection.owner}/${connection.name} on GitHub`}
+            aria-label={`Open ${connection.owner}/${connection.name}`}
             className="icon-button"
             href={connection.url}
             rel="noreferrer"
             target="_blank"
-            title="Open on GitHub"
+            title="Open repository"
           >
             <IconExternal />
           </a>
@@ -1843,202 +1814,6 @@ function SourceCodeViewer({ content, source }: SourceCodeViewerProps) {
   );
 }
 
-type RepositoryConnectDialogProps = Readonly<{
-  connections: RepositoryConnection[];
-  error: string | null;
-  githubFilter: string;
-  githubLoading: boolean;
-  githubRepositories: GitHubRepository[];
-  needsGitHubReconnect: boolean;
-  onConnectGithubRepository: (repo: GitHubRepository) => void;
-  onFetchGithubRepositories: () => void;
-  onGithubFilterChange: (value: string) => void;
-  onOpenChange: (open: boolean) => void;
-  onRepositoryChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  open: boolean;
-  repository: string;
-  submitting: boolean;
-}>;
-
-function RepositoryConnectDialog({
-  connections,
-  error,
-  githubFilter,
-  githubLoading,
-  githubRepositories,
-  needsGitHubReconnect,
-  onConnectGithubRepository,
-  onFetchGithubRepositories,
-  onGithubFilterChange,
-  onOpenChange,
-  onRepositoryChange,
-  onSubmit,
-  open,
-  repository,
-  submitting,
-}: RepositoryConnectDialogProps) {
-  const filteredGithubRepositories = useMemo(() => {
-    if (!githubFilter.trim()) return githubRepositories;
-    const query = githubFilter.trim().toLowerCase();
-    return githubRepositories.filter((repo) =>
-      repo.fullName.toLowerCase().includes(query),
-    );
-  }, [githubFilter, githubRepositories]);
-
-  return (
-    <Dialog.Root onOpenChange={onOpenChange} open={open}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="repository-dialog__overlay" />
-        <Dialog.Content className="repository-dialog">
-          <header className="repository-dialog__header">
-            <div>
-              <Eyebrow>Add project</Eyebrow>
-              <Dialog.Title className="repository-dialog__title">
-                Choose a GitHub repository
-              </Dialog.Title>
-              <Dialog.Description className="repository-dialog__description">
-                Select a repository from your GitHub account, or paste a
-                repository URL manually.
-              </Dialog.Description>
-            </div>
-            <Dialog.Close className="icon-button" aria-label="Close dialog">
-              <IconClose />
-            </Dialog.Close>
-          </header>
-
-          <div className="repository-dialog__toolbar">
-            <SearchInput
-              onChange={onGithubFilterChange}
-              placeholder="Search repositories"
-              value={githubFilter}
-            />
-            <Button
-              className="button--small"
-              disabled={githubLoading}
-              onClick={onFetchGithubRepositories}
-              variant="secondary"
-            >
-              {githubLoading
-                ? "Refreshing"
-                : githubRepositories.length === 0
-                  ? "Fetch GitHub"
-                  : "Refresh"}
-            </Button>
-          </div>
-
-          <div className="repository-dialog__body">
-            {githubLoading ? (
-              <StateRow
-                detail="Fetching repositories from your connected GitHub account."
-                label="Loading GitHub repositories"
-                tone="loading"
-              />
-            ) : needsGitHubReconnect ? (
-              <div className="repository-dialog__empty">
-                <h4>Reconnect GitHub</h4>
-                <p>
-                  Scaffy needs a fresh GitHub authorization before it can list
-                  your repositories.
-                </p>
-                <a
-                  className="button button--secondary button--small"
-                  href={oauthLoginUrl.github}
-                >
-                  Reconnect GitHub
-                </a>
-              </div>
-            ) : githubRepositories.length === 0 ? (
-              <div className="repository-dialog__empty">
-                <h4>No repositories loaded</h4>
-                <p>
-                  Fetch your GitHub repositories to choose one without pasting a
-                  link.
-                </p>
-                <Button onClick={onFetchGithubRepositories}>
-                  Fetch GitHub repositories
-                </Button>
-              </div>
-            ) : filteredGithubRepositories.length === 0 ? (
-              <div className="repository-dialog__empty">
-                <h4>No matches</h4>
-                <p>No repository matches “{githubFilter}”.</p>
-              </div>
-            ) : (
-              <ul className="repository-picker-list">
-                {filteredGithubRepositories.map((repo) => {
-                  const connected = connections.some(
-                    (connection) =>
-                      `${connection.owner}/${connection.name}`.toLowerCase() ===
-                      repo.fullName.toLowerCase(),
-                  );
-                  return (
-                    <li className="repository-picker-list__item" key={repo.fullName}>
-                      <button
-                        className="repository-picker-list__main"
-                        disabled={connected || submitting}
-                        onClick={() => onConnectGithubRepository(repo)}
-                        type="button"
-                      >
-                        <span className="repository-picker-list__name">
-                          {repo.fullName}
-                        </span>
-                        <span className="repository-picker-list__meta">
-                          <span aria-hidden="true" className="dot" />
-                          {repo.privateRepository ? "Private" : "Public"}
-                        </span>
-                      </button>
-                      <Button
-                        className="button--small"
-                        disabled={connected || submitting}
-                        onClick={() => onConnectGithubRepository(repo)}
-                        variant={connected ? "secondary" : "primary"}
-                      >
-                        {connected ? "Connected" : "Connect"}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          <form className="repository-dialog__manual" onSubmit={onSubmit}>
-            <div>
-              <label htmlFor="repository">Paste repository</label>
-              <span>owner/repo or https://github.com/owner/repo</span>
-            </div>
-            <div className="repository-dialog__manual-row">
-              <TextInput
-                id="repository"
-                onChange={(event) => onRepositoryChange(event.target.value)}
-                placeholder="owner/repo"
-                value={repository}
-              />
-              <Button disabled={submitting} type="submit">
-                {submitting ? "Connecting" : "Connect"}
-              </Button>
-            </div>
-          </form>
-
-          {error && (
-            <div className="repository-dialog__error">
-              <p className="form-error">{error}</p>
-              {needsGitHubReconnect && (
-                <a
-                  className="button button--secondary button--small"
-                  href={oauthLoginUrl.github}
-                >
-                  Reconnect GitHub
-                </a>
-              )}
-            </div>
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
 
 type CreateProjectPanelProps = Readonly<{
   onCancel: () => void;
@@ -2814,6 +2589,38 @@ function IconSearch() {
     >
       <circle cx="7" cy="7" r="5" />
       <path d="m11 11 3.5 3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconAnalyze() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      viewBox="0 0 16 16"
+    >
+      <path
+        d="M2 9.5h2.5l1.5 3 3-8 1.5 5H14"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconBack() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      viewBox="0 0 16 16"
+    >
+      <path d="M9.5 3.5 5 8l4.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

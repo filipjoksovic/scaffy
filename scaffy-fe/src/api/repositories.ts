@@ -1,9 +1,12 @@
 import { apiFetch, throwApiError } from './client'
 import type { AnalysisResponse } from './analyze'
 
+export type RepositoryProvider = 'github' | 'gitlab'
+
 export type RepositoryConnection = {
   id: string
-  provider: 'github'
+  provider: RepositoryProvider
+  instance: string
   owner: string
   name: string
   url: string
@@ -32,6 +35,8 @@ export type GitHubRepository = {
   url: string
   privateRepository: boolean
 }
+
+export type GitLabRepository = GitHubRepository
 
 export type RepositoryAnalysis = {
   runId: string
@@ -143,13 +148,31 @@ export async function listGitHubRepositories(): Promise<GitHubRepository[]> {
   return (await response.json()) as GitHubRepository[]
 }
 
-export async function connectRepository(repository: string): Promise<RepositoryConnection> {
+export async function listGitLabRepositories(instance = ''): Promise<GitLabRepository[]> {
+  const query = instance ? `?instance=${encodeURIComponent(instance)}` : ''
+  const response = await apiFetch(`/api/repositories/gitlab${query}`)
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return (await response.json()) as GitLabRepository[]
+}
+
+export type ConnectRepositoryInput = {
+  repository: string
+  provider?: RepositoryProvider
+  instance?: string
+}
+
+export async function connectRepository(
+  input: string | ConnectRepositoryInput,
+): Promise<RepositoryConnection> {
+  const body = typeof input === 'string' ? { repository: input } : input
   const response = await apiFetch('/api/repositories', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ repository }),
+    body: JSON.stringify(body),
   })
   if (!response.ok) {
     await throwApiError(response)

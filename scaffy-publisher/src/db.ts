@@ -21,6 +21,7 @@ export class PublicationStore {
       SELECT
         pj.id,
         pj.user_id,
+        pj.workspace_id,
         pj.initializer_generation_job_id,
         pj.repository_name,
         pj.repository_description,
@@ -37,6 +38,7 @@ export class PublicationStore {
     return {
       id: row.id,
       userId: row.user_id,
+      workspaceId: row.workspace_id,
       initJobId: row.initializer_generation_job_id,
       repositoryName: row.repository_name,
       repositoryDescription: row.repository_description,
@@ -115,10 +117,17 @@ export class PublicationStore {
     }
   }
 
-  async succeed(id: string, userId: string, owner: string, name: string, url: string): Promise<void> {
+  async succeed(
+    id: string,
+    userId: string,
+    workspaceId: string,
+    owner: string,
+    name: string,
+    url: string,
+  ): Promise<void> {
     await this.pool.query('BEGIN')
     try {
-      const connectionId = await this.upsertConnection(userId, owner, name, url)
+      const connectionId = await this.upsertConnection(userId, workspaceId, owner, name, url)
       await this.pool.query(
         `
         UPDATE repository_publication_jobs
@@ -162,23 +171,29 @@ export class PublicationStore {
     }
   }
 
-  private async upsertConnection(userId: string, owner: string, name: string, url: string): Promise<string> {
+  private async upsertConnection(
+    userId: string,
+    workspaceId: string,
+    owner: string,
+    name: string,
+    url: string,
+  ): Promise<string> {
     const existing = await this.pool.query(
       `
       SELECT id
       FROM repository_connections
-      WHERE user_id = $1 AND provider = 'github' AND repository_owner = $2 AND repository_name = $3
+      WHERE workspace_id = $1 AND provider = 'github' AND repository_owner = $2 AND repository_name = $3
       `,
-      [userId, owner, name],
+      [workspaceId, owner, name],
     )
     if (existing.rows[0]) {
       await this.pool.query(
         `
         UPDATE repository_connections
-        SET repository_url = $2, updated_at = CURRENT_TIMESTAMP
+        SET repository_url = $2, user_id = $3, updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         `,
-        [existing.rows[0].id, url],
+        [existing.rows[0].id, url, userId],
       )
       return existing.rows[0].id
     }
@@ -187,16 +202,17 @@ export class PublicationStore {
       `
       INSERT INTO repository_connections (
         id,
+        workspace_id,
         user_id,
         provider,
         repository_owner,
         repository_name,
         repository_url
       )
-      VALUES ($1, $2, 'github', $3, $4, $5)
+      VALUES ($1, $2, $3, 'github', $4, $5, $6)
       RETURNING id
       `,
-      [randomUUID(), userId, owner, name, url],
+      [randomUUID(), workspaceId, userId, owner, name, url],
     )
     return inserted.rows[0].id
   }

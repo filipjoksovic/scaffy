@@ -6,13 +6,24 @@ export type ApiErrorResponse = {
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
+let activeWorkspaceId: string | null = null
+
+export function setActiveWorkspaceId(workspaceId: string | null): void {
+  activeWorkspaceId = workspaceId
+}
+
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`
 }
 
 export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers)
+  if (activeWorkspaceId) {
+    headers.set('X-Workspace-Id', activeWorkspaceId)
+  }
   return fetch(apiUrl(path), {
     ...init,
+    headers,
     credentials: 'include',
   })
 }

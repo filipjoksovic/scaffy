@@ -49,6 +49,14 @@ public class OAuthInstanceRepository {
 				""", this::mapInstance, registrationId).stream().findFirst();
 	}
 
+	public Optional<String> findBaseUrlByHost(String host) {
+		return jdbcTemplate.query("""
+				SELECT base_url
+				FROM oauth_instances
+				WHERE host = ?
+				""", (rs, rowNum) -> rs.getString("base_url"), host).stream().findFirst();
+	}
+
 	public List<OAuthInstanceSummary> listPublic() {
 		return jdbcTemplate.query("""
 				SELECT registration_id, host, display_name

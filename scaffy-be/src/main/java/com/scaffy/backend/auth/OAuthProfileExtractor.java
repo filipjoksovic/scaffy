@@ -19,7 +19,7 @@ public class OAuthProfileExtractor {
 					string(attributes.get("picture")),
 					"");
 		}
-		if ("github".equals(registrationId)) {
+		if ("github".equals(registrationId) || "github-repos".equals(registrationId)) {
 			return new OAuthProfile(
 					"github",
 					required(attributes, "id"),

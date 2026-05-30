@@ -15,6 +15,7 @@ export type PublisherConfig = {
 export type PublicationJob = {
   id: string
   userId: string
+  workspaceId: string | null
   initJobId: string
   repositoryName: string
   repositoryDescription: string | null
