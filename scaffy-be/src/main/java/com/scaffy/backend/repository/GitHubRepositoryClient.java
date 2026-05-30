@@ -25,7 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.scaffy.backend.auth.OAuthAccessTokenRecord;
 import com.scaffy.backend.auth.ProviderTokenCrypto;
-import com.scaffy.backend.auth.UserRepository;
+import com.scaffy.backend.auth.WorkspaceOAuthTokenRepository;
 
 @Service
 public class GitHubRepositoryClient {
@@ -38,35 +38,35 @@ public class GitHubRepositoryClient {
 	private final HttpClient httpClient;
 	private final ObjectMapper objectMapper;
 	private final ProviderTokenCrypto providerTokenCrypto;
-	private final UserRepository userRepository;
+	private final WorkspaceOAuthTokenRepository tokenRepository;
 
 	@Autowired
 	public GitHubRepositoryClient(
 			ObjectMapper objectMapper,
 			ProviderTokenCrypto providerTokenCrypto,
-			UserRepository userRepository) {
-		this(HttpClient.newHttpClient(), objectMapper, providerTokenCrypto, userRepository);
+			WorkspaceOAuthTokenRepository tokenRepository) {
+		this(HttpClient.newHttpClient(), objectMapper, providerTokenCrypto, tokenRepository);
 	}
 
 	GitHubRepositoryClient(
 			HttpClient httpClient,
 			ObjectMapper objectMapper,
 			ProviderTokenCrypto providerTokenCrypto,
-			UserRepository userRepository) {
+			WorkspaceOAuthTokenRepository tokenRepository) {
 		this.httpClient = httpClient;
 		this.objectMapper = objectMapper;
 		this.providerTokenCrypto = providerTokenCrypto;
-		this.userRepository = userRepository;
+		this.tokenRepository = tokenRepository;
 	}
 
-	public List<GitHubRepositoryOption> findRepositories(UUID userId) {
-		log.info("Fetching GitHub repositories for userId={}", userId);
-		Optional<OAuthAccessTokenRecord> tokenRecord = userRepository.findOAuthAccessToken(userId, "github");
+	public List<GitHubRepositoryOption> findRepositories(UUID workspaceId, UUID userId) {
+		log.info("Fetching GitHub repositories for workspaceId={} userId={}", workspaceId, userId);
+		Optional<OAuthAccessTokenRecord> tokenRecord = tokenRepository.findToken(workspaceId, userId, "github", "");
 		if (tokenRecord.isEmpty()) {
-			log.warn("No stored GitHub OAuth access token found for userId={}", userId);
+			log.warn("No GitHub token for workspaceId={} userId={}", workspaceId, userId);
 			throw new ResponseStatusException(
 					HttpStatus.CONFLICT,
-					"Reconnect with GitHub before fetching repositories.");
+					"Connect GitHub in this workspace before fetching repositories.");
 		}
 		OAuthAccessTokenRecord token = tokenRecord.get();
 		if (token.expiresAt() != null) {
@@ -117,8 +117,11 @@ public class GitHubRepositoryClient {
 			Thread.currentThread().interrupt();
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repositories could not be loaded.", ex);
 		}
-		catch (IOException | JacksonException ex) {
-			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repositories could not be loaded.", ex);
+		catch (IOException ex) {
+			throw ProviderHttpException.unreachable("GitHub", "api.github.com", ex);
+		}
+		catch (JacksonException ex) {
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repositories could not be parsed.", ex);
 		}
 	}
 

@@ -1,11 +1,14 @@
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Link, useNavigate } from 'react-router-dom'
+import { Check, ChevronsUpDown, Plus } from 'lucide-react'
 import { useWorkspace } from '../lib/workspace'
 import { createWorkspace } from '../api/workspaces'
 
+/** Lives in the workspace sidebar: shows the active workspace and switches/creates workspaces. */
 export function WorkspaceSwitcher() {
-  const { workspaces, activeWorkspace, loading, selectWorkspace, refresh } = useWorkspace()
+  const { workspaces, activeWorkspace, selectWorkspace, refresh } = useWorkspace()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -13,16 +16,11 @@ export function WorkspaceSwitcher() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  if (loading && workspaces.length === 0) {
-    return <span className="auth-status">Loading workspaces</span>
-  }
-  if (workspaces.length === 0) {
-    return null
-  }
+  const label = activeWorkspace?.name ?? 'Workspace'
+  const initial = label.trim().charAt(0).toUpperCase() || 'W'
+  const role = activeWorkspace?.role
 
-  const label = activeWorkspace?.name ?? 'Select workspace'
-
-  async function handleCreate(event: React.FormEvent) {
+  async function handleCreate(event: FormEvent) {
     event.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) {
@@ -49,22 +47,19 @@ export function WorkspaceSwitcher() {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button aria-label="Switch workspace" className="workspace-trigger" type="button">
-          <span className="workspace-trigger__label">{label}</span>
-          <svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12">
-            <path
-              d="M3.5 6l4.5 4 4.5-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+        <button aria-label="Switch workspace" className="ws-switcher" type="button">
+          <span aria-hidden="true" className="ws-switcher__avatar">
+            {initial}
+          </span>
+          <span className="ws-switcher__copy">
+            <strong>{label}</strong>
+            {role && <span>{role}</span>}
+          </span>
+          <ChevronsUpDown aria-hidden="true" className="ws-switcher__chev" size={15} />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content align="end" className="account-menu" collisionPadding={12} sideOffset={8}>
+        <Popover.Content align="start" className="account-menu ws-switcher-menu" collisionPadding={12} sideOffset={6}>
           <div className="account-menu__head">
             <strong>Workspaces</strong>
           </div>
@@ -84,16 +79,11 @@ export function WorkspaceSwitcher() {
                 type="button"
               >
                 <span>{workspace.name}</span>
-                {workspace.id === activeWorkspace?.id && <span aria-hidden="true">✓</span>}
+                {workspace.id === activeWorkspace?.id && <Check aria-hidden="true" size={15} />}
               </button>
             ))}
           </div>
           <div className="account-menu__items">
-            <Popover.Close asChild>
-              <Link className="account-menu__item" to="/workspace">
-                <span>Workspace settings</span>
-              </Link>
-            </Popover.Close>
             {creating ? (
               <form className="workspace-create" onSubmit={handleCreate}>
                 <input
@@ -121,14 +111,16 @@ export function WorkspaceSwitcher() {
                 </div>
               </form>
             ) : (
-              <button
-                className="account-menu__item"
-                onClick={() => setCreating(true)}
-                type="button"
-              >
-                <span>+ New workspace</span>
+              <button className="account-menu__item" onClick={() => setCreating(true)} type="button">
+                <Plus aria-hidden="true" size={15} />
+                <span>New workspace</span>
               </button>
             )}
+            <Popover.Close asChild>
+              <Link className="account-menu__item" to="/workspace">
+                <span>Workspace settings</span>
+              </Link>
+            </Popover.Close>
           </div>
         </Popover.Content>
       </Popover.Portal>

@@ -26,6 +26,8 @@ export type RepositoryAnalysisSummary = {
   overallStatus: string
   analysisSchemaVersion: number
   analyzerModelVersion: string
+  status: 'succeeded' | 'failed'
+  errorMessage: string | null
 }
 
 export type GitHubRepository = {

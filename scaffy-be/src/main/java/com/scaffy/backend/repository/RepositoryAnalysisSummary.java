@@ -15,5 +15,11 @@ public record RepositoryAnalysisSummary(
 		String overallStatus,
 		OffsetDateTime analyzedAt,
 		int analysisSchemaVersion,
-		String analyzerModelVersion) {
+		String analyzerModelVersion,
+		String status,
+		String errorMessage) {
+
+	public boolean failed() {
+		return "failed".equals(status);
+	}
 }

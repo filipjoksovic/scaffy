@@ -50,10 +50,12 @@ public class RepositoryAnalysisRepository {
 					analyzed_at,
 					analysis_schema_version,
 					analyzer_model_version,
+					status,
+					error_message,
 					workflow_content,
 					analysis_json
 				FROM repository_analysis_runs
-				WHERE repository_connection_id = ?
+				WHERE repository_connection_id = ? AND status = 'succeeded'
 				ORDER BY run_number DESC
 				LIMIT 1
 				""", this::mapPersistedAnalysis, repositoryConnectionId).stream().findFirst();
@@ -73,10 +75,12 @@ public class RepositoryAnalysisRepository {
 					analyzed_at,
 					analysis_schema_version,
 					analyzer_model_version,
+					status,
+					error_message,
 					workflow_content,
 					analysis_json
 				FROM repository_analysis_runs
-				WHERE repository_connection_id = ?
+				WHERE repository_connection_id = ? AND status = 'succeeded'
 				ORDER BY run_number DESC
 				LIMIT 2
 				""", this::mapPersistedAnalysis, repositoryConnectionId);
@@ -95,7 +99,9 @@ public class RepositoryAnalysisRepository {
 					overall_status,
 					analyzed_at,
 					analysis_schema_version,
-					analyzer_model_version
+					analyzer_model_version,
+					status,
+					error_message
 				FROM repository_analysis_runs
 				WHERE repository_connection_id = ?
 				ORDER BY run_number DESC
@@ -119,7 +125,9 @@ public class RepositoryAnalysisRepository {
 					r.overall_status,
 					r.analyzed_at,
 					r.analysis_schema_version,
-					r.analyzer_model_version
+					r.analyzer_model_version,
+					r.status,
+					r.error_message
 				FROM repository_analysis_runs r
 				JOIN (
 					SELECT repository_connection_id, MAX(run_number) AS run_number
@@ -173,9 +181,11 @@ public class RepositoryAnalysisRepository {
 					analysis_schema_version,
 					analyzer_model_version,
 					workflow_content,
-					analysis_json
+					analysis_json,
+					status,
+					error_message
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'succeeded', NULL)
 				""",
 				id,
 				repositoryConnectionId,
@@ -193,6 +203,67 @@ public class RepositoryAnalysisRepository {
 		return findById(id).orElseThrow();
 	}
 
+	@Transactional
+	public RepositoryAnalysisSummary insertFailure(UUID repositoryConnectionId, String errorMessage) {
+		UUID id = UUID.randomUUID();
+		Integer nextRunNumber = jdbcTemplate.queryForObject("""
+				SELECT COALESCE(MAX(run_number), 0) + 1
+				FROM repository_analysis_runs
+				WHERE repository_connection_id = ?
+				""", Integer.class, repositoryConnectionId);
+		jdbcTemplate.update("""
+				INSERT INTO repository_analysis_runs (
+					id,
+					repository_connection_id,
+					run_number,
+					workflow_path,
+					workflow_content_hash,
+					provider,
+					overall_score,
+					overall_level,
+					overall_status,
+					analysis_schema_version,
+					analyzer_model_version,
+					workflow_content,
+					analysis_json,
+					status,
+					error_message
+				)
+				VALUES (?, ?, ?, '', NULL, '', 0, 0, 'missing', ?, ?, NULL, '{}', 'failed', ?)
+				""",
+				id,
+				repositoryConnectionId,
+				nextRunNumber,
+				ANALYSIS_SCHEMA_VERSION,
+				ANALYZER_MODEL_VERSION,
+				truncate(errorMessage));
+		return jdbcTemplate.query("""
+				SELECT id,
+					repository_connection_id,
+					run_number,
+					workflow_path,
+					workflow_content_hash,
+					provider,
+					overall_score,
+					overall_level,
+					overall_status,
+					analyzed_at,
+					analysis_schema_version,
+					analyzer_model_version,
+					status,
+					error_message
+				FROM repository_analysis_runs
+				WHERE id = ?
+				""", this::mapSummary, id).stream().findFirst().orElseThrow();
+	}
+
+	private String truncate(String value) {
+		if (value == null) {
+			return "Analysis failed.";
+		}
+		return value.length() > 2000 ? value.substring(0, 2000) : value;
+	}
+
 	private Optional<PersistedRepositoryAnalysis> findById(UUID id) {
 		return jdbcTemplate.query("""
 				SELECT id,
@@ -207,6 +278,8 @@ public class RepositoryAnalysisRepository {
 					analyzed_at,
 					analysis_schema_version,
 					analyzer_model_version,
+					status,
+					error_message,
 					workflow_content,
 					analysis_json
 				FROM repository_analysis_runs
@@ -234,7 +307,9 @@ public class RepositoryAnalysisRepository {
 				rs.getString("overall_status"),
 				rs.getObject("analyzed_at", OffsetDateTime.class),
 				rs.getInt("analysis_schema_version"),
-				rs.getString("analyzer_model_version"));
+				rs.getString("analyzer_model_version"),
+				rs.getString("status"),
+				rs.getString("error_message"));
 	}
 
 	private String analysisJson(AnalysisResponse analysis) {

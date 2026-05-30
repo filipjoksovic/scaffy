@@ -38,6 +38,7 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 	private final OAuthProfileExtractor profileExtractor;
 	private final ProviderTokenCrypto providerTokenCrypto;
 	private final UserRepository userRepository;
+	private final WorkspaceOAuthTokenRepository workspaceTokenRepository;
 	private final OAuthInstanceRepository instanceRepository;
 	private final WorkspaceService workspaceService;
 
@@ -50,6 +51,7 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 			OAuthProfileExtractor profileExtractor,
 			ProviderTokenCrypto providerTokenCrypto,
 			UserRepository userRepository,
+			WorkspaceOAuthTokenRepository workspaceTokenRepository,
 			OAuthInstanceRepository instanceRepository,
 			WorkspaceService workspaceService) {
 		this.appProperties = appProperties;
@@ -60,6 +62,7 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 		this.profileExtractor = profileExtractor;
 		this.providerTokenCrypto = providerTokenCrypto;
 		this.userRepository = userRepository;
+		this.workspaceTokenRepository = workspaceTokenRepository;
 		this.instanceRepository = instanceRepository;
 		this.workspaceService = workspaceService;
 	}
@@ -76,15 +79,26 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 
 		if (OAuthConnectController.MODE_VALUE.equals(readCookie(request, OAuthConnectController.MODE_COOKIE))) {
 			UUID currentUserId = currentUserId(request);
-			clearModeCookie(response);
+			UUID workspaceId = parseUuid(readCookie(request, OAuthConnectController.WORKSPACE_COOKIE));
+			String returnPath = sanitizeReturn(readCookie(request, OAuthConnectController.RETURN_COOKIE));
+			clearConnectCookies(response);
 			if (currentUserId != null) {
-				linkProviderToken(oauth, profile, currentUserId);
-				log.info(
-						"Linked provider account provider={} instance={} userId={}",
-						profile.provider(),
-						profile.instance(),
-						currentUserId);
-				response.sendRedirect(connectRedirect(profile));
+				if (workspaceId != null && isMember(workspaceId, currentUserId)) {
+					linkProviderToken(oauth, profile, workspaceId, currentUserId);
+					log.info(
+							"Linked provider account provider={} instance={} userId={} workspaceId={}",
+							profile.provider(),
+							profile.instance(),
+							currentUserId,
+							workspaceId);
+					response.sendRedirect(connectRedirect(returnPath, profile));
+				}
+				else {
+					log.warn("Connect-mode OAuth missing/invalid workspace for userId={}", currentUserId);
+					response.sendRedirect(appProperties.frontendUrl()
+							+ "/dashboard?authError="
+							+ URLEncoder.encode("Could not determine the workspace to connect.", StandardCharsets.UTF_8));
+				}
 				return;
 			}
 			log.warn("Connect-mode OAuth completed without a valid current session; falling back to login");
@@ -101,21 +115,55 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 		// Login establishes identity only. Repository access (and its token) is granted later via an
 		// explicit "Connect" step, so we intentionally do not persist the provider token here.
 		authCookieService.addAccessCookie(response, jwtService.createAccessToken(user));
+		authCookieService.addRefreshCookie(response, jwtService.createRefreshToken(user));
 		log.info("Issued Scaffy auth cookie for userId={} redirect={}", user.id(), appProperties.frontendUrl());
 		response.sendRedirect(appProperties.frontendUrl());
 	}
 
-	private void linkProviderToken(OAuth2AuthenticationToken oauth, OAuthProfile profile, UUID userId) {
+	private void linkProviderToken(OAuth2AuthenticationToken oauth, OAuthProfile profile, UUID workspaceId, UUID userId) {
 		OAuth2AccessToken accessToken = loadAccessToken(oauth, profile);
 		if (accessToken == null) {
 			return;
 		}
-		userRepository.linkOAuthAccount(
+		workspaceTokenRepository.upsert(
+				workspaceId,
 				userId,
-				profile,
+				profile.provider(),
+				profile.instance(),
+				profile.providerUserId(),
+				profile.displayName(),
 				providerTokenCrypto.encrypt(accessToken.getTokenValue()),
 				accessToken.getExpiresAt(),
 				accessToken.getScopes());
+	}
+
+	private boolean isMember(UUID workspaceId, UUID userId) {
+		try {
+			workspaceService.requireMembership(workspaceId, userId);
+			return true;
+		}
+		catch (RuntimeException ex) {
+			return false;
+		}
+	}
+
+	private UUID parseUuid(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		try {
+			return UUID.fromString(value);
+		}
+		catch (IllegalArgumentException ex) {
+			return null;
+		}
+	}
+
+	private String sanitizeReturn(String returnTo) {
+		if (returnTo == null || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+			return "/dashboard";
+		}
+		return returnTo;
 	}
 
 	private OAuth2AccessToken loadAccessToken(OAuth2AuthenticationToken oauth, OAuthProfile profile) {
@@ -133,9 +181,11 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 		return client.getAccessToken();
 	}
 
-	private String connectRedirect(OAuthProfile profile) {
+	private String connectRedirect(String returnPath, OAuthProfile profile) {
 		StringBuilder url = new StringBuilder(appProperties.frontendUrl())
-				.append("/dashboard?connected=")
+				.append(returnPath)
+				.append(returnPath.contains("?") ? "&" : "?")
+				.append("connected=")
 				.append(URLEncoder.encode(profile.provider(), StandardCharsets.UTF_8));
 		if (profile.instance() != null && !profile.instance().isBlank()) {
 			url.append("&instance=").append(URLEncoder.encode(profile.instance(), StandardCharsets.UTF_8));
@@ -164,8 +214,14 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 		return null;
 	}
 
-	private void clearModeCookie(HttpServletResponse response) {
-		ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(OAuthConnectController.MODE_COOKIE, "")
+	private void clearConnectCookies(HttpServletResponse response) {
+		clearCookie(response, OAuthConnectController.MODE_COOKIE);
+		clearCookie(response, OAuthConnectController.WORKSPACE_COOKIE);
+		clearCookie(response, OAuthConnectController.RETURN_COOKIE);
+	}
+
+	private void clearCookie(HttpServletResponse response, String name) {
+		ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
 				.httpOnly(true)
 				.secure(authProperties.cookieSecure())
 				.sameSite(authProperties.cookieSameSite())

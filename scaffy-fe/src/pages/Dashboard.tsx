@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Link } from "react-router-dom";
+import { Activity, ArrowLeft, ExternalLink, Search, Trash2, X } from "lucide-react";
 import type * as Monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker.js?worker";
 import type {
@@ -28,6 +29,7 @@ import {
   Button,
   Card,
   Eyebrow,
+  ProviderLogo,
   StateRow,
   TextInput,
   WorkspaceFrame,
@@ -41,6 +43,8 @@ import {
 } from "../components/wizard";
 import {
   createInitJob,
+  downloadBlob,
+  downloadInitJob,
   getInitCatalog,
   getInitJob,
   type InitCatalog,
@@ -192,7 +196,10 @@ export function Dashboard() {
     ? (analysisErrorByRepository[selectedConnection.id] ?? null)
     : null;
   const selectedConnectionId = selectedConnection?.id ?? null;
-  const selectedSummaryRunId = selectedConnection?.analysisSummary?.runId ?? null;
+  const selectedSummaryRunId =
+    selectedConnection?.analysisSummary && selectedConnection.analysisSummary.status !== "failed"
+      ? selectedConnection.analysisSummary.runId
+      : null;
   const hasSelectedAnalysis = selectedConnectionId
     ? Boolean(analysisByRepository[selectedConnectionId])
     : false;
@@ -614,7 +621,8 @@ function ProjectCard({
   onDelete,
 }: ProjectCardProps) {
   const summary = connection.analysisSummary;
-  const canAnalyze = connection.provider === "github";
+  const succeeded = summary && summary.status !== "failed";
+  const failed = !analyzing && (Boolean(analysisError) || summary?.status === "failed");
   return (
     <div className="project-card-wrap">
       <button className="project-card" onClick={onOpen} type="button">
@@ -626,20 +634,23 @@ function ProjectCard({
             <strong>{connection.name}</strong>
             <span>{connection.owner}</span>
           </div>
-          {summary ? (
+          {succeeded ? (
             <span
-              className={`project-card__score ${statusBadgeClassName(summary.overallStatus)}`}
+              className={`project-card__score project-card__score--${summary.overallStatus.replace(/_/g, "-")}`}
+              title={statusMeta(summary.overallStatus).label}
             >
               {formatScore(summary.overallScore)}
             </span>
+          ) : failed ? (
+            <span className="project-card__score project-card__score--error">!</span>
           ) : (
             <span className="project-card__score project-card__score--pending">—</span>
           )}
         </div>
         <div className="project-card__meta">
-          <span>{formatProvider(connection.provider)}</span>
+          <ProviderLogo provider={connection.provider} />
           <span>
-            {summary
+            {succeeded
               ? `Analyzed ${formatRelative(summary.analyzedAt)}`
               : `Connected ${formatRelative(connection.connectedAt)}`}
           </span>
@@ -647,11 +658,11 @@ function ProjectCard({
         <div className="project-card__footer">
           {analyzing ? (
             <span className="project-card__runs">Analyzing…</span>
-          ) : analysisError ? (
+          ) : failed ? (
             <span className="project-card__runs project-card__runs--error">
               Analysis failed
             </span>
-          ) : summary ? (
+          ) : succeeded ? (
             <>
               <Badge className={statusBadgeClassName(summary.overallStatus)}>
                 {statusMeta(summary.overallStatus).label}
@@ -667,18 +678,16 @@ function ProjectCard({
         </div>
       </button>
       <div className="project-card__quick">
-        {canAnalyze && (
-          <button
-            aria-label={`Analyze ${connection.owner}/${connection.name}`}
-            className="icon-button project-card__action"
-            disabled={analyzing}
-            onClick={onAnalyze}
-            title={summary ? "Re-analyze" : "Analyze"}
-            type="button"
-          >
-            <IconAnalyze />
-          </button>
-        )}
+        <button
+          aria-label={`Analyze ${connection.owner}/${connection.name}`}
+          className="icon-button project-card__action"
+          disabled={analyzing}
+          onClick={onAnalyze}
+          title={summary ? "Re-analyze" : "Analyze"}
+          type="button"
+        >
+          <IconAnalyze />
+        </button>
         <button
           aria-label={`Remove ${connection.owner}/${connection.name}`}
           className="icon-button icon-button--danger project-card__action"
@@ -763,6 +772,12 @@ function ProjectDetail({
     );
   }
 
+  const summaryFailed =
+    connection.analysisSummary?.status === "failed"
+      ? connection.analysisSummary.errorMessage || "Analysis failed."
+      : null;
+  const failureMessage = error ?? summaryFailed;
+
   return (
     <Card as="section" className="project-detail">
       <ProjectDetailHeader
@@ -774,22 +789,32 @@ function ProjectDetail({
         onDisconnect={onDisconnect}
       />
 
-      {error ? (
+      {failureMessage ? (
         <div className="analysis-empty analysis-empty--error">
           <StateRow
-            detail={error}
+            detail={failureMessage}
             icon="!"
             label="Repository analysis failed"
             tone="error"
           />
-          {error.toLowerCase().includes("github") && (
-            <a
-              className="button button--secondary button--small"
-              href={oauthLoginUrl.github}
-            >
-              Reconnect GitHub
-            </a>
-          )}
+          <div className="dashboard-empty-actions">
+            <Button disabled={loading} onClick={() => onAnalyze(connection)}>
+              {loading ? "Analyzing…" : "Retry analysis"}
+            </Button>
+            {failureMessage.toLowerCase().includes("github") && (
+              <a
+                className="button button--secondary button--small"
+                href={oauthLoginUrl.github}
+              >
+                Reconnect GitHub
+              </a>
+            )}
+            {failureMessage.toLowerCase().includes("gitlab") && (
+              <Link className="button button--secondary button--small" to="/workspace">
+                Reconnect GitLab
+              </Link>
+            )}
+          </div>
         </div>
       ) : analysis ? (
         <AnalysisBreakdown
@@ -798,25 +823,17 @@ function ProjectDetail({
           onReanalyze={() => onAnalyze(connection)}
           reanalyzing={loading}
         />
-      ) : connection.provider !== "github" ? (
-        <div className="analysis-empty">
-          <div>
-            <Eyebrow>Analysis</Eyebrow>
-            <h3>GitLab analysis is coming soon</h3>
-            <p>
-              This GitLab project is connected to the workspace. Pipeline analysis for
-              GitLab is on the way — GitHub projects can be analyzed today.
-            </p>
-          </div>
-        </div>
       ) : (
         <div className="analysis-empty">
           <div>
             <Eyebrow>Analysis</Eyebrow>
             <h3>No analysis has been started</h3>
             <p>
-              Scaffy will inspect the repository, detect GitHub Actions workflow
-              files, and score the pipeline against the capability model.
+              Scaffy will inspect the repository, detect its CI pipeline
+              {connection.provider === "gitlab"
+                ? " (.gitlab-ci.yml)"
+                : " (GitHub Actions workflows)"}
+              , and score it against the capability model.
             </p>
           </div>
           <Button onClick={() => onAnalyze(connection)}>
@@ -848,7 +865,9 @@ function ProjectDetailHeader({
   return (
     <header className="project-detail__header">
       <div className="project-detail__title">
-        <Eyebrow>{formatProvider(connection.provider)}</Eyebrow>
+        <span className="project-detail__provider">
+          <ProviderLogo provider={connection.provider} size={16} />
+        </span>
         <h3>
           {connection.owner}/{connection.name}
         </h3>
@@ -876,18 +895,14 @@ function ProjectDetailHeader({
       </div>
       <div className="project-detail__side">
         <div className="project-detail__actions">
-          {connection.provider === "github" ? (
-            <Button
-              className="button--small"
-              disabled={loading}
-              onClick={() => onAnalyze(connection)}
-              variant="secondary"
-            >
-              {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
-            </Button>
-          ) : (
-            <Badge title="GitLab analysis is coming soon.">Analysis coming soon</Badge>
-          )}
+          <Button
+            className="button--small"
+            disabled={loading}
+            onClick={() => onAnalyze(connection)}
+            variant="secondary"
+          >
+            {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
+          </Button>
           <a
             aria-label={`Open ${connection.owner}/${connection.name}`}
             className="icon-button"
@@ -1830,6 +1845,7 @@ type CreateProjectState = {
   frontend: string;
   frontendRuntime: string;
   frontendVersion: string;
+  pipeline: string;
   pipelineMaturity: string;
   projectName: string;
 };
@@ -1837,6 +1853,7 @@ type CreateProjectState = {
 type CreateProjectStatus =
   | { kind: "idle" }
   | { kind: "generating"; job?: InitJob }
+  | { kind: "generated"; initJob: InitJob }
   | { kind: "publishing"; initJob: InitJob; publication?: RepositoryPublication }
   | { kind: "analyzing"; initJob: InitJob; publication: RepositoryPublication }
   | {
@@ -1854,6 +1871,7 @@ const createProjectInitialState: CreateProjectState = {
   frontend: "",
   frontendRuntime: "",
   frontendVersion: "",
+  pipeline: "",
   pipelineMaturity: "",
   projectName: "",
 };
@@ -1891,7 +1909,7 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
   const inFlight =
     status.kind === "generating" || status.kind === "publishing" || status.kind === "analyzing";
 
-  const canSubmit = Boolean(
+  const canGenerate = Boolean(
     catalog &&
       !inFlight &&
       state.projectName &&
@@ -1902,8 +1920,16 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
       state.backend &&
       state.backendVersion &&
       state.backendRuntime &&
+      state.pipeline &&
       state.pipelineMaturity,
   );
+  const canPublish = state.pipeline === "github-actions";
+  const generatedJob =
+    status.kind === "generated" || status.kind === "success"
+      ? status.initJob
+      : status.kind === "error"
+        ? status.job ?? null
+        : null;
 
   function update<K extends keyof CreateProjectState>(
     key: K,
@@ -1929,8 +1955,8 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
     });
   }
 
-  async function startCreateProject() {
-    if (!catalog || !canSubmit) return;
+  async function generate() {
+    if (!catalog || !canGenerate) return;
     setStatus({ kind: "generating" });
     try {
       const maturity = catalog.maturityPresets.find(
@@ -1944,7 +1970,7 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
         backend: state.backend,
         backendVersion: state.backendVersion,
         backendRuntime: state.backendRuntime,
-        pipeline: "github-actions",
+        pipeline: state.pipeline,
         pipelineMaturity: state.pipelineMaturity,
         includeDocker: Boolean(maturity?.dockerRequired),
       });
@@ -1959,7 +1985,19 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
       if (initJob.status !== "succeeded") {
         throw new Error(initJob.errorMessage || "Project generation failed.");
       }
+      setStatus({ kind: "generated", initJob });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Project generation failed.",
+      });
+    }
+  }
 
+  async function publish() {
+    if (!generatedJob) return;
+    const initJob = generatedJob;
+    try {
       const publicationCreated = await createRepositoryPublication({
         initJobId: initJob.jobId,
         repositoryName: state.projectName,
@@ -1988,9 +2026,28 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
     } catch (err) {
       setStatus({
         kind: "error",
-        message: err instanceof Error ? err.message : "Project creation failed.",
+        message: err instanceof Error ? err.message : "GitHub publication failed.",
+        job: initJob,
       });
     }
+  }
+
+  async function downloadZip() {
+    if (!generatedJob) return;
+    try {
+      const blob = await downloadInitJob(generatedJob.jobId);
+      downloadBlob(blob, `${state.projectName || "scaffy-project"}.zip`);
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Download failed.",
+        job: generatedJob,
+      });
+    }
+  }
+
+  function startOver() {
+    setStatus({ kind: "idle" });
   }
 
   return (
@@ -2002,11 +2059,11 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
         <div>
           <Eyebrow>Create project</Eyebrow>
           <h2 id="create-project-title">
-            Generate a project and publish it to GitHub.
+            Generate a project, then download it or publish to GitHub.
           </h2>
           <p>
-            Pick a stack and a maturity target. Scaffy generates the repository,
-            publishes it under your GitHub account, connects it here, and runs the first
+            Pick a stack, pipeline, and maturity target. Scaffy generates the project —
+            download the ZIP, or publish it to GitHub, connect it here, and run the first
             analysis.
           </p>
         </div>
@@ -2094,23 +2151,45 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
 
             <WizardStep
               index={4}
-              title="Maturity target"
-              hint="Scaffy generates a GitHub Actions pipeline at this discipline level."
+              title="CI / CD pipeline"
+              hint="Choose the provider and how much delivery discipline Scaffy should generate."
             >
-              <MaturityPicker
-                onSelect={(id) => update("pipelineMaturity", id)}
-                presets={catalog.maturityPresets}
-                selectedId={state.pipelineMaturity}
-              />
+              <div className="create-project-section">
+                <div className="create-project-options">
+                  {catalog.pipelines.map((option) => (
+                    <button
+                      aria-pressed={state.pipeline === option.id}
+                      className={`compact-choice${
+                        state.pipeline === option.id ? " choice-card--selected" : ""
+                      }`}
+                      key={option.id}
+                      onClick={() => update("pipeline", option.id)}
+                      type="button"
+                    >
+                      <strong>{option.name}</strong>
+                      <span>{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+                <MaturityPicker
+                  onSelect={(id) => update("pipelineMaturity", id)}
+                  presets={catalog.maturityPresets}
+                  selectedId={state.pipelineMaturity}
+                />
+              </div>
             </WizardStep>
           </div>
 
           <CreateProjectReview
-            canSubmit={canSubmit}
+            canGenerate={canGenerate}
+            canPublish={canPublish}
             catalog={catalog}
             inFlight={inFlight}
             onCancel={onCancel}
-            onStart={startCreateProject}
+            onDownload={downloadZip}
+            onGenerate={generate}
+            onPublish={publish}
+            onStartOver={startOver}
             state={state}
             status={status}
           />
@@ -2121,21 +2200,29 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
 }
 
 type CreateProjectReviewProps = {
-  canSubmit: boolean;
+  canGenerate: boolean;
+  canPublish: boolean;
   catalog: InitCatalog;
   inFlight: boolean;
   onCancel: () => void;
-  onStart: () => void;
+  onDownload: () => void;
+  onGenerate: () => void;
+  onPublish: () => void;
+  onStartOver: () => void;
   state: CreateProjectState;
   status: CreateProjectStatus;
 };
 
 function CreateProjectReview({
-  canSubmit,
+  canGenerate,
+  canPublish,
   catalog,
   inFlight,
   onCancel,
-  onStart,
+  onDownload,
+  onGenerate,
+  onPublish,
+  onStartOver,
   state,
   status,
 }: CreateProjectReviewProps) {
@@ -2145,8 +2232,10 @@ function CreateProjectReview({
   const backend = catalog.backends.find((item) => item.id === state.backend);
   const backendVersion = backend?.versions.find((v) => v.id === state.backendVersion);
   const backendRuntime = backendVersion?.runtimes.find((r) => r.id === state.backendRuntime);
+  const pipeline = catalog.pipelines.find((p) => p.id === state.pipeline);
   const maturity = catalog.maturityPresets.find((p) => p.id === state.pipelineMaturity);
   const dockerIncluded = Boolean(maturity?.dockerRequired);
+  const readyToFinish = status.kind === "generated" || (status.kind === "error" && Boolean(status.job));
 
   return (
     <div className="review">
@@ -2186,8 +2275,8 @@ function CreateProjectReview({
           )}
         </CreateReviewRow>
 
-        <CreateReviewRow label="Pipeline" iconId="github-actions">
-          <strong>GitHub Actions</strong>
+        <CreateReviewRow label="Pipeline" iconId={pipeline?.id}>
+          <strong>{pipeline ? pipeline.name : "Pick a pipeline"}</strong>
           <span>{maturity ? maturity.label : "Pick a maturity level"}</span>
         </CreateReviewRow>
 
@@ -2201,27 +2290,47 @@ function CreateProjectReview({
 
       <div className="review__actions">
         {status.kind === "success" ? (
-          <Button onClick={onCancel} variant="secondary">
-            Back to projects
-          </Button>
+          <>
+            <Button onClick={onCancel}>Back to projects</Button>
+            <Button onClick={onDownload} variant="secondary">
+              Download ZIP
+            </Button>
+          </>
+        ) : readyToFinish ? (
+          <>
+            <Button
+              disabled={!canPublish}
+              onClick={onPublish}
+              title={canPublish ? undefined : "Choose GitHub Actions to publish to GitHub."}
+              variant="download"
+            >
+              Publish to GitHub
+            </Button>
+            <Button onClick={onDownload} variant="secondary">
+              Download ZIP
+            </Button>
+            <Button onClick={onStartOver} variant="secondary">
+              Start over
+            </Button>
+          </>
         ) : status.kind === "error" ? (
           <>
-            <Button disabled={!canSubmit} onClick={onStart} variant="download">
-              Retry
+            <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
+              Retry generation
             </Button>
             <Button onClick={onCancel} variant="secondary">
               Cancel
             </Button>
           </>
         ) : (
-          <Button disabled={!canSubmit} onClick={onStart} variant="download">
+          <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
             {inFlight
               ? status.kind === "generating"
                 ? "Generating…"
                 : status.kind === "publishing"
                   ? "Publishing…"
                   : "Analyzing…"
-              : "Generate and publish"}
+              : "Generate project"}
           </Button>
         )}
       </div>
@@ -2260,8 +2369,8 @@ function CreateProjectStatusPanel({ status }: { status: CreateProjectStatus }) {
     return (
       <div className="gen gen--idle">
         <p className="gen__hint">
-          When you start, Scaffy will queue the generator, push to GitHub, and run the
-          first analysis. You can leave this open and watch the live log.
+          Scaffy queues the generator and streams the build log. When it finishes you can
+          download the ZIP or publish it to GitHub and run the first analysis.
         </p>
       </div>
     );
@@ -2273,23 +2382,25 @@ function CreateProjectStatusPanel({ status }: { status: CreateProjectStatus }) {
   const logs =
     status.kind === "generating"
       ? status.job?.logs
-      : status.kind === "publishing" || status.kind === "analyzing" || status.kind === "success"
-        ? status.publication?.logs
-        : status.kind === "error"
-          ? status.publication?.logs || status.job?.logs
-          : undefined;
+      : status.kind === "generated"
+        ? status.initJob?.logs
+        : status.kind === "publishing" || status.kind === "analyzing" || status.kind === "success"
+          ? status.publication?.logs
+          : status.kind === "error"
+            ? status.publication?.logs || status.job?.logs
+            : undefined;
 
-  const dotKind =
-    status.kind === "success"
+  const tone =
+    status.kind === "success" || status.kind === "generated"
       ? "success"
       : status.kind === "error"
         ? "error"
         : "loading";
 
   return (
-    <div className={`gen gen--${status.kind === "error" ? "error" : status.kind === "success" ? "success" : "loading"}`}>
+    <div className={`gen gen--${tone}`}>
       <div className="gen__head">
-        <span className={`gen__dot gen__dot--${dotKind}`} aria-hidden="true" />
+        <span className={`gen__dot gen__dot--${tone}`} aria-hidden="true" />
         <div>
           <strong>{title}</strong>
           <p>{copy}</p>
@@ -2369,6 +2480,7 @@ function createProjectStatusTitle(status: CreateProjectStatus): string {
     if (status.job?.status === "queued") return "Queued for generation";
     return "Generating project";
   }
+  if (status.kind === "generated") return "Project generated";
   if (status.kind === "publishing") return "Publishing to GitHub";
   if (status.kind === "analyzing") return "Running first analysis";
   if (status.kind === "success") return "Project ready";
@@ -2379,6 +2491,9 @@ function createProjectStatusTitle(status: CreateProjectStatus): string {
 function createProjectStatusCopy(status: CreateProjectStatus): string {
   if (status.kind === "generating") {
     return status.job?.progress || "Waiting for the generator worker…";
+  }
+  if (status.kind === "generated") {
+    return "Generation finished. Download the ZIP, or publish it to GitHub to connect and analyze it.";
   }
   if (status.kind === "publishing") {
     return status.publication?.progress || "Pushing the generated repo to GitHub…";
@@ -2392,7 +2507,7 @@ function createProjectStatusCopy(status: CreateProjectStatus): string {
       : "Repository connected. Analysis can be retried from the project view.";
   }
   if (status.kind === "error") return status.message;
-  return "Configure the project and start the GitHub creation flow.";
+  return "Configure the project and start the generator.";
 }
 
 function createProjectPercent(status: CreateProjectStatus): number {
@@ -2402,8 +2517,9 @@ function createProjectPercent(status: CreateProjectStatus): number {
     if (status.job?.status === "running") return 38;
     return 6;
   }
-  if (status.kind === "publishing") return 64;
-  if (status.kind === "analyzing") return 86;
+  if (status.kind === "generated") return 55;
+  if (status.kind === "publishing") return 72;
+  if (status.kind === "analyzing") return 90;
   if (status.kind === "success") return 100;
   if (status.kind === "error") return 100;
   return 0;
@@ -2426,10 +2542,13 @@ function withCreateCatalogDefaults(
   const maturity =
     catalog.maturityPresets.find((preset) => preset.id === "l2") ??
     catalog.maturityPresets[0];
+  const githubPipeline =
+    catalog.pipelines.find((preset) => preset.id === "github-actions") ?? catalog.pipelines[0];
   const next = {
     ...state,
     frontend: state.frontend || catalog.frontends[0]?.id || "",
     backend: state.backend || catalog.backends[0]?.id || "",
+    pipeline: state.pipeline || githubPipeline?.id || "",
     pipelineMaturity: state.pipelineMaturity || maturity?.id || "",
   };
   return withCreateStackDefaults(
@@ -2509,6 +2628,8 @@ function summaryFromAnalysis(
     overallStatus: analysis.analysis.overallStatus,
     analysisSchemaVersion: analysis.analysisSchemaVersion,
     analyzerModelVersion: analysis.analyzerModelVersion,
+    status: "succeeded",
+    errorMessage: null,
   };
 }
 
@@ -2579,108 +2700,27 @@ function formatFindingChangeKind(kind: string): string {
 }
 
 function IconSearch() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      viewBox="0 0 16 16"
-    >
-      <circle cx="7" cy="7" r="5" />
-      <path d="m11 11 3.5 3.5" strokeLinecap="round" />
-    </svg>
-  );
+  return <Search aria-hidden="true" size={16} />;
 }
 
 function IconAnalyze() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      viewBox="0 0 16 16"
-    >
-      <path
-        d="M2 9.5h2.5l1.5 3 3-8 1.5 5H14"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <Activity aria-hidden="true" size={16} />;
 }
 
 function IconBack() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      viewBox="0 0 16 16"
-    >
-      <path d="M9.5 3.5 5 8l4.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <ArrowLeft aria-hidden="true" size={16} />;
 }
 
 function IconExternal() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      viewBox="0 0 16 16"
-    >
-      <path d="M9 3h4v4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M13 3 7.5 8.5" strokeLinecap="round" />
-      <path
-        d="M12.5 9.5V12a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12V5A1.5 1.5 0 0 1 4 3.5h2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ExternalLink aria-hidden="true" size={16} />;
 }
 
 function IconClose() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      viewBox="0 0 16 16"
-    >
-      <path d="M4 4l8 8" strokeLinecap="round" />
-      <path d="M12 4l-8 8" strokeLinecap="round" />
-    </svg>
-  );
+  return <X aria-hidden="true" size={16} />;
 }
 
 function IconTrash() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      viewBox="0 0 16 16"
-    >
-      <path d="M3 4.5h10" strokeLinecap="round" />
-      <path
-        d="M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M4.5 4.5 5 13a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <Trash2 aria-hidden="true" size={16} />;
 }
 
 function formatRelative(iso: string): string {

@@ -16,7 +16,7 @@ export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`
 }
 
-export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+function rawFetch(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers)
   if (activeWorkspaceId) {
     headers.set('X-Workspace-Id', activeWorkspaceId)
@@ -26,6 +26,38 @@ export function apiFetch(path: string, init: RequestInit = {}): Promise<Response
     headers,
     credentials: 'include',
   })
+}
+
+// Single-flight refresh: many requests may 401 at once when the access token expires; they all
+// await one /api/auth/refresh call rather than stampeding it.
+let refreshInFlight: Promise<boolean> | null = null
+
+function attemptRefresh(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(apiUrl('/api/auth/refresh'), {
+      method: 'POST',
+      credentials: 'include',
+    })
+      .then((response) => response.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null
+      })
+  }
+  return refreshInFlight
+}
+
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const response = await rawFetch(path, init)
+  if (response.status !== 401) {
+    return response
+  }
+  // Access token likely expired — try a silent refresh, then replay the request once.
+  const refreshed = await attemptRefresh()
+  if (!refreshed) {
+    return response
+  }
+  return rawFetch(path, init)
 }
 
 export async function throwApiError(response: Response): Promise<never> {

@@ -31,23 +31,36 @@ function readStoredId(): string | null {
   }
 }
 
+function writeStoredId(workspaceId: string | null) {
+  try {
+    if (workspaceId) {
+      localStorage.setItem(STORAGE_KEY, workspaceId)
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  } catch {
+    // ignore storage failures
+  }
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [activeId, setActiveId] = useState<string | null>(() => readStoredId())
+  const [activeId, setActiveId] = useState<string | null>(() => {
+    // Seed the outgoing X-Workspace-Id header from storage before any request fires.
+    const stored = readStoredId()
+    setActiveWorkspaceId(stored)
+    return stored
+  })
   const [loading, setLoading] = useState(false)
 
-  const applyActiveId = useCallback((workspaceId: string | null) => {
+  // persist = false is used for logout, where we clear the in-memory selection + header but keep
+  // the stored id so the same workspace is restored on the next sign-in.
+  const applyActiveId = useCallback((workspaceId: string | null, persist = true) => {
     setActiveId(workspaceId)
     setActiveWorkspaceId(workspaceId)
-    try {
-      if (workspaceId) {
-        localStorage.setItem(STORAGE_KEY, workspaceId)
-      } else {
-        localStorage.removeItem(STORAGE_KEY)
-      }
-    } catch {
-      // ignore storage failures
+    if (persist) {
+      writeStoredId(workspaceId)
     }
   }, [])
 
@@ -56,35 +69,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     try {
       const list = await listWorkspaces()
       setWorkspaces(list)
-      setActiveId((current) => {
-        const next = list.some((workspace) => workspace.id === current)
-          ? current
-          : (list[0]?.id ?? null)
-        setActiveWorkspaceId(next)
-        try {
-          if (next) {
-            localStorage.setItem(STORAGE_KEY, next)
-          } else {
-            localStorage.removeItem(STORAGE_KEY)
-          }
-        } catch {
-          // ignore storage failures
-        }
-        return next
-      })
+      const stored = readStoredId()
+      const next = list.some((workspace) => workspace.id === stored)
+        ? stored
+        : (list[0]?.id ?? null)
+      applyActiveId(next)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [applyActiveId])
 
   useEffect(() => {
     if (user) {
       void refresh()
-    } else {
+    } else if (!authLoading) {
+      // Genuinely signed out (not just the initial auth check) — clear in-memory state without
+      // wiping the stored selection.
       setWorkspaces([])
-      applyActiveId(null)
+      applyActiveId(null, false)
     }
-  }, [user, refresh, applyActiveId])
+  }, [user, authLoading, refresh, applyActiveId])
 
   const selectWorkspace = useCallback(
     (workspaceId: string) => {

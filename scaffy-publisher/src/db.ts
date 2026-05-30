@@ -61,16 +61,17 @@ export class PublicationStore {
     return result.rowCount === 1
   }
 
-  async getGitHubToken(userId: string): Promise<OAuthToken | null> {
+  async getGitHubToken(workspaceId: string, userId: string): Promise<OAuthToken | null> {
     const result = await this.pool.query(
       `
       SELECT access_token_encrypted, scopes
-      FROM oauth_accounts
-      WHERE user_id = $1 AND provider = 'github' AND access_token_encrypted IS NOT NULL
+      FROM workspace_oauth_tokens
+      WHERE workspace_id = $1 AND user_id = $2 AND provider = 'github'
+        AND provider_instance = '' AND access_token_encrypted IS NOT NULL
       ORDER BY updated_at DESC
       LIMIT 1
       `,
-      [userId],
+      [workspaceId, userId],
     )
     const row = result.rows[0]
     if (!row) return null

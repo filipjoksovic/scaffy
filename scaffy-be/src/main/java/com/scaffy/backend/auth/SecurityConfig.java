@@ -24,6 +24,7 @@ public class SecurityConfig {
 			HttpSecurity http,
 			JwtAuthenticationFilter jwtAuthenticationFilter,
 			OAuthLoginSuccessHandler oauthLoginSuccessHandler,
+			OAuthLoginFailureHandler oauthLoginFailureHandler,
 			OAuth2UserService<OAuth2UserRequest, OAuth2User> oauth2UserService) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
@@ -41,7 +42,8 @@ public class SecurityConfig {
 						.anyRequest().permitAll())
 				.oauth2Login(oauth -> oauth
 						.userInfoEndpoint(userInfo -> userInfo.userService(oauth2UserService))
-						.successHandler(oauthLoginSuccessHandler))
+						.successHandler(oauthLoginSuccessHandler)
+						.failureHandler(oauthLoginFailureHandler))
 				.exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

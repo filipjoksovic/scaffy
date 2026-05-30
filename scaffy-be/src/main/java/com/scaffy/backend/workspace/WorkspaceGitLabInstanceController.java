@@ -22,7 +22,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import com.scaffy.backend.auth.OAuthInstance;
 import com.scaffy.backend.auth.OAuthInstanceRepository;
 import com.scaffy.backend.auth.ScaffyPrincipal;
-import com.scaffy.backend.auth.UserRepository;
+import com.scaffy.backend.auth.WorkspaceOAuthTokenRepository;
 
 @RestController
 @RequestMapping("/api/workspaces/{workspaceId}/gitlab-instances")
@@ -31,17 +31,17 @@ public class WorkspaceGitLabInstanceController {
 	private final WorkspaceService workspaceService;
 	private final WorkspaceGitLabInstanceRepository instanceRepository;
 	private final OAuthInstanceRepository oauthInstanceRepository;
-	private final UserRepository userRepository;
+	private final WorkspaceOAuthTokenRepository tokenRepository;
 
 	public WorkspaceGitLabInstanceController(
 			WorkspaceService workspaceService,
 			WorkspaceGitLabInstanceRepository instanceRepository,
 			OAuthInstanceRepository oauthInstanceRepository,
-			UserRepository userRepository) {
+			WorkspaceOAuthTokenRepository tokenRepository) {
 		this.workspaceService = workspaceService;
 		this.instanceRepository = instanceRepository;
 		this.oauthInstanceRepository = oauthInstanceRepository;
-		this.userRepository = userRepository;
+		this.tokenRepository = tokenRepository;
 	}
 
 	@GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -51,7 +51,8 @@ public class WorkspaceGitLabInstanceController {
 		workspaceService.requireMembership(workspaceId, principal.userId());
 		return instanceRepository.listForWorkspace(workspaceId)
 				.stream()
-				.map(instance -> WorkspaceGitLabInstanceResponse.from(instance, isConnected(principal.userId(), instance.host())))
+				.map(instance -> WorkspaceGitLabInstanceResponse.from(
+						instance, isConnected(workspaceId, principal.userId(), instance.host())))
 				.toList();
 	}
 
@@ -86,7 +87,7 @@ public class WorkspaceGitLabInstanceController {
 				.path(oauthInstance.registrationId())
 				.toUriString();
 		return new AddInstanceResponse(
-				WorkspaceGitLabInstanceResponse.from(instance, isConnected(principal.userId(), host)),
+				WorkspaceGitLabInstanceResponse.from(instance, isConnected(workspaceId, principal.userId(), host)),
 				callbackUrl);
 	}
 
@@ -102,8 +103,8 @@ public class WorkspaceGitLabInstanceController {
 		}
 	}
 
-	private boolean isConnected(UUID userId, String host) {
-		return userRepository.findOAuthAccessToken(userId, "gitlab", host).isPresent();
+	private boolean isConnected(UUID workspaceId, UUID userId, String host) {
+		return tokenRepository.findToken(workspaceId, userId, "gitlab", host).isPresent();
 	}
 
 	private URI parseBaseUrl(String value) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
+import { Search, X } from 'lucide-react'
 import { connectProviderUrl, listConnections, type ProviderConnection } from '../api/auth'
 import {
   connectRepository,
@@ -16,6 +17,7 @@ import {
 import { useWorkspace } from '../lib/workspace'
 import { Button } from './Button'
 import { Eyebrow } from './Eyebrow'
+import { ProviderLogo } from './ProviderLogo'
 import { StateRow } from './StateRow'
 import { TextInput } from './TextInput'
 
@@ -146,6 +148,7 @@ export function ConnectRepositoryDialog({
                 role="tab"
                 type="button"
               >
+                <ProviderLogo monochrome provider={tab.provider} size={14} />
                 {tab.label}
                 {tab.connected && <span aria-hidden="true" className="connect-provider-tabs__dot" />}
               </button>
@@ -159,6 +162,7 @@ export function ConnectRepositoryDialog({
               loadingMeta={metaLoading}
               onConnected={onConnected}
               tab={activeTab}
+              workspaceId={activeWorkspace?.id ?? null}
             />
           )}
         </Dialog.Content>
@@ -169,12 +173,13 @@ export function ConnectRepositoryDialog({
 
 type ProviderPanelProps = {
   tab: ProviderTab
+  workspaceId: string | null
   existingConnections: RepositoryConnection[]
   loadingMeta: boolean
   onConnected: (connection: RepositoryConnection) => void
 }
 
-function ProviderPanel({ tab, existingConnections, loadingMeta, onConnected }: ProviderPanelProps) {
+function ProviderPanel({ tab, workspaceId, existingConnections, loadingMeta, onConnected }: ProviderPanelProps) {
   const [repos, setRepos] = useState<GitHubRepository[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -264,7 +269,10 @@ function ProviderPanel({ tab, existingConnections, loadingMeta, onConnected }: P
               ? 'Authorize Scaffy to read your GitHub repositories. You stay signed in with your current account.'
               : `Authorize Scaffy against ${tab.label} to browse and add your projects.`}
           </p>
-          <a className="button button--primary" href={connectProviderUrl(tab.registrationId)}>
+          <a
+            className="button button--primary"
+            href={connectProviderUrl(tab.registrationId, { workspaceId, returnTo: '/dashboard' })}
+          >
             Connect {tab.label}
           </a>
         </div>
@@ -304,7 +312,10 @@ function ProviderPanel({ tab, existingConnections, loadingMeta, onConnected }: P
             <h4>Could not load repositories</h4>
             <p>{error}</p>
             {reconnectNeeded && (
-              <a className="button button--secondary button--small" href={connectProviderUrl(tab.registrationId)}>
+              <a
+                className="button button--secondary button--small"
+                href={connectProviderUrl(tab.registrationId, { workspaceId, returnTo: '/dashboard' })}
+              >
                 Reconnect {tab.label}
               </a>
             )}
@@ -375,19 +386,9 @@ function ProviderPanel({ tab, existingConnections, loadingMeta, onConnected }: P
 }
 
 function IconSearch() {
-  return (
-    <svg aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 16 16">
-      <circle cx="7" cy="7" r="5" />
-      <path d="m11 11 3.5 3.5" strokeLinecap="round" />
-    </svg>
-  )
+  return <Search aria-hidden="true" size={16} />
 }
 
 function IconClose() {
-  return (
-    <svg aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 16 16">
-      <path d="M4 4l8 8" strokeLinecap="round" />
-      <path d="M12 4l-8 8" strokeLinecap="round" />
-    </svg>
-  )
+  return <X aria-hidden="true" size={16} />
 }

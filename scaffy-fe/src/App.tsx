@@ -8,6 +8,7 @@ import { WorkspaceMembers } from './pages/WorkspaceMembers'
 import { WorkspaceSettings } from './pages/WorkspaceSettings'
 import { AuthProvider } from './lib/auth'
 import { WorkspaceProvider } from './lib/workspace'
+import { AuthErrorBanner } from './components/AuthErrorBanner'
 import './App.css'
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
     <AuthProvider>
       <WorkspaceProvider>
         <BrowserRouter>
+          <AuthErrorBanner />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/dashboard" element={<Dashboard />} />

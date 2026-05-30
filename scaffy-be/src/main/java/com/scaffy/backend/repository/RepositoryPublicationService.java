@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.scaffy.backend.auth.OAuthAccessTokenRecord;
-import com.scaffy.backend.auth.UserRepository;
+import com.scaffy.backend.auth.WorkspaceOAuthTokenRepository;
 import com.scaffy.backend.init.InitGenerationJob;
 import com.scaffy.backend.init.InitGenerationJobRepository;
 import com.scaffy.backend.init.InitJobNotFoundException;
@@ -23,19 +23,19 @@ public class RepositoryPublicationService {
 	private final RepositoryPublicationJobRepository publicationJobRepository;
 	private final RepositoryConnectionRepository connectionRepository;
 	private final RepositoryPublicationQueuePublisher queuePublisher;
-	private final UserRepository userRepository;
+	private final WorkspaceOAuthTokenRepository tokenRepository;
 
 	public RepositoryPublicationService(
 			InitGenerationJobRepository initGenerationJobRepository,
 			RepositoryPublicationJobRepository publicationJobRepository,
 			RepositoryConnectionRepository connectionRepository,
 			RepositoryPublicationQueuePublisher queuePublisher,
-			UserRepository userRepository) {
+			WorkspaceOAuthTokenRepository tokenRepository) {
 		this.initGenerationJobRepository = initGenerationJobRepository;
 		this.publicationJobRepository = publicationJobRepository;
 		this.connectionRepository = connectionRepository;
 		this.queuePublisher = queuePublisher;
-		this.userRepository = userRepository;
+		this.tokenRepository = tokenRepository;
 	}
 
 	public RepositoryPublicationResponse create(UUID userId, UUID workspaceId, CreateRepositoryPublicationRequest request) {
@@ -50,10 +50,10 @@ public class RepositoryPublicationService {
 					"Initializer job must finish successfully before publishing to GitHub.");
 		}
 
-		OAuthAccessTokenRecord token = userRepository.findOAuthAccessToken(userId, "github")
+		OAuthAccessTokenRecord token = tokenRepository.findToken(workspaceId, userId, "github", "")
 				.orElseThrow(() -> new ResponseStatusException(
 						HttpStatus.CONFLICT,
-						"Reconnect with GitHub before creating repositories."));
+						"Connect GitHub in this workspace before creating repositories."));
 		Set<String> scopes = scopes(token);
 		if (!scopes.contains("repo") || !scopes.contains("workflow")) {
 			throw new ResponseStatusException(

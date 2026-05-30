@@ -55,33 +55,39 @@ public class JwtService {
 		return unsigned + "." + base64Url(hmac(unsigned));
 	}
 
+	public String createRefreshToken(AppUser user) {
+		Instant now = clock.instant();
+		Map<String, Object> header = Map.of("alg", "HS256", "typ", "JWT");
+		Map<String, Object> claims = Map.of(
+				"sub", user.id().toString(),
+				"typ", "refresh",
+				"iat", now.getEpochSecond(),
+				"exp", now.plus(authProperties.refreshTokenTtl()).getEpochSecond());
+
+		String unsigned = base64Url(json(header)) + "." + base64Url(json(claims));
+		return unsigned + "." + base64Url(hmac(unsigned));
+	}
+
+	/** Validates a refresh token (signature, expiry, type) and returns the user id it belongs to. */
+	public Optional<UUID> parseRefreshToken(String token) {
+		Map<String, Object> claims = verifiedClaims(token);
+		if (claims == null || !"refresh".equals(string(claims.get("typ")))) {
+			return Optional.empty();
+		}
+		try {
+			return Optional.of(UUID.fromString(string(claims.get("sub"))));
+		}
+		catch (IllegalArgumentException | NullPointerException ex) {
+			return Optional.empty();
+		}
+	}
+
 	public Optional<ScaffyPrincipal> parseAccessToken(String token) {
-		if (token == null || token.isBlank()) {
+		Map<String, Object> claims = verifiedClaims(token);
+		if (claims == null || "refresh".equals(string(claims.get("typ")))) {
 			return Optional.empty();
 		}
-		String[] parts = token.split("\\.");
-		if (parts.length != 3) {
-			return Optional.empty();
-		}
-
-		String unsigned = parts[0] + "." + parts[1];
-		byte[] expected = hmac(unsigned);
-		byte[] actual;
 		try {
-			actual = Base64.getUrlDecoder().decode(parts[2]);
-		}
-		catch (IllegalArgumentException ex) {
-			return Optional.empty();
-		}
-		if (!MessageDigest.isEqual(expected, actual)) {
-			return Optional.empty();
-		}
-
-		try {
-			Map<String, Object> claims = objectMapper.readValue(Base64.getUrlDecoder().decode(parts[1]), CLAIMS_TYPE);
-			if (epochSecond(claims.get("exp")) <= clock.instant().getEpochSecond()) {
-				return Optional.empty();
-			}
 			UUID userId = UUID.fromString(string(claims.get("sub")));
 			return Optional.of(new ScaffyPrincipal(
 					userId,
@@ -89,8 +95,41 @@ public class JwtService {
 					string(claims.get("displayName")),
 					string(claims.get("avatarUrl"))));
 		}
-		catch (IllegalArgumentException | JacksonException ex) {
+		catch (IllegalArgumentException ex) {
 			return Optional.empty();
+		}
+	}
+
+	/** Verifies signature + expiry and returns the decoded claims, or null if the token is invalid. */
+	private Map<String, Object> verifiedClaims(String token) {
+		if (token == null || token.isBlank()) {
+			return null;
+		}
+		String[] parts = token.split("\\.");
+		if (parts.length != 3) {
+			return null;
+		}
+		String unsigned = parts[0] + "." + parts[1];
+		byte[] expected = hmac(unsigned);
+		byte[] actual;
+		try {
+			actual = Base64.getUrlDecoder().decode(parts[2]);
+		}
+		catch (IllegalArgumentException ex) {
+			return null;
+		}
+		if (!MessageDigest.isEqual(expected, actual)) {
+			return null;
+		}
+		try {
+			Map<String, Object> claims = objectMapper.readValue(Base64.getUrlDecoder().decode(parts[1]), CLAIMS_TYPE);
+			if (epochSecond(claims.get("exp")) <= clock.instant().getEpochSecond()) {
+				return null;
+			}
+			return claims;
+		}
+		catch (IllegalArgumentException | JacksonException ex) {
+			return null;
 		}
 	}
 

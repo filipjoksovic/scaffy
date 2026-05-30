@@ -76,8 +76,11 @@ public class RepositoryConnectionController {
 	}
 
 	@GetMapping(path = "/github", produces = MediaType.APPLICATION_JSON_VALUE)
-	public List<GitHubRepositoryResponse> listGitHubRepositories(@AuthenticationPrincipal ScaffyPrincipal principal) {
-		return gitHubRepositoryClient.findRepositories(principal.userId())
+	public List<GitHubRepositoryResponse> listGitHubRepositories(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId) {
+		UUID activeWorkspace = workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId);
+		return gitHubRepositoryClient.findRepositories(activeWorkspace, principal.userId())
 				.stream()
 				.map(GitHubRepositoryResponse::from)
 				.toList();
@@ -86,8 +89,10 @@ public class RepositoryConnectionController {
 	@GetMapping(path = "/gitlab", produces = MediaType.APPLICATION_JSON_VALUE)
 	public List<GitLabRepositoryResponse> listGitLabRepositories(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
 			@RequestParam(value = "instance", required = false) String instance) {
-		return gitLabRepositoryClient.findProjects(principal.userId(), instance)
+		UUID activeWorkspace = workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId);
+		return gitLabRepositoryClient.findProjects(activeWorkspace, principal.userId(), instance)
 				.stream()
 				.map(GitLabRepositoryResponse::from)
 				.toList();
@@ -223,7 +228,9 @@ public class RepositoryConnectionController {
 			int overallLevel,
 			String overallStatus,
 			int analysisSchemaVersion,
-			String analyzerModelVersion) {
+			String analyzerModelVersion,
+			String status,
+			String errorMessage) {
 
 		static RepositoryAnalysisSummaryResponse from(RepositoryAnalysisSummary summary) {
 			if (summary == null) {
@@ -239,7 +246,9 @@ public class RepositoryConnectionController {
 					summary.overallLevel(),
 					summary.overallStatus(),
 					summary.analysisSchemaVersion(),
-					summary.analyzerModelVersion());
+					summary.analyzerModelVersion(),
+					summary.status(),
+					summary.errorMessage());
 		}
 	}
 
@@ -253,7 +262,9 @@ public class RepositoryConnectionController {
 			int overallLevel,
 			String overallStatus,
 			int analysisSchemaVersion,
-			String analyzerModelVersion) {
+			String analyzerModelVersion,
+			String status,
+			String errorMessage) {
 
 		static RepositoryAnalysisRunSummaryResponse from(RepositoryAnalysisSummary summary) {
 			return new RepositoryAnalysisRunSummaryResponse(
@@ -266,7 +277,9 @@ public class RepositoryConnectionController {
 					summary.overallLevel(),
 					summary.overallStatus(),
 					summary.analysisSchemaVersion(),
-					summary.analyzerModelVersion());
+					summary.analyzerModelVersion(),
+					summary.status(),
+					summary.errorMessage());
 		}
 	}
 

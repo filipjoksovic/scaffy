@@ -237,6 +237,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: var(--space-xs);
   width: 100%;
   border: 0;
   border-radius: var(--radius-sm);
@@ -670,4 +671,53 @@
 .workspace-invite-list__row span {
   color: var(--color-muted);
   font-size: 12px;
+}
+
+/* Auth error banner (OAuth login/connect failures) */
+.auth-error-banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  background: color-mix(in srgb, var(--color-error) 12%, var(--color-canvas));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-hairline));
+  color: var(--color-ink);
+}
+
+.auth-error-banner__icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-error);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auth-error-banner p {
+  margin: 0;
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.auth-error-banner button {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 var(--space-xs);
+}
+
+.auth-error-banner button:hover {
+  color: var(--color-ink);
 }

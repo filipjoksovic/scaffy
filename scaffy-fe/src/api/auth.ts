@@ -17,9 +17,24 @@ export function instanceLoginUrl(registrationId: string): string {
   return apiUrl(`/oauth2/authorization/${registrationId}`)
 }
 
-/** Account-linking ("connect") flow: links a provider to the current user without changing identity. */
-export function connectProviderUrl(registrationId: string): string {
-  return apiUrl(`/api/auth/connect/${registrationId}`)
+/**
+ * Account-linking ("connect") flow: links a provider to the current user in a specific workspace.
+ * This is a full-page navigation, so the workspace + return path travel as query params (the
+ * X-Workspace-Id header only rides on fetch requests).
+ */
+export function connectProviderUrl(
+  registrationId: string,
+  options: { workspaceId?: string | null; returnTo?: string } = {},
+): string {
+  const params = new URLSearchParams()
+  if (options.workspaceId) {
+    params.set('workspace', options.workspaceId)
+  }
+  if (options.returnTo) {
+    params.set('return', options.returnTo)
+  }
+  const query = params.toString()
+  return apiUrl(`/api/auth/connect/${registrationId}${query ? `?${query}` : ''}`)
 }
 
 export type ProviderConnection = {

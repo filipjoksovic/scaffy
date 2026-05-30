@@ -3,7 +3,6 @@ import { Link, NavLink } from 'react-router-dom'
 import { oauthLoginUrl } from '../api/auth'
 import { useAuth } from '../lib/auth'
 import { GitlabLoginMenu } from './GitlabLoginMenu'
-import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 export function TopNav() {
   const { user, loading, logout } = useAuth()
@@ -30,7 +29,6 @@ export function TopNav() {
           <span className="auth-status">Checking session</span>
         ) : user ? (
           <>
-            <WorkspaceSwitcher />
             <Popover.Root>
               <Popover.Trigger asChild>
                 <button

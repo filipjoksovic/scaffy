@@ -128,7 +128,7 @@ class RepositoryConnectionControllerTest {
 		mockMvc().perform(get("/api/repositories/github")
 						.cookie(authCookie("a1ec1bfe-40b7-4fc3-9425-ad111b423125")))
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.message").value("Reconnect with GitHub before fetching repositories."));
+				.andExpect(jsonPath("$.message").value("Connect GitHub in this workspace before fetching repositories."));
 	}
 
 	@Test
@@ -149,7 +149,7 @@ class RepositoryConnectionControllerTest {
 
 		mockMvc().perform(post("/api/repositories/" + id + "/analyze").cookie(cookie))
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.message").value("Reconnect with GitHub before analyzing repositories."));
+				.andExpect(jsonPath("$.message").value("Connect GitHub in this workspace before analyzing repositories."));
 	}
 
 	private Cookie authCookie(String userId) {

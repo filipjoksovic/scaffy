@@ -18,7 +18,7 @@ import {
   listConnections,
   type ProviderConnection,
 } from "../api/auth";
-import { Badge, Button, Card, Eyebrow, StateRow, TextInput, WorkspaceFrame } from "../components";
+import { Badge, Button, Card, Eyebrow, ProviderLogo, StateRow, TextInput, WorkspaceFrame } from "../components";
 import { useAuth } from "../lib/auth";
 import { useWorkspace } from "../lib/workspace";
 
@@ -261,7 +261,10 @@ export function WorkspaceSettings() {
               <ul className="gitlab-instance-list">
                 <li className="gitlab-instance-list__row">
                   <div className="gitlab-instance-list__id">
-                    <strong>GitHub</strong>
+                    <strong className="provider-name">
+                      <ProviderLogo provider="github" size={15} />
+                      GitHub
+                    </strong>
                     <span>{githubConnection ? "Connected" : "Not connected"}</span>
                   </div>
                   <div className="gitlab-instance-list__actions">
@@ -276,7 +279,10 @@ export function WorkspaceSettings() {
                     ) : (
                       <a
                         className="button button--primary button--small"
-                        href={connectProviderUrl("github-repos")}
+                        href={connectProviderUrl("github-repos", {
+                          workspaceId: activeWorkspaceId,
+                          returnTo: "/workspace",
+                        })}
                       >
                         Connect GitHub
                       </a>
@@ -285,7 +291,10 @@ export function WorkspaceSettings() {
                 </li>
                 <li className="gitlab-instance-list__row">
                   <div className="gitlab-instance-list__id">
-                    <strong>GitLab.com</strong>
+                    <strong className="provider-name">
+                      <ProviderLogo provider="gitlab" size={15} />
+                      GitLab.com
+                    </strong>
                     <span>{gitlabComConnection ? "Connected" : "Not connected"}</span>
                   </div>
                   <div className="gitlab-instance-list__actions">
@@ -300,7 +309,10 @@ export function WorkspaceSettings() {
                     ) : (
                       <a
                         className="button button--primary button--small"
-                        href={connectProviderUrl("gitlab")}
+                        href={connectProviderUrl("gitlab", {
+                          workspaceId: activeWorkspaceId,
+                          returnTo: "/workspace",
+                        })}
                       >
                         Connect GitLab.com
                       </a>
@@ -344,7 +356,10 @@ export function WorkspaceSettings() {
                   {instances.map((instance) => (
                     <li className="gitlab-instance-list__row" key={instance.id}>
                       <div className="gitlab-instance-list__id">
-                        <strong>{instance.displayName || instance.host}</strong>
+                        <strong className="provider-name">
+                          <ProviderLogo provider="gitlab" size={15} />
+                          {instance.displayName || instance.host}
+                        </strong>
                         <span>{instance.host}</span>
                       </div>
                       <div className="gitlab-instance-list__actions">
@@ -353,7 +368,10 @@ export function WorkspaceSettings() {
                         ) : (
                           <a
                             className="button button--secondary button--small"
-                            href={connectProviderUrl(instance.registrationId)}
+                            href={connectProviderUrl(instance.registrationId, {
+                              workspaceId: activeWorkspaceId,
+                              returnTo: "/workspace",
+                            })}
                           >
                             Connect
                           </a>

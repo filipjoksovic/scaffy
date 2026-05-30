@@ -24,7 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.scaffy.backend.auth.OAuthAccessTokenRecord;
 import com.scaffy.backend.auth.OAuthInstanceRepository;
 import com.scaffy.backend.auth.ProviderTokenCrypto;
-import com.scaffy.backend.auth.UserRepository;
+import com.scaffy.backend.auth.WorkspaceOAuthTokenRepository;
 
 @Service
 public class GitLabRepositoryClient {
@@ -40,28 +40,28 @@ public class GitLabRepositoryClient {
 	private final HttpClient httpClient;
 	private final ObjectMapper objectMapper;
 	private final ProviderTokenCrypto providerTokenCrypto;
-	private final UserRepository userRepository;
+	private final WorkspaceOAuthTokenRepository tokenRepository;
 	private final OAuthInstanceRepository instanceRepository;
 
 	@Autowired
 	public GitLabRepositoryClient(
 			ObjectMapper objectMapper,
 			ProviderTokenCrypto providerTokenCrypto,
-			UserRepository userRepository,
+			WorkspaceOAuthTokenRepository tokenRepository,
 			OAuthInstanceRepository instanceRepository) {
-		this(HttpClient.newHttpClient(), objectMapper, providerTokenCrypto, userRepository, instanceRepository);
+		this(HttpClient.newHttpClient(), objectMapper, providerTokenCrypto, tokenRepository, instanceRepository);
 	}
 
 	GitLabRepositoryClient(
 			HttpClient httpClient,
 			ObjectMapper objectMapper,
 			ProviderTokenCrypto providerTokenCrypto,
-			UserRepository userRepository,
+			WorkspaceOAuthTokenRepository tokenRepository,
 			OAuthInstanceRepository instanceRepository) {
 		this.httpClient = httpClient;
 		this.objectMapper = objectMapper;
 		this.providerTokenCrypto = providerTokenCrypto;
-		this.userRepository = userRepository;
+		this.tokenRepository = tokenRepository;
 		this.instanceRepository = instanceRepository;
 	}
 
@@ -73,25 +73,25 @@ public class GitLabRepositoryClient {
 		return instanceRepository.findBaseUrlByHost(host.toLowerCase());
 	}
 
-	public List<GitLabProjectOption> findProjects(UUID userId, String host) {
+	public List<GitLabProjectOption> findProjects(UUID workspaceId, UUID userId, String host) {
 		String normalizedHost = host == null || host.isBlank() ? GITLAB_COM_HOST : host.toLowerCase();
 		String baseUrl = resolveBaseUrl(normalizedHost)
 				.orElseThrow(() -> new ResponseStatusException(
 						HttpStatus.NOT_FOUND, "Unknown GitLab instance: " + normalizedHost));
 
 		Optional<OAuthAccessTokenRecord> tokenRecord =
-				userRepository.findOAuthAccessToken(userId, "gitlab", normalizedHost);
+				tokenRepository.findToken(workspaceId, userId, "gitlab", normalizedHost);
 		if (tokenRecord.isEmpty()) {
-			log.warn("No stored GitLab OAuth access token found for userId={} host={}", userId, normalizedHost);
+			log.warn("No GitLab token for workspaceId={} userId={} host={}", workspaceId, userId, normalizedHost);
 			throw new ResponseStatusException(
 					HttpStatus.CONFLICT,
-					"Connect this GitLab account before fetching projects.");
+					"Connect this GitLab account in this workspace before fetching projects.");
 		}
 		String accessToken = providerTokenCrypto.decrypt(tokenRecord.get().encryptedAccessToken());
 
 		List<GitLabProjectOption> projects = new ArrayList<>();
 		for (int page = 1; page <= 5; page++) {
-			List<GitLabProjectOption> pageItems = fetchProjectPage(baseUrl, accessToken, page);
+			List<GitLabProjectOption> pageItems = fetchProjectPage(baseUrl, normalizedHost, accessToken, page);
 			projects.addAll(pageItems);
 			if (pageItems.size() < 100) {
 				break;
@@ -101,7 +101,7 @@ public class GitLabRepositoryClient {
 		return projects;
 	}
 
-	private List<GitLabProjectOption> fetchProjectPage(String baseUrl, String accessToken, int page) {
+	private List<GitLabProjectOption> fetchProjectPage(String baseUrl, String host, String accessToken, int page) {
 		String url = baseUrl + "/api/v4/projects?membership=true&simple=true&per_page=100"
 				+ "&order_by=last_activity_at&page=" + page;
 		HttpRequest request = HttpRequest.newBuilder(URI.create(url))
@@ -130,8 +130,11 @@ public class GitLabRepositoryClient {
 			Thread.currentThread().interrupt();
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab projects could not be loaded.", ex);
 		}
-		catch (IOException | JacksonException ex) {
-			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab projects could not be loaded.", ex);
+		catch (IOException ex) {
+			throw ProviderHttpException.unreachable("GitLab", host, ex);
+		}
+		catch (JacksonException ex) {
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab projects could not be parsed.", ex);
 		}
 	}
 

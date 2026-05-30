@@ -52,11 +52,16 @@ async function handleJob(jobId: string): Promise<void> {
       throw new Error('Generated artifact is not available.')
     }
 
+    if (!job.workspaceId) {
+      throw new Error('Publication job is not associated with a workspace.')
+    }
+    const workspaceId = job.workspaceId
+
     console.log(`[publisher] job=${jobId} publishing repository=${job.repositoryName}`)
     await store.progress(jobId, 'Loading GitHub token')
-    const tokenRecord = await store.getGitHubToken(job.userId)
+    const tokenRecord = await store.getGitHubToken(workspaceId, job.userId)
     if (!tokenRecord) {
-      throw new Error('Reconnect with GitHub before creating repositories.')
+      throw new Error('Connect GitHub in this workspace before creating repositories.')
     }
 
     const scopes = (tokenRecord.scopes ?? '').split(/[,\s]+/)
@@ -83,10 +88,7 @@ async function handleJob(jobId: string): Promise<void> {
       job.repositoryDescription,
       files,
     )
-    if (!job.workspaceId) {
-      throw new Error('Publication job is not associated with a workspace.')
-    }
-    await store.succeed(jobId, job.userId, job.workspaceId, published.owner, published.name, published.url)
+    await store.succeed(jobId, job.userId, workspaceId, published.owner, published.name, published.url)
     console.log(`[publisher] job=${jobId} succeeded url=${published.url}`)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Publication failed.'

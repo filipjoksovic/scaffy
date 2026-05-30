@@ -25,7 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.scaffy.backend.auth.OAuthAccessTokenRecord;
 import com.scaffy.backend.auth.ProviderTokenCrypto;
-import com.scaffy.backend.auth.UserRepository;
+import com.scaffy.backend.auth.WorkspaceOAuthTokenRepository;
 
 @Service
 public class GitHubWorkflowClient {
@@ -37,29 +37,29 @@ public class GitHubWorkflowClient {
 	private final HttpClient httpClient;
 	private final ObjectMapper objectMapper;
 	private final ProviderTokenCrypto providerTokenCrypto;
-	private final UserRepository userRepository;
+	private final WorkspaceOAuthTokenRepository tokenRepository;
 
 	@Autowired
 	public GitHubWorkflowClient(
 			ObjectMapper objectMapper,
 			ProviderTokenCrypto providerTokenCrypto,
-			UserRepository userRepository) {
-		this(HttpClient.newHttpClient(), objectMapper, providerTokenCrypto, userRepository);
+			WorkspaceOAuthTokenRepository tokenRepository) {
+		this(HttpClient.newHttpClient(), objectMapper, providerTokenCrypto, tokenRepository);
 	}
 
 	GitHubWorkflowClient(
 			HttpClient httpClient,
 			ObjectMapper objectMapper,
 			ProviderTokenCrypto providerTokenCrypto,
-			UserRepository userRepository) {
+			WorkspaceOAuthTokenRepository tokenRepository) {
 		this.httpClient = httpClient;
 		this.objectMapper = objectMapper;
 		this.providerTokenCrypto = providerTokenCrypto;
-		this.userRepository = userRepository;
+		this.tokenRepository = tokenRepository;
 	}
 
-	public GitHubWorkflowFile findWorkflow(UUID userId, RepositoryConnection repository) {
-		String accessToken = accessToken(userId);
+	public GitHubWorkflowFile findWorkflow(UUID workspaceId, UUID userId, RepositoryConnection repository) {
+		String accessToken = accessToken(workspaceId, userId);
 		String defaultBranch = defaultBranch(repository, accessToken);
 		List<String> workflowPaths = workflowPaths(repository, defaultBranch, accessToken);
 		if (workflowPaths.isEmpty()) {
@@ -79,11 +79,11 @@ public class GitHubWorkflowClient {
 		return new GitHubWorkflowFile(selectedPath, rawContent(repository, defaultBranch, selectedPath, accessToken));
 	}
 
-	private String accessToken(UUID userId) {
-		OAuthAccessTokenRecord token = userRepository.findOAuthAccessToken(userId, "github")
+	private String accessToken(UUID workspaceId, UUID userId) {
+		OAuthAccessTokenRecord token = tokenRepository.findToken(workspaceId, userId, "github", "")
 				.orElseThrow(() -> new ResponseStatusException(
 						HttpStatus.CONFLICT,
-						"Reconnect with GitHub before analyzing repositories."));
+						"Connect GitHub in this workspace before analyzing repositories."));
 		return providerTokenCrypto.decrypt(token.encryptedAccessToken());
 	}
 
@@ -161,7 +161,7 @@ public class GitHubWorkflowClient {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repository files could not be loaded.", ex);
 		}
 		catch (IOException ex) {
-			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repository files could not be loaded.", ex);
+			throw ProviderHttpException.unreachable("GitHub", "api.github.com", ex);
 		}
 	}
 

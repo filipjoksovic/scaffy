@@ -205,7 +205,7 @@ class RepositoryAnalysisPersistenceControllerTest {
 		GitHubWorkflowClient gitHubWorkflowClient() {
 			return new GitHubWorkflowClient((ObjectMapper) null, null, null) {
 				@Override
-				public GitHubWorkflowFile findWorkflow(UUID userId, RepositoryConnection repository) {
+				public GitHubWorkflowFile findWorkflow(UUID workspaceId, UUID userId, RepositoryConnection repository) {
 					int fetchCount = WORKFLOW_FETCHES.incrementAndGet();
 					if (fetchCount == 1) {
 						return new GitHubWorkflowFile(".github/workflows/ci.yml", """
