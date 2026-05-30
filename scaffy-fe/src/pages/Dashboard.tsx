@@ -11,6 +11,11 @@ import type {
 } from "../api/analyze";
 import { oauthLoginUrl } from "../api/auth";
 import {
+  requestFindingFix,
+  type FindingFixEdit,
+  type FindingFixResponse,
+} from "../api/recommend";
+import {
   analyzeRepository,
   createRepositoryPublication,
   disconnectRepository,
@@ -952,7 +957,10 @@ function AnalysisBreakdown({
   const [activeTab, setActiveTab] = useState<AnalysisDetailTab>("quality");
   const [findingFilter, setFindingFilter] = useState<FindingFilter>("missing");
   const [findingDimension, setFindingDimension] = useState<string | null>(null);
-  const findings = flattenAnalysisFindings(analysis.analysis.dimensions);
+  const findings = useMemo(
+    () => flattenAnalysisFindings(analysis.analysis.dimensions),
+    [analysis.analysis.dimensions],
+  );
   const openFindings = findings.filter(
     (finding) => finding.finding.type !== "POSITIVE",
   );
@@ -1000,7 +1008,9 @@ function AnalysisBreakdown({
             onClearDimensionFilter={() => setFindingDimension(null)}
             onFilterChange={setFindingFilter}
             onReanalyze={onReanalyze}
+            provider={analysis.analysis.provider}
             reanalyzing={reanalyzing}
+            runId={analysis.runId}
             workflowContent={analysis.workflowContent}
             workflowPath={analysis.workflowPath}
           />
@@ -1299,7 +1309,9 @@ type FindingsTableProps = Readonly<{
   onClearDimensionFilter: () => void;
   onFilterChange: (filter: FindingFilter) => void;
   onReanalyze: () => Promise<void>;
+  provider: string;
   reanalyzing: boolean;
+  runId: string;
   workflowContent: string | null;
   workflowPath: string;
 }>;
@@ -1311,7 +1323,9 @@ function FindingsTable({
   onClearDimensionFilter,
   onFilterChange,
   onReanalyze,
+  provider,
   reanalyzing,
+  runId,
   workflowContent,
   workflowPath,
 }: FindingsTableProps) {
@@ -1354,6 +1368,8 @@ function FindingsTable({
         : null,
     [findings, selectedFindingKey],
   );
+
+  const [fixCache] = useState(() => new Map<string, FindingFixResponse>());
 
   return (
     <section className="findings-panel">
@@ -1427,13 +1443,16 @@ function FindingsTable({
       )}
       <FindingSourceDialog
         finding={selectedFinding}
+        fixCache={fixCache}
         onOpenChange={(open) => {
           if (!open) {
             setSelectedFindingKey(null);
           }
         }}
         onReanalyze={onReanalyze}
+        provider={provider}
         reanalyzing={reanalyzing}
+        runId={runId}
         workflowContent={workflowContent}
         workflowPath={workflowPath}
       />
@@ -1629,18 +1648,29 @@ function FindingRow({ finding, onSelect }: FindingRowProps) {
 
 type FindingSourceDialogProps = Readonly<{
   finding: FlattenedAnalysisFinding | null;
+  fixCache: Map<string, FindingFixResponse>;
   onOpenChange: (open: boolean) => void;
   onReanalyze: () => Promise<void>;
+  provider: string;
   reanalyzing: boolean;
+  runId: string;
   workflowContent: string | null;
   workflowPath: string;
 }>;
 
+type FindingFixState =
+  | { kind: "loading" }
+  | { kind: "ready"; data: FindingFixResponse }
+  | { kind: "error"; message: string };
+
 function FindingSourceDialog({
   finding,
+  fixCache,
   onOpenChange,
   onReanalyze,
+  provider,
   reanalyzing,
+  runId,
   workflowContent,
   workflowPath,
 }: FindingSourceDialogProps) {
@@ -1659,21 +1689,21 @@ function FindingSourceDialog({
         <Dialog.Content className="source-dialog">
           <header className="source-dialog__header">
             <div>
-              <Eyebrow>Workflow source</Eyebrow>
+              <Eyebrow>Suggested fix</Eyebrow>
               <Dialog.Title className="source-dialog__title">
-                {finding?.ruleLabel ?? "Finding source"}
+                {finding?.ruleLabel ?? "Finding"}
               </Dialog.Title>
               <Dialog.Description className="source-dialog__description">
                 {workflowPath}
               </Dialog.Description>
             </div>
-            <Dialog.Close className="icon-button" aria-label="Close source viewer">
+            <Dialog.Close className="icon-button" aria-label="Close finding details">
               <IconClose />
             </Dialog.Close>
           </header>
 
-          {finding && canShowSource && source && workflowContent ? (
-            <>
+          <div className="source-dialog__body">
+            {finding && (
               <div className="source-dialog__meta">
                 <Badge
                   className={`finding-badge finding-badge--${finding.finding.type.toLowerCase()}`}
@@ -1684,41 +1714,354 @@ function FindingSourceDialog({
                   <span>{finding.dimensionLabel}</span>
                   <span>{finding.capabilityLabel}</span>
                 </span>
-                <span className="source-dialog__meta-location">
-                  <code>{source.path}</code>
-                  <span>
-                    Line {source.startLine}
-                    {source.endLine !== source.startLine
-                      ? `-${source.endLine}`
-                      : ""}
+                {source ? (
+                  <span className="source-dialog__meta-location">
+                    <code>{source.path}</code>
+                    <span>
+                      Line {source.startLine}
+                      {source.endLine !== source.startLine
+                        ? `-${source.endLine}`
+                        : ""}
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="source-dialog__meta-location">
+                    <span>No location</span>
+                  </span>
+                )}
               </div>
-              {finding.finding.evidence && (
-                <p className="source-dialog__evidence">
-                  {finding.finding.evidence}
-                </p>
-              )}
-              <SourceCodeViewer content={workflowContent} source={source} />
-            </>
-          ) : (
-            <div className="source-dialog__empty">
-              <h4>Exact source is not available</h4>
-              <p>
-                {workflowContent
-                  ? "This finding does not map to a concrete YAML node."
-                  : "This analysis was created before Scaffy stored workflow source. Re-run the analyzer to enable click-to-code navigation."}
+            )}
+
+            {finding?.finding.evidence && (
+              <p className="source-dialog__evidence">
+                {finding.finding.evidence}
               </p>
-              {!workflowContent && (
+            )}
+
+            {finding && workflowContent ? (
+              <FindingFixSection
+                key={findingKey(finding)}
+                cache={fixCache}
+                finding={finding}
+                provider={provider}
+                runId={runId}
+                workflowContent={workflowContent}
+                workflowPath={workflowPath}
+              />
+            ) : (
+              <div className="source-dialog__empty">
+                <h4>Suggestions need stored workflow source</h4>
+                <p>
+                  This analysis was created before Scaffy stored workflow
+                  source. Re-run the analyzer to generate an AI fix and enable
+                  click-to-code navigation.
+                </p>
                 <Button disabled={reanalyzing} onClick={handleReanalyze}>
                   {reanalyzing ? "Analyzing" : "Re-analyze repository"}
                 </Button>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+
+            {canShowSource && source && workflowContent && (
+              <div className="source-dialog__section">
+                <Eyebrow>Workflow source</Eyebrow>
+                <SourceCodeViewer content={workflowContent} source={source} />
+              </div>
+            )}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+type FindingFixSectionProps = Readonly<{
+  cache: Map<string, FindingFixResponse>;
+  finding: FlattenedAnalysisFinding;
+  provider: string;
+  runId: string;
+  workflowContent: string;
+  workflowPath: string;
+}>;
+
+function FindingFixSection({
+  cache,
+  finding,
+  provider,
+  runId,
+  workflowContent,
+  workflowPath,
+}: FindingFixSectionProps) {
+  const cacheKey = `${runId}::${findingKey(finding)}`;
+  const [fix, setFix] = useState<FindingFixState>(() => {
+    const cached = cache.get(cacheKey);
+    return cached ? { kind: "ready", data: cached } : { kind: "loading" };
+  });
+
+  useEffect(() => {
+    if (cache.has(cacheKey)) {
+      return;
+    }
+
+    let active = true;
+    const source = finding.finding.source;
+
+    requestFindingFix({
+      analysisRunId: runId,
+      provider,
+      workflowPath,
+      workflowContent,
+      finding: {
+        ruleId: finding.finding.ruleId,
+        ruleLabel: finding.ruleLabel,
+        ruleDescription: finding.ruleDescription,
+        dimension: finding.finding.dimension,
+        capability: finding.finding.capability,
+        type: finding.finding.type,
+        evidence: finding.finding.evidence,
+        location: finding.finding.location,
+        startLine: source?.startLine ?? null,
+        endLine: source?.endLine ?? null,
+      },
+    })
+      .then((data) => {
+        cache.set(cacheKey, data);
+        if (active) {
+          setFix({ kind: "ready", data });
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setFix({
+            kind: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Could not reach the recommendation service.",
+          });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [cache, cacheKey, finding, provider, runId, workflowContent, workflowPath]);
+
+  if (fix.kind === "loading") {
+    return (
+      <div className="finding-fix">
+        <StateRow
+          detail="Asking the AI assistant how to resolve this finding."
+          label="Generating suggestion"
+          tone="loading"
+        />
+      </div>
+    );
+  }
+
+  if (fix.kind === "error") {
+    return (
+      <div className="finding-fix">
+        <StateRow
+          detail={fix.message}
+          icon="!"
+          label="Suggestion unavailable"
+          tone="error"
+        />
+      </div>
+    );
+  }
+
+  if (fix.kind !== "ready") {
+    return null;
+  }
+
+  const data = fix.data;
+
+  if (data.status === "unavailable") {
+    return (
+      <div className="finding-fix">
+        <StateRow
+          detail={
+            data.message ??
+            "Set an OpenAI API key on the backend to enable AI suggestions."
+          }
+          label="AI suggestions are turned off"
+          tone="empty"
+        />
+      </div>
+    );
+  }
+
+  if (data.status !== "ok") {
+    return (
+      <div className="finding-fix">
+        <StateRow
+          detail={data.message ?? "The provider could not generate a suggestion."}
+          icon="!"
+          label="Suggestion failed"
+          tone="error"
+        />
+      </div>
+    );
+  }
+
+  const diff = buildFixDiff(data, workflowContent, finding.finding.source);
+
+  return (
+    <div className="finding-fix">
+      <div className="finding-fix__head">
+        {data.summary && <h4>{data.summary}</h4>}
+        {data.explanation && <p>{data.explanation}</p>}
+        {data.model && (
+          <span className="finding-fix__model">Model: {data.model}</span>
+        )}
+      </div>
+      {diff && (
+        <SuggestedFixDiff
+          collapseUnchanged={diff.collapseUnchanged}
+          language={data.language ?? "yaml"}
+          modified={diff.modified}
+          original={diff.original}
+        />
+      )}
+    </div>
+  );
+}
+
+type FixDiff = Readonly<{
+  collapseUnchanged: boolean;
+  modified: string;
+  original: string;
+}>;
+
+function buildFixDiff(
+  data: FindingFixResponse,
+  workflowContent: string,
+  source: CapabilityFinding["source"],
+): FixDiff | null {
+  if (data.edit && data.edit.code != null) {
+    return {
+      collapseUnchanged: true,
+      modified: applyWorkflowEdit(workflowContent, data.edit),
+      original: workflowContent,
+    };
+  }
+  if (data.suggestedCode) {
+    return {
+      collapseUnchanged: false,
+      modified: data.suggestedCode,
+      original: extractSourceSnippet(workflowContent, source),
+    };
+  }
+  return null;
+}
+
+function applyWorkflowEdit(content: string, edit: FindingFixEdit): string {
+  const lines = content.split("\n");
+  const codeLines = (edit.code ?? "").split("\n");
+
+  if (edit.mode === "REPLACE" && edit.startLine != null && edit.endLine != null) {
+    const start = Math.max(1, edit.startLine);
+    const end = Math.min(Math.max(start, edit.endLine), lines.length);
+    return [...lines.slice(0, start - 1), ...codeLines, ...lines.slice(end)].join(
+      "\n",
+    );
+  }
+
+  const at = Math.max(0, Math.min(edit.afterLine ?? lines.length, lines.length));
+  return [...lines.slice(0, at), ...codeLines, ...lines.slice(at)].join("\n");
+}
+
+function extractSourceSnippet(
+  content: string,
+  source: CapabilityFinding["source"],
+): string {
+  if (!source) {
+    return "";
+  }
+  return content
+    .split("\n")
+    .slice(source.startLine - 1, source.endLine)
+    .join("\n");
+}
+
+type SuggestedFixDiffProps = Readonly<{
+  collapseUnchanged: boolean;
+  language: string;
+  modified: string;
+  original: string;
+}>;
+
+function SuggestedFixDiff({
+  collapseUnchanged,
+  language,
+  modified,
+  original,
+}: SuggestedFixDiffProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) {
+      return undefined;
+    }
+
+    let disposed = false;
+    let originalModel: Monaco.editor.ITextModel | null = null;
+    let modifiedModel: Monaco.editor.ITextModel | null = null;
+    let editor: Monaco.editor.IStandaloneDiffEditor | null = null;
+
+    void Promise.all([
+      import("monaco-editor/esm/vs/editor/editor.api.js"),
+      import("monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js"),
+      import("monaco-editor/min/vs/editor/editor.main.css"),
+    ]).then(([monacoModule]) => {
+      if (disposed || !containerRef.current) {
+        return;
+      }
+
+      const monacoApi = monacoModule as unknown as typeof Monaco;
+      originalModel = monacoApi.editor.createModel(original, language);
+      modifiedModel = monacoApi.editor.createModel(modified, language);
+      editor = monacoApi.editor.createDiffEditor(containerRef.current, {
+        automaticLayout: true,
+        contextmenu: false,
+        fontFamily:
+          "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontSize: 12,
+        glyphMargin: false,
+        hideUnchangedRegions: { enabled: collapseUnchanged },
+        lineDecorationsWidth: 0,
+        lineNumbersMinChars: 3,
+        minimap: { enabled: false },
+        overviewRulerLanes: 0,
+        readOnly: true,
+        renderLineHighlight: "none",
+        renderOverviewRuler: false,
+        renderSideBySide: false,
+        scrollBeyondLastLine: false,
+        stickyScroll: { enabled: false },
+        theme: "vs",
+        wordWrap: "off",
+      });
+      editor.setModel({ modified: modifiedModel, original: originalModel });
+    });
+
+    return () => {
+      disposed = true;
+      editor?.dispose();
+      originalModel?.dispose();
+      modifiedModel?.dispose();
+    };
+  }, [collapseUnchanged, language, modified, original]);
+
+  return (
+    <div
+      className="source-viewer source-viewer--monaco finding-fix__editor"
+      ref={containerRef}
+      role="region"
+      aria-label="Suggested fix diff"
+    />
   );
 }
 

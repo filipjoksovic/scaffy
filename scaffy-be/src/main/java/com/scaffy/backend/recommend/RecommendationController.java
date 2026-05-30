@@ -22,4 +22,9 @@ public class RecommendationController {
 	public RecommendationResponse recommend(@RequestBody AnalysisResponse analysis) {
 		return recommendationService.recommend(analysis);
 	}
+
+	@PostMapping(path = "/finding", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public FindingFixResponse recommendFix(@RequestBody FindingFixRequest request) {
+		return recommendationService.recommendFix(request);
+	}
 }
