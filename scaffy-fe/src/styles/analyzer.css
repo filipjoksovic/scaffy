@@ -400,3 +400,86 @@
     justify-self: start;
   }
 }
+
+.recommendations-panel {
+  margin-top: var(--space-base);
+  gap: var(--space-base);
+}
+
+.recommendations-panel__head {
+  display: grid;
+  gap: var(--space-xs);
+  max-width: 720px;
+}
+
+.recommendations-panel__head h2 {
+  font-size: 22px;
+}
+
+.recommendations-panel__head p {
+  color: var(--color-body);
+}
+
+.recommendations-list {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.recommendations-list__meta {
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.recommendation-card {
+  display: grid;
+  gap: var(--space-xs);
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+  padding: var(--space-base);
+}
+
+.recommendation-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.recommendation-card__head h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.recommendation-card__description {
+  color: var(--color-body);
+  font-size: 14px;
+}
+
+.recommendation-card__meta {
+  display: grid;
+  gap: var(--space-xs);
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+}
+
+.recommendation-card__meta > div {
+  display: grid;
+  gap: 2px;
+}
+
+.recommendation-card__meta dt {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.recommendation-card__meta dd {
+  color: var(--color-body);
+  font-size: 13px;
+  margin: 0;
+}
