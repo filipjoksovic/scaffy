@@ -27,9 +27,11 @@ describe('initProject', () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/init$/), {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: expect.any(Headers),
       body: JSON.stringify(request),
     })
+    const [, init] = fetchMock.mock.calls[0]
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
   })
 
   it('surfaces validation details from the API response', async () => {

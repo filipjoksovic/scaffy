@@ -38,6 +38,7 @@ describe('repository connections API', () => {
     await expect(listRepositoryConnections()).resolves.toEqual(connections)
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories$/), {
       credentials: 'include',
+      headers: expect.any(Headers),
     })
   })
 
@@ -61,12 +62,12 @@ describe('repository connections API', () => {
     await expect(connectRepository('scaffy-labs/demo-app')).resolves.toEqual(connection)
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories$/), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: expect.any(Headers),
       body: JSON.stringify({ repository: 'scaffy-labs/demo-app' }),
       credentials: 'include',
     })
+    const [, connectInit] = fetchMock.mock.calls[0]
+    expect(new Headers(connectInit.headers).get('Content-Type')).toBe('application/json')
   })
 
   it('fetches GitHub repositories with credentials', async () => {
@@ -88,6 +89,7 @@ describe('repository connections API', () => {
     await expect(listGitHubRepositories()).resolves.toEqual(repositories)
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/github$/), {
       credentials: 'include',
+      headers: expect.any(Headers),
     })
   })
 
@@ -99,6 +101,7 @@ describe('repository connections API', () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-id$/), {
       method: 'DELETE',
       credentials: 'include',
+      headers: expect.any(Headers),
     })
   })
 
@@ -131,6 +134,7 @@ describe('repository connections API', () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-id\/analyze$/), {
       method: 'POST',
       credentials: 'include',
+      headers: expect.any(Headers),
     })
   })
 
@@ -162,6 +166,7 @@ describe('repository connections API', () => {
     await expect(getRepositoryAnalysis('repo-id')).resolves.toEqual(analysis)
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-id\/analysis$/), {
       credentials: 'include',
+      headers: expect.any(Headers),
     })
   })
 
@@ -191,6 +196,7 @@ describe('repository connections API', () => {
       expect.stringMatching(/\/api\/repositories\/repo-id\/analysis\/runs$/),
       {
         credentials: 'include',
+        headers: expect.any(Headers),
       },
     )
   })
@@ -248,6 +254,7 @@ describe('repository connections API', () => {
       expect.stringMatching(/\/api\/repositories\/repo-id\/analysis\/delta$/),
       {
         credentials: 'include',
+        headers: expect.any(Headers),
       },
     )
   })

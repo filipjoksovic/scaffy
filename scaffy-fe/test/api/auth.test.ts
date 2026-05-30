@@ -28,6 +28,7 @@ describe('auth API', () => {
     await expect(currentUser()).resolves.toEqual(user)
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/auth\/me$/), {
       credentials: 'include',
+      headers: expect.any(Headers),
     })
   })
 
@@ -51,6 +52,7 @@ describe('auth API', () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/auth\/logout$/), {
       method: 'POST',
       credentials: 'include',
+      headers: expect.any(Headers),
     })
   })
 })

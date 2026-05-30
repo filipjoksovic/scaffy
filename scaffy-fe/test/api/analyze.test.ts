@@ -63,7 +63,7 @@ describe('analyzePipeline', () => {
     expect(init.credentials).toBe('include')
     expect(init.body).toBeInstanceOf(FormData)
     expect(init.body.get('file')).toBe(file)
-    expect(init.headers).toBeUndefined()
+    expect(new Headers(init.headers).get('Content-Type')).toBeNull()
   })
 
   it('surfaces validation errors from the API response', async () => {
