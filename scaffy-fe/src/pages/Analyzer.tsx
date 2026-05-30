@@ -19,6 +19,7 @@ import {
   Button,
   Card,
   Eyebrow,
+  RecommendationsPanel,
   StateRow,
 } from "../components";
 import {
@@ -267,6 +268,8 @@ function ReportPanel({ issueCount, report }: ReportPanelProps) {
           />
         ))}
       </div>
+
+      <RecommendationsPanel report={report} />
     </section>
   );
 }
