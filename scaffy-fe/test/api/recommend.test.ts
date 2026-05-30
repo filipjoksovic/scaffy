@@ -56,7 +56,7 @@ describe('requestRecommendations', () => {
     expect(url).toMatch(/\/api\/recommend$/)
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
-    expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
     expect(JSON.parse(init.body as string)).toEqual(sampleReport)
   })
 
