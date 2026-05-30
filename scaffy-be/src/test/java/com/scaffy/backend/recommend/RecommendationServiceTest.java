@@ -21,7 +21,8 @@ class RecommendationServiceTest {
 		RecommendationService service = new RecommendationService(
 				new StubLlmClient(false, "n/a", null, null),
 				promptBuilder,
-				objectMapper);
+				objectMapper,
+				null);
 
 		RecommendationResponse response = service.recommend(sampleAnalysis());
 
@@ -35,7 +36,8 @@ class RecommendationServiceTest {
 		RecommendationService service = new RecommendationService(
 				new StubLlmClient(true, "gpt-4o-mini", "{\"recommendations\":[]}", null),
 				promptBuilder,
-				objectMapper);
+				objectMapper,
+				null);
 
 		RecommendationResponse response = service.recommend(null);
 
@@ -48,7 +50,8 @@ class RecommendationServiceTest {
 		RecommendationService service = new RecommendationService(
 				new StubLlmClient(true, "gpt-4o-mini", null, new LlmCallException("upstream timeout")),
 				promptBuilder,
-				objectMapper);
+				objectMapper,
+				null);
 
 		RecommendationResponse response = service.recommend(sampleAnalysis());
 
@@ -61,7 +64,8 @@ class RecommendationServiceTest {
 		RecommendationService service = new RecommendationService(
 				new StubLlmClient(true, "gpt-4o-mini", "not json", null),
 				promptBuilder,
-				objectMapper);
+				objectMapper,
+				null);
 
 		RecommendationResponse response = service.recommend(sampleAnalysis());
 
@@ -93,7 +97,8 @@ class RecommendationServiceTest {
 		RecommendationService service = new RecommendationService(
 				new StubLlmClient(true, "gpt-4o-mini", json, null),
 				promptBuilder,
-				objectMapper);
+				objectMapper,
+				null);
 
 		RecommendationResponse response = service.recommend(sampleAnalysis());
 
@@ -124,7 +129,8 @@ class RecommendationServiceTest {
 		RecommendationService service = new RecommendationService(
 				new StubLlmClient(true, "gpt-4o-mini", json, null),
 				promptBuilder,
-				objectMapper);
+				objectMapper,
+				null);
 
 		RecommendationResponse response = service.recommend(sampleAnalysis());
 

@@ -29,7 +29,8 @@ class RecommendationControllerTest {
 		RecommendationService service = new RecommendationService(
 				new NoopLlmClient(),
 				new RecommendationPromptBuilder(),
-				new ObjectMapper()) {
+				new ObjectMapper(),
+				null) {
 			@Override
 			public RecommendationResponse recommend(AnalysisResponse analysis) {
 				capturedAnalysis.set(analysis);
