@@ -15,15 +15,18 @@ import org.springframework.web.client.RestClientException;
 public class OpenAiClient implements LlmClient {
 
 	private static final Logger log = LoggerFactory.getLogger(OpenAiClient.class);
+	private static final String FIELD_CONTENT = "content";
 
 	private final RecommendationProperties.OpenAi config;
 	private final RestClient restClient;
 
 	public OpenAiClient(RecommendationProperties properties) {
+		this(properties, RestClient.builder());
+	}
+
+	public OpenAiClient(RecommendationProperties properties, RestClient.Builder builder) {
 		this.config = properties.openai();
-		this.restClient = RestClient.builder()
-				.baseUrl(config.baseUrl())
-				.build();
+		this.restClient = builder.baseUrl(config.baseUrl()).build();
 	}
 
 	@Override
@@ -47,8 +50,8 @@ public class OpenAiClient implements LlmClient {
 				"temperature", config.temperature(),
 				"response_format", Map.of("type", "json_object"),
 				"messages", List.of(
-						Map.of("role", "system", "content", systemPrompt),
-						Map.of("role", "user", "content", userPrompt)));
+						Map.of("role", "system", FIELD_CONTENT, systemPrompt),
+						Map.of("role", "user", FIELD_CONTENT, userPrompt)));
 
 		try {
 			Map<?, ?> response = restClient.post()
@@ -89,7 +92,7 @@ public class OpenAiClient implements LlmClient {
 		if (!(messageObject instanceof Map<?, ?> message)) {
 			throw new LlmCallException("OpenAI choice message missing");
 		}
-		Object content = message.get("content");
+		Object content = message.get(FIELD_CONTENT);
 		if (!(content instanceof String text) || text.isBlank()) {
 			throw new LlmCallException("OpenAI message content empty");
 		}

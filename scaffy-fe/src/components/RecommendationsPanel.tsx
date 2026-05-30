@@ -5,6 +5,16 @@ import {
   type RecommendationResponse,
 } from '../api/recommend'
 import type { AnalysisResponse } from '../api/analyze'
+import {
+  errorMessage,
+  loadingView,
+  normalizePriority,
+  priorityClassName,
+  recommendationKey,
+  viewFromError,
+  viewFromResponse,
+  type RecommendationsView,
+} from '../lib/recommendations'
 import { Badge } from './Badge'
 import { Card } from './Card'
 import { Eyebrow } from './Eyebrow'
@@ -29,14 +39,14 @@ export function RecommendationsPanel({ report }: Props) {
         if (!cancelled) setState({ kind: 'success', data })
       })
       .catch((error: unknown) => {
-        if (cancelled) return
-        const message = error instanceof Error ? error.message : 'Failed to load recommendations.'
-        setState({ kind: 'error', message })
+        if (!cancelled) setState({ kind: 'error', message: errorMessage(error) })
       })
     return () => {
       cancelled = true
     }
   }, [report])
+
+  const view = toView(state)
 
   return (
     <Card as="section" className="recommendations-panel">
@@ -48,77 +58,42 @@ export function RecommendationsPanel({ report }: Props) {
           review each suggestion before applying.
         </p>
       </header>
-      <RecommendationsBody state={state} />
+      <RecommendationsBody view={view} />
     </Card>
   )
 }
 
-function RecommendationsBody({ state }: { state: RecommendationsState }) {
-  if (state.kind === 'loading') {
-    return (
-      <StateRow
-        detail="Calling /api/recommend with the current analysis report."
-        label="Generating recommendations"
-        tone="loading"
-      />
-    )
+function toView(state: RecommendationsState): RecommendationsView {
+  if (state.kind === 'loading') return loadingView()
+  if (state.kind === 'error') return viewFromError(state.message)
+  return viewFromResponse(state.data)
+}
+
+function RecommendationsBody({ view }: Readonly<{ view: RecommendationsView }>) {
+  if (view.kind === 'loading') {
+    return <StateRow detail={view.detail} label={view.label} tone="loading" />
   }
-
-  if (state.kind === 'error') {
-    return (
-      <StateRow
-        detail={state.message}
-        icon="!"
-        label="Recommendations failed"
-        tone="error"
-      />
-    )
+  if (view.kind === 'error') {
+    return <StateRow detail={view.detail} icon="!" label={view.label} tone="error" />
   }
-
-  const { data } = state
-
-  if (data.status === 'unavailable') {
-    return (
-      <StateRow
-        detail={data.message ?? 'The recommendation provider is not configured on this deployment.'}
-        label="Recommendations not configured"
-        tone="empty"
-      />
-    )
-  }
-
-  if (data.status === 'error') {
-    return (
-      <StateRow
-        detail={data.message ?? 'The recommendation provider returned an error.'}
-        icon="!"
-        label="Recommendations unavailable"
-        tone="error"
-      />
-    )
-  }
-
-  if (data.recommendations.length === 0) {
-    return (
-      <StateRow
-        detail="The model returned no suggestions for this pipeline."
-        label="No recommendations"
-        tone="empty"
-      />
-    )
+  if (view.kind === 'unavailable' || view.kind === 'empty') {
+    return <StateRow detail={view.detail} label={view.label} tone="empty" />
   }
 
   return (
     <div className="recommendations-list">
-      {data.model && <p className="recommendations-list__meta">Model: {data.model}</p>}
-      {data.recommendations.map((recommendation, index) => (
-        <RecommendationCard key={`${recommendation.title}-${index}`} recommendation={recommendation} />
+      {view.model && <p className="recommendations-list__meta">Model: {view.model}</p>}
+      {view.recommendations.map((recommendation, index) => (
+        <RecommendationCard
+          key={recommendationKey(recommendation, index)}
+          recommendation={recommendation}
+        />
       ))}
     </div>
   )
 }
 
-function RecommendationCard({ recommendation }: { recommendation: Recommendation }) {
+function RecommendationCard({ recommendation }: Readonly<{ recommendation: Recommendation }>) {
   return (
     <article className="recommendation-card">
       <header className="recommendation-card__head">
@@ -140,8 +115,8 @@ function RecommendationCard({ recommendation }: { recommendation: Recommendation
   )
 }
 
-function PriorityBadge({ priority }: { priority: string }) {
-  const normalized = priority.toLowerCase()
-  const className = `badge badge--priority badge--priority-${normalized}`
-  return <Badge className={className}>{normalized}</Badge>
+function PriorityBadge({ priority }: Readonly<{ priority: string }>) {
+  return (
+    <Badge className={priorityClassName(priority)}>{normalizePriority(priority)}</Badge>
+  )
 }
