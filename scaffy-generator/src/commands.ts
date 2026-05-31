@@ -68,6 +68,7 @@ export async function postProcessProject(
   await ensureBackendProject(workspace, selection)
   await patchFrontendPackage(workspace, selection)
   await patchBackendPackage(workspace, selection)
+  await writeGitignore(workspace, selection)
   await writePipeline(workspace, request, selection)
   await writeReadme(workspace, request, selection)
   if (selection.includeDocker) {
@@ -260,6 +261,61 @@ function frontendDependencies(selection: InitSelection): Record<string, string> 
     return { vue: '^3.5.0' }
   }
   return {}
+}
+
+async function writeGitignore(workspace: string, selection: InitSelection): Promise<void> {
+  // Root-level ignores cover cross-cutting artifacts. The frontend (Vite /
+  // Angular) and NestJS backend scaffolders emit their own subfolder
+  // .gitignore, so we only fill the gaps: the root, plus backends whose CLIs
+  // produce no .gitignore (.NET and the hand-written Spring Boot project).
+  await writeFile(path.join(workspace, '.gitignore'), `# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+`)
+
+  const backendGitignore = backendGitignoreContents(selection)
+  if (backendGitignore) {
+    await writeFile(path.join(workspace, 'backend', '.gitignore'), backendGitignore)
+  }
+}
+
+function backendGitignoreContents(selection: InitSelection): string | null {
+  if (selection.backend.id === 'dotnet') {
+    return `bin/
+obj/
+*.user
+`
+  }
+  if (selection.backend.id === 'spring-boot') {
+    return `target/
+*.class
+HELP.md
+`
+  }
+  return null
 }
 
 async function writePipeline(workspace: string, request: InitJobRequest, selection: InitSelection): Promise<void> {
