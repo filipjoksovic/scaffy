@@ -166,6 +166,71 @@ test('l3 GitHub fixture emits structured delivery signals and compose output', a
   assert.equal(selection.includeDocker, true)
 })
 
+test('writes a root .gitignore plus a backend .gitignore for .NET', async () => {
+  const request = {
+    projectName: 'demo-app',
+    frontend: 'angular',
+    frontendVersion: '19',
+    frontendRuntime: 'node-22',
+    backend: 'dotnet',
+    backendVersion: '9',
+    backendRuntime: 'dotnet-9',
+    pipeline: 'github-actions',
+    pipelineMaturity: 'l2',
+    includeDocker: false,
+  }
+  const root = await mkdtemp(path.join(tmpdir(), 'scaffy-generator-test-'))
+  await writeFixtureProject(root, request, validateSelection(request))
+
+  const rootIgnore = await readFile(path.join(root, '.gitignore'), 'utf8')
+  assert.match(rootIgnore, /node_modules\//)
+  assert.match(rootIgnore, /\.env/)
+  assert.match(rootIgnore, /\.DS_Store/)
+
+  const backendIgnore = await readFile(path.join(root, 'backend', '.gitignore'), 'utf8')
+  assert.match(backendIgnore, /bin\//)
+  assert.match(backendIgnore, /obj\//)
+})
+
+test('writes a backend .gitignore for Spring Boot', async () => {
+  const request = {
+    projectName: 'demo-app',
+    frontend: 'react',
+    frontendVersion: '19',
+    frontendRuntime: 'node-22',
+    backend: 'spring-boot',
+    backendVersion: '4.0',
+    backendRuntime: 'java-21',
+    pipeline: 'github-actions',
+    pipelineMaturity: 'l2',
+    includeDocker: false,
+  }
+  const root = await mkdtemp(path.join(tmpdir(), 'scaffy-generator-test-'))
+  await writeFixtureProject(root, request, validateSelection(request))
+
+  const backendIgnore = await readFile(path.join(root, 'backend', '.gitignore'), 'utf8')
+  assert.match(backendIgnore, /target\//)
+})
+
+test('does not write a backend .gitignore for a Node backend', async () => {
+  const request = {
+    projectName: 'demo-app',
+    frontend: 'react',
+    frontendVersion: '19',
+    frontendRuntime: 'node-22',
+    backend: 'nestjs',
+    backendVersion: '11',
+    backendRuntime: 'node-22',
+    pipeline: 'github-actions',
+    pipelineMaturity: 'l2',
+    includeDocker: false,
+  }
+  const root = await mkdtemp(path.join(tmpdir(), 'scaffy-generator-test-'))
+  await writeFixtureProject(root, request, validateSelection(request))
+
+  await assert.rejects(readFile(path.join(root, 'backend', '.gitignore'), 'utf8'))
+})
+
 test('l2 and l3 GitLab fixtures emit scanner-recognized progression signals', async () => {
   const base = {
     projectName: 'demo-app',
