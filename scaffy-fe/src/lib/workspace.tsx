@@ -12,6 +12,13 @@ import { setActiveWorkspaceId } from '../api/client'
 import { useAuth } from './auth'
 
 const STORAGE_KEY = 'scaffy.activeWorkspaceId'
+// Allowlist for the only shape a workspace id can legitimately take (UUID-like token).
+// Sanitizes server-supplied ids before they reach browser storage.
+const WORKSPACE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+
+function sanitizeWorkspaceId(workspaceId: string | null): string | null {
+  return workspaceId && WORKSPACE_ID_PATTERN.test(workspaceId) ? workspaceId : null
+}
 
 type WorkspaceState = {
   workspaces: Workspace[]
@@ -25,7 +32,7 @@ const WorkspaceContext = createContext<WorkspaceState | null>(null)
 
 function readStoredId(): string | null {
   try {
-    return localStorage.getItem(STORAGE_KEY)
+    return sanitizeWorkspaceId(localStorage.getItem(STORAGE_KEY))
   } catch {
     return null
   }
@@ -33,8 +40,9 @@ function readStoredId(): string | null {
 
 function writeStoredId(workspaceId: string | null) {
   try {
-    if (workspaceId) {
-      localStorage.setItem(STORAGE_KEY, workspaceId)
+    const safeId = sanitizeWorkspaceId(workspaceId)
+    if (safeId) {
+      localStorage.setItem(STORAGE_KEY, safeId)
     } else {
       localStorage.removeItem(STORAGE_KEY)
     }
