@@ -40,7 +40,8 @@ public class SecurityConfig {
 								"/api/repositories/**",
 								"/api/workspaces/**",
 								"/api/init/favourites/**",
-								"/api/init/history").authenticated()
+								"/api/init/history",
+								"/api/recommend/finding/apply").authenticated()
 						.anyRequest().permitAll())
 				.oauth2Login(oauth -> oauth
 						.userInfoEndpoint(userInfo -> userInfo.userService(oauth2UserService))

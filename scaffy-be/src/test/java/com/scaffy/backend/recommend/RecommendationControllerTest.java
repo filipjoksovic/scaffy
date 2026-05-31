@@ -38,7 +38,7 @@ class RecommendationControllerTest {
 			}
 		};
 
-		RecommendationController controller = new RecommendationController(service);
+		RecommendationController controller = new RecommendationController(service, null, null);
 		AnalysisResponse input = new AnalysisResponse(
 				PipelineProvider.GITHUB_ACTIONS,
 				0.0,

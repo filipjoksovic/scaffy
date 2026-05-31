@@ -264,6 +264,13 @@ public class RepositoryAnalysisRepository {
 		return value.length() > 2000 ? value.substring(0, 2000) : value;
 	}
 
+	public Optional<UUID> findRunConnectionId(UUID runId) {
+		return jdbcTemplate.query(
+				"SELECT repository_connection_id FROM repository_analysis_runs WHERE id = ?",
+				(rs, rowNum) -> rs.getObject("repository_connection_id", UUID.class),
+				runId).stream().findFirst();
+	}
+
 	private Optional<PersistedRepositoryAnalysis> findById(UUID id) {
 		return jdbcTemplate.query("""
 				SELECT id,

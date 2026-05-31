@@ -7,6 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -59,6 +60,129 @@ public class GitLabWorkflowClient {
 		this.providerTokenCrypto = providerTokenCrypto;
 		this.tokenRepository = tokenRepository;
 		this.gitLabRepositoryClient = gitLabRepositoryClient;
+	}
+
+	public WorkflowCommitResult commitWorkflow(
+			UUID workspaceId,
+			UUID userId,
+			RepositoryConnection repository,
+			String workflowPath,
+			String newContent,
+			String commitMessage) {
+		String host = repository.providerInstance() == null || repository.providerInstance().isBlank()
+				? GITLAB_COM_HOST
+				: repository.providerInstance();
+		String baseUrl = gitLabRepositoryClient.resolveBaseUrl(host)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown GitLab instance: " + host));
+		String accessToken = accessToken(workspaceId, userId, host);
+		String projectId = encode(repository.owner() + "/" + repository.name());
+
+		Map<String, Object> project = jsonObject(gitLabRequest(baseUrl, host, "/api/v4/projects/" + projectId, accessToken));
+		String defaultBranch = string(project.get("default_branch"));
+		if (defaultBranch == null) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "This GitLab project has no default branch yet.");
+		}
+
+		String requestBody = jsonString(Map.of(
+				"branch", defaultBranch,
+				"commit_message", commitMessage,
+				"content", newContent,
+				"encoding", "text"));
+
+		String filePath = "/api/v4/projects/" + projectId + "/repository/files/" + encode(workflowPath);
+		gitLabSendJson("PUT", baseUrl, host, filePath, accessToken, requestBody);
+
+		String commitSha = latestCommitSha(baseUrl, host, projectId, defaultBranch, workflowPath, accessToken);
+		String commitUrl = commitSha == null
+				? null
+				: baseUrl + "/" + repository.owner() + "/" + repository.name() + "/-/commit/" + commitSha;
+		log.info(
+				"Committed GitLab workflow update userId={} host={} project={}/{} path={} branch={} sha={}",
+				userId,
+				host,
+				repository.owner(),
+				repository.name(),
+				workflowPath,
+				defaultBranch,
+				commitSha);
+		return new WorkflowCommitResult(commitSha, commitUrl, defaultBranch);
+	}
+
+	private String latestCommitSha(
+			String baseUrl,
+			String host,
+			String projectId,
+			String branch,
+			String workflowPath,
+			String accessToken) {
+		String url = "/api/v4/projects/" + projectId + "/repository/commits?ref_name=" + encode(branch)
+				+ "&path=" + encode(workflowPath) + "&per_page=1";
+		String body = gitLabRequest(baseUrl, host, url, accessToken);
+		try {
+			List<Map<String, Object>> commits = objectMapper.readValue(
+					body,
+					new TypeReference<List<Map<String, Object>>>() {
+					});
+			if (commits.isEmpty()) {
+				return null;
+			}
+			return string(commits.get(0).get("id"));
+		}
+		catch (JacksonException ex) {
+			log.warn("Could not parse latest commit response: {}", ex.getMessage());
+			return null;
+		}
+	}
+
+	private void gitLabSendJson(
+			String method,
+			String baseUrl,
+			String host,
+			String pathAndQuery,
+			String accessToken,
+			String requestBody) {
+		HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + pathAndQuery))
+				.header("Accept", "application/json")
+				.header("Authorization", "Bearer " + accessToken)
+				.header("Content-Type", "application/json")
+				.method(method, HttpRequest.BodyPublishers.ofString(requestBody))
+				.build();
+		try {
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+			if (response.statusCode() == 401 || response.statusCode() == 403) {
+				throw new ResponseStatusException(
+						HttpStatus.CONFLICT,
+						"GitLab authorization cannot write to this project. Reconnect GitLab and grant write access.");
+			}
+			if (response.statusCode() == 404) {
+				throw new ResponseStatusException(HttpStatus.NOT_FOUND, "GitLab project or workflow file was not found.");
+			}
+			if (response.statusCode() == 400 || response.statusCode() == 409) {
+				throw new ResponseStatusException(
+						HttpStatus.CONFLICT,
+						"The workflow file has changed since the suggestion was generated. Reload the analysis and try again.");
+			}
+			if (response.statusCode() < 200 || response.statusCode() >= 300) {
+				log.warn("GitLab write failed status={} path={} body={}", response.statusCode(), pathAndQuery, response.body());
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab commit could not be created.");
+			}
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab commit could not be created.", ex);
+		}
+		catch (IOException ex) {
+			throw ProviderHttpErrors.unreachable("GitLab", host, ex);
+		}
+	}
+
+	private String jsonString(Map<String, Object> value) {
+		try {
+			return objectMapper.writeValueAsString(value);
+		}
+		catch (JacksonException ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not encode GitLab commit body.", ex);
+		}
 	}
 
 	public GitLabCiFile findCiFile(UUID workspaceId, UUID userId, RepositoryConnection repository) {
