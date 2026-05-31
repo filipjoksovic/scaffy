@@ -213,10 +213,9 @@ describe('applyFindingFix', () => {
     expect(url).toMatch(/\/api\/recommend\/finding\/apply$/)
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
-    expect(init.headers).toEqual({
-      'Content-Type': 'application/json',
-      'X-Workspace-Id': 'workspace-1',
-    })
+    const headers = new Headers(init.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('X-Workspace-Id')).toBe('workspace-1')
     expect(JSON.parse(init.body as string)).toEqual(sampleApplyRequest)
   })
 
@@ -230,7 +229,9 @@ describe('applyFindingFix', () => {
     await applyFindingFix(sampleApplyRequest)
 
     const [, init] = fetchMock.mock.calls[0]
-    expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+    const headers = new Headers(init.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('X-Workspace-Id')).toBeNull()
   })
 
   it('throws when the apply endpoint returns a non-OK status', async () => {
