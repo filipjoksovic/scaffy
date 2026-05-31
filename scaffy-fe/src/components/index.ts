@@ -1,4 +1,5 @@
 export { Badge } from './Badge'
+export { FavouriteStacks } from './FavouriteStacks'
 export { AppFrame } from './AppFrame'
 export { Button } from './Button'
 export { Card } from './Card'
