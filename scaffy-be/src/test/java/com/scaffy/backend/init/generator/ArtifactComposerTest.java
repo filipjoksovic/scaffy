@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 class ArtifactComposerTest {
 
-	private final ArtifactComposer composer = new ArtifactComposer();
+	private final ArtifactComposer composer = new ArtifactComposer(new GeneratorCacheManager());
 
 	private static final Map<String, String> TOKENS = Map.of(
 			"__SCAFFY_PROJECT_NAME__", "demo-app",

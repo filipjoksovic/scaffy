@@ -20,9 +20,11 @@ import org.springframework.stereotype.Component;
 public class TemplateOverlay {
 
 	private final TemplateRenderer renderer;
+	private final GeneratorCacheManager cacheManager;
 
-	public TemplateOverlay(TemplateRenderer renderer) {
+	public TemplateOverlay(TemplateRenderer renderer, GeneratorCacheManager cacheManager) {
 		this.renderer = renderer;
+		this.cacheManager = cacheManager;
 	}
 
 	public List<EmittedFile> emit(List<TemplateFile> templates, Map<String, String> variables) throws IOException {
@@ -39,13 +41,20 @@ public class TemplateOverlay {
 		return emitted;
 	}
 
-	private static byte[] readResource(String resourcePath) throws IOException {
+	private byte[] readResource(String resourcePath) throws IOException {
+		byte[] cached = cacheManager.getTemplate(resourcePath);
+		if (cached != null) {
+			return cached;
+		}
 		ClassPathResource resource = new ClassPathResource(resourcePath);
 		if (!resource.exists()) {
 			throw new IOException("Template resource not found: " + resourcePath);
 		}
+		byte[] bytes;
 		try (InputStream in = resource.getInputStream()) {
-			return in.readAllBytes();
+			bytes = in.readAllBytes();
 		}
+		cacheManager.putTemplate(resourcePath, bytes);
+		return bytes;
 	}
 }

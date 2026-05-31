@@ -1,7 +1,9 @@
 import { emptyDir, mkdirp, remove } from 'fs-extra/esm'
+import { readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { validateSelection } from './catalog.js'
+import * as cache from './cache.js'
 import { buildCommandPlan, postProcessProject, runCommand, writeFixtureProject } from './commands.js'
 import { zipDirectory } from './zip.js'
 import type { CommandLogLine, GeneratorConfig, InitGenerationJob } from './types.js'
@@ -16,6 +18,18 @@ export async function generateZip(
   reportLog?: LogReporter,
 ): Promise<string> {
   const selection = validateSelection(job.request)
+
+  // Check the cache before doing any filesystem work.
+  const cacheKey = cache.requestKey(job.request)
+  const cached = cache.get(cacheKey)
+  if (cached !== null) {
+    await report('Serving from cache')
+    const cachedZipPath = path.join(tmpdir(), 'scaffy-generator', job.id, `${job.request.projectName}.zip`)
+    await mkdirp(path.dirname(cachedZipPath))
+    await writeFile(cachedZipPath, cached)
+    return cachedZipPath
+  }
+
   const root = path.join(tmpdir(), 'scaffy-generator', job.id)
   const workspace = path.join(root, job.request.projectName)
   const zipPath = path.join(root, `${job.request.projectName}.zip`)
@@ -44,6 +58,11 @@ export async function generateZip(
     await report('Creating ZIP artifact')
     await zipDirectory(workspace, zipPath)
     await report('ZIP artifact created')
+
+    // Store in cache so identical future requests are served instantly.
+    const zipBytes = await readFile(zipPath)
+    cache.put(cacheKey, zipBytes)
+
     return zipPath
   } catch (error) {
     throw error instanceof Error ? error : new Error(String(error))

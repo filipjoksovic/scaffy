@@ -19,3 +19,5 @@ output/playwright/
 
 # Node
 node_modules/
+
+.env
