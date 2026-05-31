@@ -22,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 public class JwtService {
 
 	private static final String HMAC_ALGORITHM = "HmacSHA256";
+	private static final String REFRESH_TYP = "refresh";
 	private static final TypeReference<Map<String, Object>> CLAIMS_TYPE = new TypeReference<>() {
 	};
 
@@ -60,7 +61,7 @@ public class JwtService {
 		Map<String, Object> header = Map.of("alg", "HS256", "typ", "JWT");
 		Map<String, Object> claims = Map.of(
 				"sub", user.id().toString(),
-				"typ", "refresh",
+				"typ", REFRESH_TYP,
 				"iat", now.getEpochSecond(),
 				"exp", now.plus(authProperties.refreshTokenTtl()).getEpochSecond());
 
@@ -71,7 +72,7 @@ public class JwtService {
 	/** Validates a refresh token (signature, expiry, type) and returns the user id it belongs to. */
 	public Optional<UUID> parseRefreshToken(String token) {
 		Map<String, Object> claims = verifiedClaims(token);
-		if (claims == null || !"refresh".equals(string(claims.get("typ")))) {
+		if (claims == null || !REFRESH_TYP.equals(string(claims.get("typ")))) {
 			return Optional.empty();
 		}
 		try {
@@ -84,7 +85,7 @@ public class JwtService {
 
 	public Optional<ScaffyPrincipal> parseAccessToken(String token) {
 		Map<String, Object> claims = verifiedClaims(token);
-		if (claims == null || "refresh".equals(string(claims.get("typ")))) {
+		if (claims == null || REFRESH_TYP.equals(string(claims.get("typ")))) {
 			return Optional.empty();
 		}
 		try {

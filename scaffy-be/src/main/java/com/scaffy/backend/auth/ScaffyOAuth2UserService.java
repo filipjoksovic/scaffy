@@ -26,6 +26,7 @@ public class ScaffyOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 
 	private static final TypeReference<List<Map<String, Object>>> GITHUB_EMAILS_TYPE = new TypeReference<>() {
 	};
+	private static final String EMAIL_ATTRIBUTE = "email";
 
 	private final DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
 	private final ObjectMapper objectMapper;
@@ -45,7 +46,7 @@ public class ScaffyOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 	public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
 		OAuth2User user = delegate.loadUser(userRequest);
 		String registrationId = userRequest.getClientRegistration().getRegistrationId();
-		if (!"github".equals(registrationId) || !isBlank(user.getAttribute("email"))) {
+		if (!"github".equals(registrationId) || !isBlank(user.getAttribute(EMAIL_ATTRIBUTE))) {
 			return user;
 		}
 
@@ -55,7 +56,7 @@ public class ScaffyOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 		}
 
 		Map<String, Object> attributes = new LinkedHashMap<>(user.getAttributes());
-		attributes.put("email", email);
+		attributes.put(EMAIL_ATTRIBUTE, email);
 		String userNameAttributeName = userRequest.getClientRegistration()
 				.getProviderDetails()
 				.getUserInfoEndpoint()
@@ -78,7 +79,7 @@ public class ScaffyOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 			return emails.stream()
 					.filter(email -> Boolean.TRUE.equals(email.get("primary")))
 					.filter(email -> Boolean.TRUE.equals(email.get("verified")))
-					.map(email -> email.get("email"))
+					.map(email -> email.get(EMAIL_ATTRIBUTE))
 					.filter(String.class::isInstance)
 					.map(String.class::cast)
 					.findFirst()

@@ -182,7 +182,16 @@ public class WorkspaceService {
 	}
 
 	private String uniqueSlug(String label) {
-		String base = label.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
+		String collapsed = label.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
+		int start = 0;
+		int end = collapsed.length();
+		while (start < end && collapsed.charAt(start) == '-') {
+			start++;
+		}
+		while (end > start && collapsed.charAt(end - 1) == '-') {
+			end--;
+		}
+		String base = collapsed.substring(start, end);
 		if (base.isBlank()) {
 			base = "workspace";
 		}

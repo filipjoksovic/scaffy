@@ -89,7 +89,7 @@ public class GitHubWorkflowClient {
 
 	private String defaultBranch(RepositoryConnection repository, String accessToken) {
 		Map<String, Object> body = jsonObject(gitHubRequest(
-				"/repos/" + encode(repository.owner()) + "/" + encode(repository.name()),
+				repoBasePath(repository),
 				accessToken,
 				"application/vnd.github+json"));
 		String defaultBranch = string(body.get("default_branch"));
@@ -102,8 +102,7 @@ public class GitHubWorkflowClient {
 	@SuppressWarnings("unchecked")
 	private List<String> workflowPaths(RepositoryConnection repository, String defaultBranch, String accessToken) {
 		Map<String, Object> body = jsonObject(gitHubRequest(
-				"/repos/" + encode(repository.owner()) + "/" + encode(repository.name()) + "/git/trees/" + encode(defaultBranch)
-						+ "?recursive=1",
+				repoBasePath(repository) + "/git/trees/" + encode(defaultBranch) + "?recursive=1",
 				accessToken,
 				"application/vnd.github+json"));
 		Object treeValue = body.get("tree");
@@ -128,8 +127,7 @@ public class GitHubWorkflowClient {
 			String path,
 			String accessToken) {
 		return gitHubRequest(
-				"/repos/" + encode(repository.owner()) + "/" + encode(repository.name()) + "/contents/" + encodePath(path)
-						+ "?ref=" + encode(defaultBranch),
+				repoBasePath(repository) + "/contents/" + encodePath(path) + "?ref=" + encode(defaultBranch),
 				accessToken,
 				"application/vnd.github.raw");
 	}
@@ -202,6 +200,10 @@ public class GitHubWorkflowClient {
 				.map(this::encode)
 				.reduce((left, right) -> left + "/" + right)
 				.orElse("");
+	}
+
+	private String repoBasePath(RepositoryConnection repository) {
+		return "/repos/" + encode(repository.owner()) + "/" + encode(repository.name());
 	}
 
 	private String encode(String value) {

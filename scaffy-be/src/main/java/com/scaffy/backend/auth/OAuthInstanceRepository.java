@@ -27,13 +27,13 @@ public class OAuthInstanceRepository {
 		int updated = jdbcTemplate.update("""
 				UPDATE oauth_instances
 				SET base_url = ?, registration_id = ?, display_name = ?, client_id = ?,
-					client_secret_encrypted = ?, updated_at = CURRENT_TIMESTAMP
+				    client_secret_encrypted = ?, updated_at = CURRENT_TIMESTAMP
 				WHERE host = ?
 				""", baseUrl, registrationId, displayName, clientId, encryptedSecret, host);
 		if (updated == 0) {
 			jdbcTemplate.update("""
 					INSERT INTO oauth_instances
-						(id, registration_id, provider, base_url, host, display_name, client_id, client_secret_encrypted)
+					    (id, registration_id, provider, base_url, host, display_name, client_id, client_secret_encrypted)
 					VALUES (?, ?, 'gitlab', ?, ?, ?, ?, ?)
 					""", UUID.randomUUID(), registrationId, baseUrl, host, displayName, clientId, encryptedSecret);
 		}

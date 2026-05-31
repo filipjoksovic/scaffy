@@ -128,7 +128,16 @@ public class RepositoryConnectionController {
 		}
 		String baseUrl = gitLabRepositoryClient.resolveBaseUrl(host)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown GitLab instance."));
-		String path = request.repository().trim().replaceAll("^/+", "").replaceAll("/+$", "");
+		String trimmed = request.repository().trim();
+		int start = 0;
+		int end = trimmed.length();
+		while (start < end && trimmed.charAt(start) == '/') {
+			start++;
+		}
+		while (end > start && trimmed.charAt(end - 1) == '/') {
+			end--;
+		}
+		String path = trimmed.substring(start, end);
 		if (path.isBlank() || !path.contains("/")) {
 			throw new ResponseStatusException(
 					HttpStatus.BAD_REQUEST, "Enter a GitLab project as group/project path.");

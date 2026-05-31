@@ -18,7 +18,16 @@ public record OAuthInstance(
 
 	static String slug(String host) {
 		String normalized = host == null ? "" : host.trim().toLowerCase();
-		String slug = normalized.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+)|(-+$)", "");
+		String collapsed = normalized.replaceAll("[^a-z0-9]+", "-");
+		int start = 0;
+		int end = collapsed.length();
+		while (start < end && collapsed.charAt(start) == '-') {
+			start++;
+		}
+		while (end > start && collapsed.charAt(end - 1) == '-') {
+			end--;
+		}
+		String slug = collapsed.substring(start, end);
 		return slug.isBlank() ? "instance" : slug;
 	}
 }

@@ -129,16 +129,16 @@ public class OAuthConnectController {
 			List<String> scopes,
 			OffsetDateTime connectedAt) {
 
-		static ProviderConnectionResponse from(ProviderConnectionRecord record) {
-			List<String> scopeList = record.scopes() == null || record.scopes().isBlank()
+		static ProviderConnectionResponse from(ProviderConnectionRecord connection) {
+			List<String> scopeList = connection.scopes() == null || connection.scopes().isBlank()
 					? List.of()
-					: List.of(record.scopes().split("[\\s,]+"));
+					: List.of(connection.scopes().split("[\\s,]+"));
 			return new ProviderConnectionResponse(
-					record.provider(),
-					record.instance(),
-					record.displayName(),
+					connection.provider(),
+					connection.instance(),
+					connection.displayName(),
 					scopeList,
-					record.updatedAt());
+					connection.updatedAt());
 		}
 	}
 }

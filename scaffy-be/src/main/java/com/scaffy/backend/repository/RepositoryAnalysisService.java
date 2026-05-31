@@ -24,6 +24,8 @@ import com.scaffy.backend.analyze.PipelineAnalyzer;
 @Service
 public class RepositoryAnalysisService {
 
+	private static final String CONNECTION_NOT_FOUND = "Repository connection not found.";
+
 	private final GitHubWorkflowClient gitHubWorkflowClient;
 	private final GitLabWorkflowClient gitLabWorkflowClient;
 	private final PipelineAnalyzer pipelineAnalyzer;
@@ -45,7 +47,7 @@ public class RepositoryAnalysisService {
 
 	public RepositoryAnalysisResponse analyze(UUID workspaceId, UUID repositoryId) {
 		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, CONNECTION_NOT_FOUND));
 		try {
 			return runAndPersist(connection);
 		}
@@ -68,7 +70,7 @@ public class RepositoryAnalysisService {
 
 	public RepositoryAnalysisResponse getStoredAnalysis(UUID workspaceId, UUID repositoryId) {
 		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, CONNECTION_NOT_FOUND));
 		return analysisRepository.findLatestByRepositoryConnectionId(connection.id())
 				.map(persisted -> RepositoryAnalysisResponse.from(connection, persisted))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository analysis not found."));
@@ -76,13 +78,13 @@ public class RepositoryAnalysisService {
 
 	public List<RepositoryAnalysisSummary> getAnalysisRuns(UUID workspaceId, UUID repositoryId) {
 		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, CONNECTION_NOT_FOUND));
 		return analysisRepository.findSummariesByRepositoryConnectionId(connection.id());
 	}
 
 	public RepositoryAnalysisDeltaResponse getAnalysisDelta(UUID workspaceId, UUID repositoryId) {
 		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository connection not found."));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, CONNECTION_NOT_FOUND));
 		List<PersistedRepositoryAnalysis> latestPair = analysisRepository.findLatestPairByRepositoryConnectionId(connection.id());
 		if (latestPair.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Repository analysis not found.");

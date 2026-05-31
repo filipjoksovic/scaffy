@@ -8,13 +8,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class OAuthProfileExtractor {
 
+	private static final String EMAIL_ATTRIBUTE = "email";
+
 	public OAuthProfile extract(String registrationId, String instance, OAuth2User user) {
 		Map<String, Object> attributes = user.getAttributes();
 		if ("google".equals(registrationId)) {
 			return new OAuthProfile(
 					"google",
 					required(attributes, "sub"),
-					string(attributes.get("email")),
+					string(attributes.get(EMAIL_ATTRIBUTE)),
 					string(attributes.get("name")),
 					string(attributes.get("picture")),
 					"");
@@ -23,7 +25,7 @@ public class OAuthProfileExtractor {
 			return new OAuthProfile(
 					"github",
 					required(attributes, "id"),
-					string(attributes.get("email")),
+					string(attributes.get(EMAIL_ATTRIBUTE)),
 					prefer(string(attributes.get("name")), string(attributes.get("login"))),
 					string(attributes.get("avatar_url")),
 					"");
@@ -32,7 +34,7 @@ public class OAuthProfileExtractor {
 			return new OAuthProfile(
 					"gitlab",
 					required(attributes, "id"),
-					string(attributes.get("email")),
+					string(attributes.get(EMAIL_ATTRIBUTE)),
 					prefer(string(attributes.get("name")), string(attributes.get("username"))),
 					string(attributes.get("avatar_url")),
 					instance == null ? "" : instance);
