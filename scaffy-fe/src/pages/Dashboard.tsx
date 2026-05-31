@@ -18,7 +18,9 @@ import type {
 } from "../api/analyze";
 import { listConnections, oauthLoginUrl } from "../api/auth";
 import {
+  applyFindingFix,
   requestFindingFix,
+  type FindingFixApplyResponse,
   type FindingFixEdit,
   type FindingFixResponse,
 } from "../api/recommend";
@@ -1809,6 +1811,12 @@ type FindingFixState =
   | { kind: "ready"; data: FindingFixResponse }
   | { kind: "error"; message: string };
 
+type ApplyFixState =
+  | { kind: "idle" }
+  | { kind: "submitting" }
+  | { kind: "success"; result: FindingFixApplyResponse }
+  | { kind: "error"; message: string };
+
 function FindingSourceDialog({
   finding,
   fixCache,
@@ -2084,6 +2092,120 @@ function FindingFixSection({
           original={diff.original}
         />
       )}
+      {diff?.modified && diff.modified !== workflowContent && (
+        <ApplyFixActions
+          finding={finding}
+          modifiedContent={diff.modified}
+          runId={runId}
+          workflowPath={workflowPath}
+        />
+      )}
+    </div>
+  );
+}
+
+type ApplyFixActionsProps = Readonly<{
+  finding: FlattenedAnalysisFinding;
+  modifiedContent: string;
+  runId: string;
+  workflowPath: string;
+}>;
+
+function ApplyFixActions({
+  finding,
+  modifiedContent,
+  runId,
+  workflowPath,
+}: ApplyFixActionsProps) {
+  const { activeWorkspace } = useWorkspace();
+  const [commitMessage, setCommitMessage] = useState("Improve CI/CD pipeline quality");
+  const [state, setState] = useState<ApplyFixState>({ kind: "idle" });
+
+  async function handleCommit() {
+    setState({ kind: "submitting" });
+    try {
+      const result = await applyFindingFix(
+        {
+          analysisRunId: runId,
+          workflowPath,
+          workflowContent: modifiedContent,
+          commitMessage: commitMessage.trim() || null,
+          finding: {
+            ruleId: finding.finding.ruleId,
+            ruleLabel: finding.ruleLabel,
+            ruleDescription: finding.ruleDescription,
+            dimension: finding.finding.dimension,
+            capability: finding.finding.capability,
+            type: finding.finding.type,
+            evidence: finding.finding.evidence,
+            location: finding.finding.location,
+            startLine: finding.finding.source?.startLine ?? null,
+            endLine: finding.finding.source?.endLine ?? null,
+          },
+        },
+        activeWorkspace?.id ?? null,
+      );
+      setState({ kind: "success", result });
+    } catch (error: unknown) {
+      setState({
+        kind: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not commit the suggested change.",
+      });
+    }
+  }
+
+  if (state.kind === "success" && state.result.status === "ok") {
+    return (
+      <div className="finding-fix__apply finding-fix__apply--success">
+        <strong>Committed to {state.result.branch ?? "default branch"}.</strong>
+        {state.result.commitUrl ? (
+          <a href={state.result.commitUrl} rel="noreferrer" target="_blank">
+            View commit
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (state.kind === "success" && state.result.status !== "ok") {
+    return (
+      <StateRow
+        detail={
+          state.result.message ??
+          "The commit was rejected. Reconnect the repository and try again."
+        }
+        icon="!"
+        label="Commit not applied"
+        tone="empty"
+      />
+    );
+  }
+
+  return (
+    <div className="finding-fix__apply">
+      <label className="finding-fix__apply-field">
+        <span>Commit message</span>
+        <input
+          className="text-input"
+          onChange={(event) => setCommitMessage(event.target.value)}
+          type="text"
+          value={commitMessage}
+        />
+      </label>
+      <div className="finding-fix__apply-actions">
+        <Button
+          disabled={state.kind === "submitting" || !commitMessage.trim()}
+          onClick={handleCommit}
+        >
+          {state.kind === "submitting" ? "Committing..." : "Commit suggested change"}
+        </Button>
+        {state.kind === "error" && (
+          <span className="finding-fix__apply-error">{state.message}</span>
+        )}
+      </div>
     </div>
   );
 }

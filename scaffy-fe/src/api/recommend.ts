@@ -86,3 +86,40 @@ export async function requestFindingFix(request: FindingFixRequest): Promise<Fin
 
   return response.json() as Promise<FindingFixResponse>
 }
+
+export type FindingFixApplyRequest = {
+  analysisRunId: string
+  finding: FindingFixRequest['finding']
+  workflowPath: string
+  workflowContent: string
+  commitMessage?: string | null
+}
+
+export type FindingFixApplyResponse = {
+  status: RecommendationStatus
+  commitSha: string | null
+  commitUrl: string | null
+  branch: string | null
+  message: string | null
+}
+
+export async function applyFindingFix(
+  request: FindingFixApplyRequest,
+  workspaceId?: string | null,
+): Promise<FindingFixApplyResponse> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (workspaceId) {
+    headers['X-Workspace-Id'] = workspaceId
+  }
+  const response = await apiFetch('/api/recommend/finding/apply', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  })
+
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+
+  return response.json() as Promise<FindingFixApplyResponse>
+}
