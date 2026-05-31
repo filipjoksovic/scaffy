@@ -3,6 +3,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { oauthLoginUrl } from '../api/auth'
 import { useAuth } from '../lib/auth'
 import { GitlabLoginMenu } from './GitlabLoginMenu'
+import { NotificationBell } from './NotificationBell'
 
 export function TopNav() {
   const { user, loading, logout } = useAuth()
@@ -14,6 +15,8 @@ export function TopNav() {
     authContent = <span className="auth-status">Checking session</span>
   } else if (user) {
     authContent = (
+      <>
+      <NotificationBell />
       <Popover.Root>
         <Popover.Trigger asChild>
           <button
@@ -87,6 +90,7 @@ export function TopNav() {
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
+      </>
     )
   } else {
     authContent = (
