@@ -1,6 +1,7 @@
 package com.scaffy.backend.init;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
@@ -11,6 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class InitJobService {
+
+	private static final int MAX_HISTORY_LIMIT = 20;
 
 	private final StackValidator stackValidator;
 	private final InitGenerationJobRepository repository;
@@ -94,6 +97,13 @@ public class InitJobService {
 				.orElseThrow(() -> new InitJobNotFoundException(id));
 	}
 
+	public List<InitHistoryItem> history(UUID userId, int limit) {
+		int clampedLimit = Math.max(1, Math.min(limit, MAX_HISTORY_LIMIT));
+		return repository.findRecentByUserId(userId, clampedLimit).stream()
+				.map(this::toHistoryItem)
+				.toList();
+	}
+
 	private InitJobResponse toResponse(InitGenerationJob job, InitSelection selection) {
 		return new InitJobResponse(
 				job.id(),
@@ -106,6 +116,19 @@ public class InitJobService {
 				job.createdAt(),
 				job.startedAt(),
 				job.completedAt());
+	}
+
+	private InitHistoryItem toHistoryItem(InitGenerationJob job) {
+		InitSelection selection = readSelection(job.selectionJson());
+		return new InitHistoryItem(
+				job.id(),
+				job.projectName(),
+				new InitHistoryItem.StackSummary(
+						selection.frontend().name(),
+						selection.backend().name(),
+						selection.pipeline().name()),
+				job.status(),
+				job.createdAt());
 	}
 
 	private String writeJson(Object value) {

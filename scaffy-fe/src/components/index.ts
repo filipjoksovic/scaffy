@@ -1,18 +1,19 @@
-export { Badge } from './Badge'
-export { FavouriteStacks } from './FavouriteStacks'
-export { AppFrame } from './AppFrame'
-export { Button } from './Button'
-export { Card } from './Card'
-export { CodeBlock } from './CodeBlock'
-export { Eyebrow } from './Eyebrow'
-export { ProviderLogo } from './ProviderLogo'
-export { RecommendationsPanel } from './RecommendationsPanel'
-export { Select } from './Select'
-export { StateRow } from './StateRow'
-export { StatusConsole } from './StatusConsole'
-export { TextInput } from './TextInput'
-export { TopNav } from './TopNav'
-export { Tooltip } from './Tooltip'
-export { WorkspaceFrame } from './WorkspaceFrame'
-export { TimelinePill } from './TimelinePill'
-export type { TimelineTone } from './TimelinePill'
+export { Badge } from "./Badge";
+export { FavouriteStacks } from "./FavouriteStacks";
+export { AppFrame } from "./AppFrame";
+export { Button } from "./Button";
+export { Card } from "./Card";
+export { CodeBlock } from "./CodeBlock";
+export { Eyebrow } from "./Eyebrow";
+export { ProviderLogo } from "./ProviderLogo";
+export { RecentProjectsPanel } from "./RecentProjectsPanel";
+export { RecommendationsPanel } from "./RecommendationsPanel";
+export { Select } from "./Select";
+export { StateRow } from "./StateRow";
+export { StatusConsole } from "./StatusConsole";
+export { TextInput } from "./TextInput";
+export { TopNav } from "./TopNav";
+export { Tooltip } from "./Tooltip";
+export { WorkspaceFrame } from "./WorkspaceFrame";
+export { TimelinePill } from "./TimelinePill";
+export type { TimelineTone } from "./TimelinePill";

@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Link } from "react-router-dom";
-import { Activity, ArrowLeft, ExternalLink, Search, Trash2, X } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  ExternalLink,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import type * as Monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker.js?worker";
 import type {
@@ -35,6 +42,7 @@ import {
   Card,
   Eyebrow,
   ProviderLogo,
+  RecentProjectsPanel,
   StateRow,
   TextInput,
   WorkspaceFrame,
@@ -51,8 +59,10 @@ import {
   downloadBlob,
   downloadInitJob,
   getInitCatalog,
+  getInitHistory,
   getInitJob,
   type InitCatalog,
+  type InitHistoryItem,
   type InitJob,
   type StackCatalogOption,
 } from "../api/init";
@@ -87,7 +97,9 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
-  const [connectInitialKey, setConnectInitialKey] = useState<string | null>(null);
+  const [connectInitialKey, setConnectInitialKey] = useState<string | null>(
+    null,
+  );
   const [hasProviderConnections, setHasProviderConnections] = useState<
     boolean | null
   >(null);
@@ -108,6 +120,11 @@ export function Dashboard() {
   const [analysisErrorByRepository, setAnalysisErrorByRepository] = useState<
     Record<string, string>
   >({});
+  const [recentProjects, setRecentProjects] = useState<InitHistoryItem[]>([]);
+  const [recentProjectsLoading, setRecentProjectsLoading] = useState(false);
+  const [recentProjectsError, setRecentProjectsError] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!user) {
@@ -119,6 +136,9 @@ export function Dashboard() {
       setDeltaByRepository({});
       setLoadingAnalysisId(null);
       setAnalysisErrorByRepository({});
+      setRecentProjects([]);
+      setRecentProjectsError(null);
+      setRecentProjectsLoading(false);
       return;
     }
 
@@ -167,6 +187,40 @@ export function Dashboard() {
   }, [user, activeWorkspaceId]);
 
   useEffect(() => {
+    if (!user || creatingProject) {
+      return undefined;
+    }
+
+    let mounted = true;
+    setRecentProjectsLoading(true);
+    setRecentProjectsError(null);
+    getInitHistory()
+      .then((items) => {
+        if (mounted) {
+          setRecentProjects(items);
+        }
+      })
+      .catch((err: unknown) => {
+        if (mounted) {
+          setRecentProjectsError(
+            err instanceof Error
+              ? err.message
+              : "Could not load recent generated projects.",
+          );
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setRecentProjectsLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [user, activeWorkspaceId, creatingProject]);
+
+  useEffect(() => {
     if (
       selectedRepositoryId &&
       !connections.some((connection) => connection.id === selectedRepositoryId)
@@ -201,7 +255,8 @@ export function Dashboard() {
     : null;
   const selectedConnectionId = selectedConnection?.id ?? null;
   const selectedSummaryRunId =
-    selectedConnection?.analysisSummary && selectedConnection.analysisSummary.status !== "failed"
+    selectedConnection?.analysisSummary &&
+    selectedConnection.analysisSummary.status !== "failed"
       ? selectedConnection.analysisSummary.runId
       : null;
   const hasSelectedAnalysis = selectedConnectionId
@@ -484,8 +539,9 @@ export function Dashboard() {
           <Eyebrow>No accounts connected</Eyebrow>
           <h3>Connect GitHub or GitLab to get started</h3>
           <p>
-            No repository providers are connected yet. Open workspace settings to
-            connect your GitHub or GitLab account — then you can add projects here.
+            No repository providers are connected yet. Open workspace settings
+            to connect your GitHub or GitLab account — then you can add projects
+            here.
           </p>
           <div className="dashboard-empty-actions">
             <Link className="button button--primary" to="/workspace">
@@ -509,8 +565,8 @@ export function Dashboard() {
           <Eyebrow>No projects yet</Eyebrow>
           <h3>Add your first repository</h3>
           <p>
-            Your accounts are connected. Add an existing repository, or generate a
-            brand new project and publish it.
+            Your accounts are connected. Add an existing repository, or generate
+            a brand new project and publish it.
           </p>
           <div className="dashboard-empty-actions">
             <Button
@@ -521,7 +577,10 @@ export function Dashboard() {
             >
               Add repository
             </Button>
-            <Button onClick={() => setCreatingProject(true)} variant="secondary">
+            <Button
+              onClick={() => setCreatingProject(true)}
+              variant="secondary"
+            >
               Create project
             </Button>
           </div>
@@ -552,13 +611,18 @@ export function Dashboard() {
       );
     }
     body = (
-      <section className="ws-page projects-page" aria-labelledby="projects-title">
+      <section
+        className="ws-page projects-page"
+        aria-labelledby="projects-title"
+      >
         <header className="ws-page__header">
           <div className="ws-page__heading">
             <Eyebrow>{activeWorkspace?.name ?? "Workspace"}</Eyebrow>
             <h2 id="projects-title">Projects</h2>
             <p className="ws-page__status">
-              <span>Connect GitHub or GitLab repositories to this workspace.</span>
+              <span>
+                Connect GitHub or GitLab repositories to this workspace.
+              </span>
             </p>
           </div>
           <div className="ws-page__actions">
@@ -571,12 +635,19 @@ export function Dashboard() {
             >
               Connect repository
             </Button>
-            <Button onClick={() => setCreatingProject(true)}>Create project</Button>
+            <Button onClick={() => setCreatingProject(true)}>
+              Create project
+            </Button>
           </div>
         </header>
 
         {error && (
-          <StateRow detail={error} icon="!" label="Something went wrong" tone="error" />
+          <StateRow
+            detail={error}
+            icon="!"
+            label="Something went wrong"
+            tone="error"
+          />
         )}
 
         {connections.length > 0 && (
@@ -593,7 +664,16 @@ export function Dashboard() {
           </div>
         )}
 
-        {projectsContent}
+        <div className="projects-with-aside">
+          <div className="projects-main">{projectsContent}</div>
+          <aside className="projects-aside" aria-label="Recent generated projects">
+            <RecentProjectsPanel
+              error={recentProjectsError}
+              items={recentProjects}
+              loading={recentProjectsLoading}
+            />
+          </aside>
+        </div>
       </section>
     );
   }
@@ -638,7 +718,8 @@ function ProjectCard({
 }: ProjectCardProps) {
   const summary = connection.analysisSummary;
   const succeeded = summary && summary.status !== "failed";
-  const failed = !analyzing && (Boolean(analysisError) || summary?.status === "failed");
+  const failed =
+    !analyzing && (Boolean(analysisError) || summary?.status === "failed");
   const scoreBadge = (() => {
     if (succeeded) {
       return (
@@ -651,9 +732,17 @@ function ProjectCard({
       );
     }
     if (failed) {
-      return <span className="project-card__score project-card__score--error">!</span>;
+      return (
+        <span className="project-card__score project-card__score--error">
+          !
+        </span>
+      );
     }
-    return <span className="project-card__score project-card__score--pending">—</span>;
+    return (
+      <span className="project-card__score project-card__score--pending">
+        —
+      </span>
+    );
   })();
   const footerContent = (() => {
     if (analyzing) {
@@ -702,9 +791,7 @@ function ProjectCard({
               : `Connected ${formatRelative(connection.connectedAt)}`}
           </span>
         </div>
-        <div className="project-card__footer">
-          {footerContent}
-        </div>
+        <div className="project-card__footer">{footerContent}</div>
       </button>
       <div className="project-card__quick">
         <button
@@ -766,10 +853,18 @@ function ProjectDetail({
           analysis state.
         </p>
         <div className="dashboard-empty-actions">
-          <button className="button button--primary" onClick={onCreate} type="button">
+          <button
+            className="button button--primary"
+            onClick={onCreate}
+            type="button"
+          >
             Create project
           </button>
-          <button className="button button--secondary" onClick={onConnect} type="button">
+          <button
+            className="button button--secondary"
+            onClick={onConnect}
+            type="button"
+          >
             Connect repository
           </button>
         </div>
@@ -794,7 +889,9 @@ function ProjectDetail({
               ? "Loading the saved repository analysis from Scaffy."
               : "Finding .github/workflows files and running the Scaffy capability analyzer."
           }
-          label={loadingStored ? "Loading saved analysis" : "Analyzing repository"}
+          label={
+            loadingStored ? "Loading saved analysis" : "Analyzing repository"
+          }
           tone="loading"
         />
       </Card>
@@ -839,7 +936,10 @@ function ProjectDetail({
               </a>
             )}
             {failureMessage.toLowerCase().includes("gitlab") && (
-              <Link className="button button--secondary button--small" to="/workspace">
+              <Link
+                className="button button--secondary button--small"
+                to="/workspace"
+              >
                 Reconnect GitLab
               </Link>
             )}
@@ -915,9 +1015,7 @@ function ProjectDetailHeader({
               {statusMeta(analysis.analysis.overallStatus).label}
             </Badge>
             <span>Run {analysis.runNumber}</span>
-            <span>
-              Analyzed {formatRelative(analysis.analyzedAt)}
-            </span>
+            <span>Analyzed {formatRelative(analysis.analyzedAt)}</span>
             <code>{analysis.workflowPath}</code>
           </div>
         )}
@@ -930,7 +1028,11 @@ function ProjectDetailHeader({
             onClick={() => onAnalyze(connection)}
             variant="secondary"
           >
-            {loading ? "Analyzing" : hasAnalysis ? "Re-analyze" : "Run analysis"}
+            {loading
+              ? "Analyzing"
+              : hasAnalysis
+                ? "Re-analyze"
+                : "Run analysis"}
           </Button>
           <a
             aria-label={`Open ${connection.owner}/${connection.name}`}
@@ -1000,14 +1102,18 @@ function AnalysisBreakdown({
     <div className="analysis-breakdown">
       <div className="analysis-tabs" aria-label="Analysis detail sections">
         <button
-          className={activeTab === "findings" ? "analysis-tabs__item--active" : ""}
+          className={
+            activeTab === "findings" ? "analysis-tabs__item--active" : ""
+          }
           onClick={() => setActiveTab("findings")}
           type="button"
         >
           Findings {openFindings.length}
         </button>
         <button
-          className={activeTab === "quality" ? "analysis-tabs__item--active" : ""}
+          className={
+            activeTab === "quality" ? "analysis-tabs__item--active" : ""
+          }
           onClick={() => setActiveTab("quality")}
           type="button"
         >
@@ -1024,7 +1130,10 @@ function AnalysisBreakdown({
 
       {activeTab === "findings" && (
         <>
-          <DeltaInlineNotice delta={delta} onOpenDelta={() => setActiveTab("delta")} />
+          <DeltaInlineNotice
+            delta={delta}
+            onOpenDelta={() => setActiveTab("delta")}
+          />
           <FindingsTable
             dimensionFilter={findingDimension}
             filter={findingFilter}
@@ -1043,7 +1152,10 @@ function AnalysisBreakdown({
 
       {activeTab === "quality" && (
         <>
-          <div className="scanner-summary" aria-label="Analysis finding summary">
+          <div
+            className="scanner-summary"
+            aria-label="Analysis finding summary"
+          >
             <div>
               <span>Open issues</span>
               <strong>{openFindings.length}</strong>
@@ -1098,15 +1210,17 @@ function DeltaInlineNotice({ delta, onOpenDelta }: DeltaInlineNoticeProps) {
     (finding) => finding.direction === "worsened",
   ).length;
 
-  if (improved === 0 && worsened === 0 && delta.overall.direction === "unchanged") {
+  if (
+    improved === 0 &&
+    worsened === 0 &&
+    delta.overall.direction === "unchanged"
+  ) {
     return null;
   }
 
   return (
     <button className="delta-inline" onClick={onOpenDelta} type="button">
-      <span>
-        Latest delta: {formatDeltaDirection(delta.overall.direction)}
-      </span>
+      <span>Latest delta: {formatDeltaDirection(delta.overall.direction)}</span>
       <strong>
         {improved} improved · {worsened} worsened
       </strong>
@@ -1164,11 +1278,11 @@ function AnalysisDeltaPanel({ delta }: AnalysisDeltaPanelProps) {
           <h4>
             Run {delta.currentRun.runNumber} vs run {delta.baseRun.runNumber}
           </h4>
-          <p>
-            Compared against {formatRelative(delta.baseRun.analyzedAt)}.
-          </p>
+          <p>Compared against {formatRelative(delta.baseRun.analyzedAt)}.</p>
         </div>
-        <Badge className={`delta-badge delta-badge--${delta.overall.direction}`}>
+        <Badge
+          className={`delta-badge delta-badge--${delta.overall.direction}`}
+        >
           {formatDeltaDirection(delta.overall.direction)}
         </Badge>
       </header>
@@ -1353,7 +1467,9 @@ function FindingsTable({
   workflowContent,
   workflowPath,
 }: FindingsTableProps) {
-  const [selectedFindingKey, setSelectedFindingKey] = useState<string | null>(null);
+  const [selectedFindingKey, setSelectedFindingKey] = useState<string | null>(
+    null,
+  );
   const scopedFindings = dimensionFilter
     ? findings.filter(
         (finding) => finding.dimension.dimension === dimensionFilter,
@@ -1388,7 +1504,9 @@ function FindingsTable({
   const selectedFinding = useMemo(
     () =>
       selectedFindingKey
-        ? findings.find((finding) => findingKey(finding) === selectedFindingKey) ?? null
+        ? (findings.find(
+            (finding) => findingKey(finding) === selectedFindingKey,
+          ) ?? null)
         : null,
     [findings, selectedFindingKey],
   );
@@ -1455,14 +1573,18 @@ function FindingsTable({
       {filteredFindings.length === 0 ? (
         <div className="findings-empty">
           <h4>No findings in this view</h4>
-          <p>Switch filters to inspect detected checks or all analyzer output.</p>
+          <p>
+            Switch filters to inspect detected checks or all analyzer output.
+          </p>
         </div>
       ) : (
         <FindingsContent
           dimensionFilter={dimensionFilter}
           filter={filter}
           findings={filteredFindings}
-          onSelectFinding={(finding) => setSelectedFindingKey(findingKey(finding))}
+          onSelectFinding={(finding) =>
+            setSelectedFindingKey(findingKey(finding))
+          }
         />
       )}
       <FindingSourceDialog
@@ -1721,7 +1843,10 @@ function FindingSourceDialog({
                 {workflowPath}
               </Dialog.Description>
             </div>
-            <Dialog.Close className="icon-button" aria-label="Close finding details">
+            <Dialog.Close
+              className="icon-button"
+              aria-label="Close finding details"
+            >
               <IconClose />
             </Dialog.Close>
           </header>
@@ -1869,7 +1994,15 @@ function FindingFixSection({
     return () => {
       active = false;
     };
-  }, [cache, cacheKey, finding, provider, runId, workflowContent, workflowPath]);
+  }, [
+    cache,
+    cacheKey,
+    finding,
+    provider,
+    runId,
+    workflowContent,
+    workflowPath,
+  ]);
 
   if (fix.kind === "loading") {
     return (
@@ -1921,7 +2054,9 @@ function FindingFixSection({
     return (
       <div className="finding-fix">
         <StateRow
-          detail={data.message ?? "The provider could not generate a suggestion."}
+          detail={
+            data.message ?? "The provider could not generate a suggestion."
+          }
           icon="!"
           label="Suggestion failed"
           tone="error"
@@ -1985,15 +2120,24 @@ function applyWorkflowEdit(content: string, edit: FindingFixEdit): string {
   const lines = content.split("\n");
   const codeLines = (edit.code ?? "").split("\n");
 
-  if (edit.mode === "REPLACE" && edit.startLine != null && edit.endLine != null) {
+  if (
+    edit.mode === "REPLACE" &&
+    edit.startLine != null &&
+    edit.endLine != null
+  ) {
     const start = Math.max(1, edit.startLine);
     const end = Math.min(Math.max(start, edit.endLine), lines.length);
-    return [...lines.slice(0, start - 1), ...codeLines, ...lines.slice(end)].join(
-      "\n",
-    );
+    return [
+      ...lines.slice(0, start - 1),
+      ...codeLines,
+      ...lines.slice(end),
+    ].join("\n");
   }
 
-  const at = Math.max(0, Math.min(edit.afterLine ?? lines.length, lines.length));
+  const at = Math.max(
+    0,
+    Math.min(edit.afterLine ?? lines.length, lines.length),
+  );
   return [...lines.slice(0, at), ...codeLines, ...lines.slice(at)].join("\n");
 }
 
@@ -2097,9 +2241,8 @@ function SourceCodeViewer({ content, source }: SourceCodeViewerProps) {
   const containerRef = useRef<HTMLElement | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
-  const decorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(
-    null,
-  );
+  const decorationsRef =
+    useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
   const [editorReadyKey, setEditorReadyKey] = useState(0);
 
   useEffect(() => {
@@ -2194,7 +2337,6 @@ function SourceCodeViewer({ content, source }: SourceCodeViewerProps) {
   );
 }
 
-
 type CreateProjectPanelProps = Readonly<{
   onCancel: () => void;
   onCreated: (
@@ -2219,7 +2361,11 @@ type CreateProjectStatus =
   | { kind: "idle" }
   | { kind: "generating"; job?: InitJob }
   | { kind: "generated"; initJob: InitJob }
-  | { kind: "publishing"; initJob: InitJob; publication?: RepositoryPublication }
+  | {
+      kind: "publishing";
+      initJob: InitJob;
+      publication?: RepositoryPublication;
+    }
   | { kind: "analyzing"; initJob: InitJob; publication: RepositoryPublication }
   | {
       kind: "success";
@@ -2227,7 +2373,12 @@ type CreateProjectStatus =
       publication: RepositoryPublication;
       analysis: RepositoryAnalysis | null;
     }
-  | { kind: "error"; message: string; job?: InitJob; publication?: RepositoryPublication };
+  | {
+      kind: "error";
+      message: string;
+      job?: InitJob;
+      publication?: RepositoryPublication;
+    };
 
 const createProjectInitialState: CreateProjectState = {
   backend: "",
@@ -2244,7 +2395,9 @@ const createProjectInitialState: CreateProjectState = {
 function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
   const [catalog, setCatalog] = useState<InitCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [state, setState] = useState<CreateProjectState>(createProjectInitialState);
+  const [state, setState] = useState<CreateProjectState>(
+    createProjectInitialState,
+  );
   const [status, setStatus] = useState<CreateProjectStatus>({ kind: "idle" });
 
   useEffect(() => {
@@ -2258,7 +2411,9 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
       .catch((err: unknown) => {
         if (!mounted) return;
         setCatalogError(
-          err instanceof Error ? err.message : "Could not load initializer catalog.",
+          err instanceof Error
+            ? err.message
+            : "Could not load initializer catalog.",
         );
       });
     return () => {
@@ -2272,35 +2427,39 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
   );
 
   const inFlight =
-    status.kind === "generating" || status.kind === "publishing" || status.kind === "analyzing";
+    status.kind === "generating" ||
+    status.kind === "publishing" ||
+    status.kind === "analyzing";
 
   const canGenerate = Boolean(
     catalog &&
-      !inFlight &&
-      state.projectName &&
-      !projectNameError &&
-      state.frontend &&
-      state.frontendVersion &&
-      state.frontendRuntime &&
-      state.backend &&
-      state.backendVersion &&
-      state.backendRuntime &&
-      state.pipeline &&
-      state.pipelineMaturity,
+    !inFlight &&
+    state.projectName &&
+    !projectNameError &&
+    state.frontend &&
+    state.frontendVersion &&
+    state.frontendRuntime &&
+    state.backend &&
+    state.backendVersion &&
+    state.backendRuntime &&
+    state.pipeline &&
+    state.pipelineMaturity,
   );
   const canPublish = state.pipeline === "github-actions";
   const generatedJob =
     status.kind === "generated" || status.kind === "success"
       ? status.initJob
       : status.kind === "error"
-        ? status.job ?? null
+        ? (status.job ?? null)
         : null;
 
   function update<K extends keyof CreateProjectState>(
     key: K,
     value: CreateProjectState[K],
   ) {
-    setStatus((current) => (current.kind === "error" ? { kind: "idle" } : current));
+    setStatus((current) =>
+      current.kind === "error" ? { kind: "idle" } : current,
+    );
     setState((current) => {
       const next = { ...current, [key]: value };
       if (!catalog) return next;
@@ -2354,7 +2513,8 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
     } catch (err) {
       setStatus({
         kind: "error",
-        message: err instanceof Error ? err.message : "Project generation failed.",
+        message:
+          err instanceof Error ? err.message : "Project generation failed.",
       });
     }
   }
@@ -2370,13 +2530,23 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
       });
       let publication = publicationCreated;
       setStatus({ kind: "publishing", initJob, publication });
-      while (publication.status === "queued" || publication.status === "running") {
+      while (
+        publication.status === "queued" ||
+        publication.status === "running"
+      ) {
         await delay(1400);
-        publication = await getRepositoryPublication(publicationCreated.publicationJobId);
+        publication = await getRepositoryPublication(
+          publicationCreated.publicationJobId,
+        );
         setStatus({ kind: "publishing", initJob, publication });
       }
-      if (publication.status !== "succeeded" || !publication.repositoryConnection) {
-        throw new Error(publication.errorMessage || "GitHub publication failed.");
+      if (
+        publication.status !== "succeeded" ||
+        !publication.repositoryConnection
+      ) {
+        throw new Error(
+          publication.errorMessage || "GitHub publication failed.",
+        );
       }
 
       setStatus({ kind: "analyzing", initJob, publication });
@@ -2391,7 +2561,8 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
     } catch (err) {
       setStatus({
         kind: "error",
-        message: err instanceof Error ? err.message : "GitHub publication failed.",
+        message:
+          err instanceof Error ? err.message : "GitHub publication failed.",
         job: initJob,
       });
     }
@@ -2427,22 +2598,23 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
             Generate a project, then download it or publish to GitHub.
           </h2>
           <p>
-            Pick a stack, pipeline, and maturity target. Scaffy generates the project —
-            download the ZIP, or publish it to GitHub, connect it here, and run the first
-            analysis.
+            Pick a stack, pipeline, and maturity target. Scaffy generates the
+            project — download the ZIP, or publish it to GitHub, connect it
+            here, and run the first analysis.
           </p>
         </div>
-        <Button
-          disabled={inFlight}
-          onClick={onCancel}
-          variant="secondary"
-        >
+        <Button disabled={inFlight} onClick={onCancel} variant="secondary">
           Cancel
         </Button>
       </header>
 
       {catalogError && (
-        <StateRow detail={catalogError} icon="!" label="Catalog unavailable" tone="error" />
+        <StateRow
+          detail={catalogError}
+          icon="!"
+          label="Catalog unavailable"
+          tone="error"
+        />
       )}
 
       {!catalog && !catalogError && <CreateProjectSkeleton />}
@@ -2463,7 +2635,9 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
                     aria-invalid={projectNameError !== null}
                     autoComplete="off"
                     id="create-project-name"
-                    onChange={(event) => update("projectName", event.target.value)}
+                    onChange={(event) =>
+                      update("projectName", event.target.value)
+                    }
                     placeholder="my-scaffy-app"
                     value={state.projectName}
                   />
@@ -2525,7 +2699,9 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
                     <button
                       aria-pressed={state.pipeline === option.id}
                       className={`compact-choice${
-                        state.pipeline === option.id ? " choice-card--selected" : ""
+                        state.pipeline === option.id
+                          ? " choice-card--selected"
+                          : ""
                       }`}
                       key={option.id}
                       onClick={() => update("pipeline", option.id)}
@@ -2592,15 +2768,27 @@ function CreateProjectReview({
   status,
 }: CreateProjectReviewProps) {
   const frontend = catalog.frontends.find((item) => item.id === state.frontend);
-  const frontendVersion = frontend?.versions.find((v) => v.id === state.frontendVersion);
-  const frontendRuntime = frontendVersion?.runtimes.find((r) => r.id === state.frontendRuntime);
+  const frontendVersion = frontend?.versions.find(
+    (v) => v.id === state.frontendVersion,
+  );
+  const frontendRuntime = frontendVersion?.runtimes.find(
+    (r) => r.id === state.frontendRuntime,
+  );
   const backend = catalog.backends.find((item) => item.id === state.backend);
-  const backendVersion = backend?.versions.find((v) => v.id === state.backendVersion);
-  const backendRuntime = backendVersion?.runtimes.find((r) => r.id === state.backendRuntime);
+  const backendVersion = backend?.versions.find(
+    (v) => v.id === state.backendVersion,
+  );
+  const backendRuntime = backendVersion?.runtimes.find(
+    (r) => r.id === state.backendRuntime,
+  );
   const pipeline = catalog.pipelines.find((p) => p.id === state.pipeline);
-  const maturity = catalog.maturityPresets.find((p) => p.id === state.pipelineMaturity);
+  const maturity = catalog.maturityPresets.find(
+    (p) => p.id === state.pipelineMaturity,
+  );
   const dockerIncluded = Boolean(maturity?.dockerRequired);
-  const readyToFinish = status.kind === "generated" || (status.kind === "error" && Boolean(status.job));
+  const readyToFinish =
+    status.kind === "generated" ||
+    (status.kind === "error" && Boolean(status.job));
   const generateButtonLabel = (() => {
     if (!inFlight) {
       return "Generate project";
@@ -2630,7 +2818,11 @@ function CreateProjectReview({
         <Button
           disabled={!canPublish}
           onClick={onPublish}
-          title={canPublish ? undefined : "Choose GitHub Actions to publish to GitHub."}
+          title={
+            canPublish
+              ? undefined
+              : "Choose GitHub Actions to publish to GitHub."
+          }
           variant="download"
         >
           Publish to GitHub
@@ -2666,7 +2858,9 @@ function CreateProjectReview({
     <div className="review">
       <div className="review__head">
         <span className="review__eyebrow">New project</span>
-        <div className="review__name">{state.projectName || "unnamed-project"}</div>
+        <div className="review__name">
+          {state.projectName || "unnamed-project"}
+        </div>
       </div>
 
       <ul className="review__rows">
@@ -2707,7 +2901,9 @@ function CreateProjectReview({
 
         <li className="review__row review__row--inline">
           <span className="review__label">Docker</span>
-          <span className={`review__pill${dockerIncluded ? " review__pill--on" : ""}`}>
+          <span
+            className={`review__pill${dockerIncluded ? " review__pill--on" : ""}`}
+          >
             {dockerIncluded ? "Included" : "Off"}
           </span>
         </li>
@@ -2736,7 +2932,10 @@ function CreateReviewRow({ label, iconId, children }: CreateReviewRowProps) {
             <StackIcon id={iconId} />
           </span>
         ) : (
-          <span className="review__icon review__icon--empty" aria-hidden="true" />
+          <span
+            className="review__icon review__icon--empty"
+            aria-hidden="true"
+          />
         )}
         <span className="review__value-text">{children}</span>
       </span>
@@ -2749,8 +2948,9 @@ function CreateProjectStatusPanel({ status }: { status: CreateProjectStatus }) {
     return (
       <div className="gen gen--idle">
         <p className="gen__hint">
-          Scaffy queues the generator and streams the build log. When it finishes you can
-          download the ZIP or publish it to GitHub and run the first analysis.
+          Scaffy queues the generator and streams the build log. When it
+          finishes you can download the ZIP or publish it to GitHub and run the
+          first analysis.
         </p>
       </div>
     );
@@ -2845,7 +3045,10 @@ function CreateProjectStatusPanel({ status }: { status: CreateProjectStatus }) {
 
 function CreateProjectSkeleton() {
   return (
-    <div className="create-project-stack create-project-skeleton" aria-hidden="true">
+    <div
+      className="create-project-stack create-project-skeleton"
+      aria-hidden="true"
+    >
       <div className="init-config">
         {[1, 2, 3, 4].map((i) => (
           <div className="init-step create-project-skeleton__step" key={i}>
@@ -2888,7 +3091,9 @@ function createProjectStatusCopy(status: CreateProjectStatus): string {
     return "Generation finished. Download the ZIP, or publish it to GitHub to connect and analyze it.";
   }
   if (status.kind === "publishing") {
-    return status.publication?.progress || "Pushing the generated repo to GitHub…";
+    return (
+      status.publication?.progress || "Pushing the generated repo to GitHub…"
+    );
   }
   if (status.kind === "analyzing") {
     return "The repository is connected. Running Scaffy on the new workflow.";
@@ -2935,7 +3140,8 @@ function withCreateCatalogDefaults(
     catalog.maturityPresets.find((preset) => preset.id === "l2") ??
     catalog.maturityPresets[0];
   const githubPipeline =
-    catalog.pipelines.find((preset) => preset.id === "github-actions") ?? catalog.pipelines[0];
+    catalog.pipelines.find((preset) => preset.id === "github-actions") ??
+    catalog.pipelines[0];
   const next = {
     ...state,
     frontend: state.frontend || catalog.frontends[0]?.id || "",
@@ -2957,10 +3163,16 @@ function withCreateStackDefaults(
 ): CreateProjectState {
   const stack = findById(options, state[kind]);
   const versionKey = `${kind}Version` as const;
-  const versionId = stack?.versions.some((version) => version.id === state[versionKey])
+  const versionId = stack?.versions.some(
+    (version) => version.id === state[versionKey],
+  )
     ? state[versionKey]
     : stack?.defaultVersionId || stack?.versions[0]?.id || "";
-  return withCreateRuntimeDefault({ ...state, [versionKey]: versionId }, options, kind);
+  return withCreateRuntimeDefault(
+    { ...state, [versionKey]: versionId },
+    options,
+    kind,
+  );
 }
 
 function withCreateRuntimeDefault(
@@ -2971,13 +3183,18 @@ function withCreateRuntimeDefault(
   const stack = findById(options, state[kind]);
   const version = findById(stack?.versions ?? [], state[`${kind}Version`]);
   const runtimeKey = `${kind}Runtime` as const;
-  const runtimeId = version?.runtimes.some((runtime) => runtime.id === state[runtimeKey])
+  const runtimeId = version?.runtimes.some(
+    (runtime) => runtime.id === state[runtimeKey],
+  )
     ? state[runtimeKey]
     : version?.defaultRuntimeId || version?.runtimes[0]?.id || "";
   return { ...state, [runtimeKey]: runtimeId };
 }
 
-function findById<T extends { id: string }>(items: T[], id: string): T | undefined {
+function findById<T extends { id: string }>(
+  items: T[],
+  id: string,
+): T | undefined {
   return items.find((item) => item.id === id);
 }
 

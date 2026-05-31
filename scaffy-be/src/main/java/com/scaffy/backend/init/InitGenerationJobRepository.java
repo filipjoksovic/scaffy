@@ -144,18 +144,39 @@ public class InitGenerationJobRepository {
 				""", this::mapJob, id).stream().findFirst();
 	}
 
-	public List<InitJobLogLine> findLogs(UUID jobId, int limit) {
+	public List<InitGenerationJob> findRecentByUserId(UUID userId, int limit) {
 		return jdbcTemplate.query("""
-				SELECT id, stream, message, created_at
-				FROM (
-					SELECT id, stream, message, created_at
-					FROM initializer_generation_job_logs
-					WHERE job_id = ?
-					ORDER BY id DESC
-					LIMIT ?
-				) recent
-				ORDER BY id ASC
-				""", this::mapLogLine, jobId, limit);
+				SELECT
+					id,
+					user_id,
+					status,
+					project_name,
+					request_json,
+					selection_json,
+					progress_message,
+					error_message,
+					artifact_object_key,
+					created_at,
+					started_at,
+					completed_at
+				FROM initializer_generation_jobs
+				WHERE user_id = ?
+				ORDER BY created_at DESC
+				LIMIT ?
+				""", this::mapJob, userId, limit);
+	}
+
+	public List<InitJobLogLine> findLogs(UUID jobId, int limit) {
+		return jdbcTemplate.query(String.join("\n",
+				"SELECT id, stream, message, created_at",
+				"FROM (",
+				"  SELECT id, stream, message, created_at",
+				"  FROM initializer_generation_job_logs",
+				"  WHERE job_id = ?",
+				"  ORDER BY id DESC",
+				"  LIMIT ?",
+				") recent",
+				"ORDER BY id ASC"), this::mapLogLine, jobId, limit);
 	}
 
 	private InitGenerationJob mapJob(ResultSet rs, int rowNum) throws SQLException {

@@ -260,6 +260,29 @@
   gap: var(--space-md);
 }
 
+.projects-with-aside {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: var(--space-lg);
+}
+
+.projects-main {
+  min-width: 0;
+}
+
+.projects-aside {
+  position: sticky;
+  top: var(--space-xl);
+  min-width: 0;
+  max-height: calc(100svh - var(--space-section));
+  overflow: hidden;
+}
+
+.projects-aside .recent-projects {
+  max-height: inherit;
+}
+
 .project-card-wrap {
   position: relative;
 }
@@ -570,6 +593,15 @@
 
   .ws-content {
     padding: var(--space-lg);
+  }
+
+  .projects-with-aside {
+    grid-template-columns: 1fr;
+  }
+
+  .projects-aside {
+    position: static;
+    max-height: none;
   }
 }
 

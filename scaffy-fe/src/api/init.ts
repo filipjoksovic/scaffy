@@ -106,6 +106,18 @@ export type InitJobLogLine = {
   createdAt: string
 }
 
+export type InitHistoryItem = {
+  jobId: string
+  projectName: string
+  stack: {
+    frontend: string
+    backend: string
+    pipeline: string
+  }
+  status: InitJobStatus
+  createdAt: string
+}
+
 export async function getInitCatalog(): Promise<InitCatalog> {
   const response = await apiFetch('/api/init/catalog')
 
@@ -162,6 +174,17 @@ export async function downloadInitJob(jobId: string): Promise<Blob> {
   }
 
   return response.blob()
+}
+
+export async function getInitHistory(limit = 5): Promise<InitHistoryItem[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  const response = await apiFetch(`/api/init/history?${params.toString()}`)
+
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+
+  return response.json()
 }
 
 // ---------------------------------------------------------------------------
