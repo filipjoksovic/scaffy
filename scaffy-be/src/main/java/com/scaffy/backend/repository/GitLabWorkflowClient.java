@@ -31,6 +31,8 @@ public class GitLabWorkflowClient {
 	private static final Logger log = LoggerFactory.getLogger(GitLabWorkflowClient.class);
 	private static final String GITLAB_COM_HOST = "gitlab.com";
 	private static final String DEFAULT_CI_PATH = ".gitlab-ci.yml";
+	private static final String PROJECTS_API_PATH = "/api/v4/projects/";
+	private static final String JSON_CONTENT_TYPE = "application/json";
 	private static final TypeReference<Map<String, Object>> OBJECT_TYPE = new TypeReference<>() {
 	};
 
@@ -77,7 +79,7 @@ public class GitLabWorkflowClient {
 		String accessToken = accessToken(workspaceId, userId, host);
 		String projectId = encode(repository.owner() + "/" + repository.name());
 
-		Map<String, Object> project = jsonObject(gitLabRequest(baseUrl, host, "/api/v4/projects/" + projectId, accessToken));
+		Map<String, Object> project = jsonObject(gitLabRequest(baseUrl, host, PROJECTS_API_PATH + projectId, accessToken));
 		String defaultBranch = string(project.get("default_branch"));
 		if (defaultBranch == null) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "This GitLab project has no default branch yet.");
@@ -89,7 +91,7 @@ public class GitLabWorkflowClient {
 				"content", newContent,
 				"encoding", "text"));
 
-		String filePath = "/api/v4/projects/" + projectId + "/repository/files/" + encode(workflowPath);
+		String filePath = PROJECTS_API_PATH + projectId + "/repository/files/" + encode(workflowPath);
 		gitLabSendJson("PUT", baseUrl, host, filePath, accessToken, requestBody);
 
 		String commitSha = latestCommitSha(baseUrl, host, projectId, defaultBranch, workflowPath, accessToken);
@@ -115,7 +117,7 @@ public class GitLabWorkflowClient {
 			String branch,
 			String workflowPath,
 			String accessToken) {
-		String url = "/api/v4/projects/" + projectId + "/repository/commits?ref_name=" + encode(branch)
+		String url = PROJECTS_API_PATH + projectId + "/repository/commits?ref_name=" + encode(branch)
 				+ "&path=" + encode(workflowPath) + "&per_page=1";
 		String body = gitLabRequest(baseUrl, host, url, accessToken);
 		try {
@@ -142,9 +144,9 @@ public class GitLabWorkflowClient {
 			String accessToken,
 			String requestBody) {
 		HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + pathAndQuery))
-				.header("Accept", "application/json")
+				.header("Accept", JSON_CONTENT_TYPE)
 				.header("Authorization", "Bearer " + accessToken)
-				.header("Content-Type", "application/json")
+				.header("Content-Type", JSON_CONTENT_TYPE)
 				.method(method, HttpRequest.BodyPublishers.ofString(requestBody))
 				.build();
 		try {
@@ -194,7 +196,7 @@ public class GitLabWorkflowClient {
 		String accessToken = accessToken(workspaceId, userId, host);
 		String projectId = encode(repository.owner() + "/" + repository.name());
 
-		Map<String, Object> project = jsonObject(gitLabRequest(baseUrl, host, "/api/v4/projects/" + projectId, accessToken));
+		Map<String, Object> project = jsonObject(gitLabRequest(baseUrl, host, PROJECTS_API_PATH + projectId, accessToken));
 		String defaultBranch = string(project.get("default_branch"));
 		if (defaultBranch == null) {
 			throw new ResponseStatusException(
@@ -203,7 +205,7 @@ public class GitLabWorkflowClient {
 		}
 		String ciPath = ciConfigPath(string(project.get("ci_config_path")));
 
-		String rawPath = "/api/v4/projects/" + projectId + "/repository/files/" + encode(ciPath)
+		String rawPath = PROJECTS_API_PATH + projectId + "/repository/files/" + encode(ciPath)
 				+ "/raw?ref=" + encode(defaultBranch);
 		String content = gitLabRequest(baseUrl, host, rawPath, accessToken);
 		log.info(
@@ -238,7 +240,7 @@ public class GitLabWorkflowClient {
 
 	private String gitLabRequest(String baseUrl, String host, String pathAndQuery, String accessToken) {
 		HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + pathAndQuery))
-				.header("Accept", "application/json")
+				.header("Accept", JSON_CONTENT_TYPE)
 				.header("Authorization", "Bearer " + accessToken)
 				.GET()
 				.build();

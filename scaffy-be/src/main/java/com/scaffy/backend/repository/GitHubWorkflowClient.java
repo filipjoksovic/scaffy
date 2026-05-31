@@ -32,6 +32,8 @@ import com.scaffy.backend.auth.WorkspaceOAuthTokenRepository;
 public class GitHubWorkflowClient {
 
 	private static final Logger log = LoggerFactory.getLogger(GitHubWorkflowClient.class);
+	private static final String GITHUB_JSON_ACCEPT = "application/vnd.github+json";
+	private static final String CONTENTS_PATH = "/contents/";
 	private static final TypeReference<Map<String, Object>> OBJECT_TYPE = new TypeReference<>() {
 	};
 
@@ -79,7 +81,7 @@ public class GitHubWorkflowClient {
 
 		String responseBody = sendJson(
 				"PUT",
-				repoBasePath(repository) + "/contents/" + encodePath(workflowPath),
+				repoBasePath(repository) + CONTENTS_PATH + encodePath(workflowPath),
 				accessToken,
 				requestBody);
 
@@ -104,9 +106,9 @@ public class GitHubWorkflowClient {
 
 	private String fileSha(RepositoryConnection repository, String branch, String workflowPath, String accessToken) {
 		Map<String, Object> body = jsonObject(gitHubRequest(
-				repoBasePath(repository) + "/contents/" + encodePath(workflowPath) + "?ref=" + encode(branch),
+				repoBasePath(repository) + CONTENTS_PATH + encodePath(workflowPath) + "?ref=" + encode(branch),
 				accessToken,
-				"application/vnd.github+json"));
+				GITHUB_JSON_ACCEPT));
 		String sha = string(body.get("sha"));
 		if (sha == null) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub file metadata is missing a sha.");
@@ -116,7 +118,7 @@ public class GitHubWorkflowClient {
 
 	private String sendJson(String method, String pathAndQuery, String accessToken, String requestBody) {
 		HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com" + pathAndQuery))
-				.header("Accept", "application/vnd.github+json")
+				.header("Accept", GITHUB_JSON_ACCEPT)
 				.header("Authorization", "Bearer " + accessToken)
 				.header("Content-Type", "application/json")
 				.method(method, HttpRequest.BodyPublishers.ofString(requestBody))
@@ -193,7 +195,7 @@ public class GitHubWorkflowClient {
 		Map<String, Object> body = jsonObject(gitHubRequest(
 				repoBasePath(repository),
 				accessToken,
-				"application/vnd.github+json"));
+				GITHUB_JSON_ACCEPT));
 		String defaultBranch = string(body.get("default_branch"));
 		if (defaultBranch == null) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repository metadata could not be read.");
@@ -206,7 +208,7 @@ public class GitHubWorkflowClient {
 		Map<String, Object> body = jsonObject(gitHubRequest(
 				repoBasePath(repository) + "/git/trees/" + encode(defaultBranch) + "?recursive=1",
 				accessToken,
-				"application/vnd.github+json"));
+				GITHUB_JSON_ACCEPT));
 		Object treeValue = body.get("tree");
 		if (!(treeValue instanceof List<?> tree)) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repository tree could not be read.");
@@ -229,7 +231,7 @@ public class GitHubWorkflowClient {
 			String path,
 			String accessToken) {
 		return gitHubRequest(
-				repoBasePath(repository) + "/contents/" + encodePath(path) + "?ref=" + encode(defaultBranch),
+				repoBasePath(repository) + CONTENTS_PATH + encodePath(path) + "?ref=" + encode(defaultBranch),
 				accessToken,
 				"application/vnd.github.raw");
 	}
