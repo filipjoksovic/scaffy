@@ -39,21 +39,21 @@ public class RepositoryAnalysisRepository {
 	public Optional<PersistedRepositoryAnalysis> findLatestByRepositoryConnectionId(UUID repositoryConnectionId) {
 		return jdbcTemplate.query("""
 				SELECT id,
-					repository_connection_id,
-					run_number,
-					workflow_path,
-					workflow_content_hash,
-					provider,
-					overall_score,
-					overall_level,
-					overall_status,
-					analyzed_at,
-					analysis_schema_version,
-					analyzer_model_version,
-					status,
-					error_message,
-					workflow_content,
-					analysis_json
+				    repository_connection_id,
+				    run_number,
+				    workflow_path,
+				    workflow_content_hash,
+				    provider,
+				    overall_score,
+				    overall_level,
+				    overall_status,
+				    analyzed_at,
+				    analysis_schema_version,
+				    analyzer_model_version,
+				    status,
+				    error_message,
+				    workflow_content,
+				    analysis_json
 				FROM repository_analysis_runs
 				WHERE repository_connection_id = ? AND status = 'succeeded'
 				ORDER BY run_number DESC
@@ -64,21 +64,21 @@ public class RepositoryAnalysisRepository {
 	public List<PersistedRepositoryAnalysis> findLatestPairByRepositoryConnectionId(UUID repositoryConnectionId) {
 		return jdbcTemplate.query("""
 				SELECT id,
-					repository_connection_id,
-					run_number,
-					workflow_path,
-					workflow_content_hash,
-					provider,
-					overall_score,
-					overall_level,
-					overall_status,
-					analyzed_at,
-					analysis_schema_version,
-					analyzer_model_version,
-					status,
-					error_message,
-					workflow_content,
-					analysis_json
+				    repository_connection_id,
+				    run_number,
+				    workflow_path,
+				    workflow_content_hash,
+				    provider,
+				    overall_score,
+				    overall_level,
+				    overall_status,
+				    analyzed_at,
+				    analysis_schema_version,
+				    analyzer_model_version,
+				    status,
+				    error_message,
+				    workflow_content,
+				    analysis_json
 				FROM repository_analysis_runs
 				WHERE repository_connection_id = ? AND status = 'succeeded'
 				ORDER BY run_number DESC
@@ -89,19 +89,19 @@ public class RepositoryAnalysisRepository {
 	public List<RepositoryAnalysisSummary> findSummariesByRepositoryConnectionId(UUID repositoryConnectionId) {
 		return jdbcTemplate.query("""
 				SELECT id,
-					repository_connection_id,
-					run_number,
-					workflow_path,
-					workflow_content_hash,
-					provider,
-					overall_score,
-					overall_level,
-					overall_status,
-					analyzed_at,
-					analysis_schema_version,
-					analyzer_model_version,
-					status,
-					error_message
+				    repository_connection_id,
+				    run_number,
+				    workflow_path,
+				    workflow_content_hash,
+				    provider,
+				    overall_score,
+				    overall_level,
+				    overall_status,
+				    analyzed_at,
+				    analysis_schema_version,
+				    analyzer_model_version,
+				    status,
+				    error_message
 				FROM repository_analysis_runs
 				WHERE repository_connection_id = ?
 				ORDER BY run_number DESC
@@ -115,28 +115,28 @@ public class RepositoryAnalysisRepository {
 		String placeholders = ids.stream().map(id -> "?").collect(Collectors.joining(", "));
 		List<RepositoryAnalysisSummary> summaries = jdbcTemplate.query("""
 				SELECT r.id,
-					r.repository_connection_id,
-					r.run_number,
-					r.workflow_path,
-					r.workflow_content_hash,
-					r.provider,
-					r.overall_score,
-					r.overall_level,
-					r.overall_status,
-					r.analyzed_at,
-					r.analysis_schema_version,
-					r.analyzer_model_version,
-					r.status,
-					r.error_message
+				    r.repository_connection_id,
+				    r.run_number,
+				    r.workflow_path,
+				    r.workflow_content_hash,
+				    r.provider,
+				    r.overall_score,
+				    r.overall_level,
+				    r.overall_status,
+				    r.analyzed_at,
+				    r.analysis_schema_version,
+				    r.analyzer_model_version,
+				    r.status,
+				    r.error_message
 				FROM repository_analysis_runs r
 				JOIN (
-					SELECT repository_connection_id, MAX(run_number) AS run_number
-					FROM repository_analysis_runs
-					WHERE repository_connection_id IN (%s)
-					GROUP BY repository_connection_id
+				    SELECT repository_connection_id, MAX(run_number) AS run_number
+				    FROM repository_analysis_runs
+				    WHERE repository_connection_id IN (%s)
+				    GROUP BY repository_connection_id
 				) latest
-					ON latest.repository_connection_id = r.repository_connection_id
-					AND latest.run_number = r.run_number
+				    ON latest.repository_connection_id = r.repository_connection_id
+				    AND latest.run_number = r.run_number
 				""".formatted(placeholders), this::mapSummary, ids.toArray());
 		return summaries.stream().collect(Collectors.toMap(RepositoryAnalysisSummary::repositoryConnectionId, summary -> summary));
 	}
@@ -169,21 +169,21 @@ public class RepositoryAnalysisRepository {
 				""", Integer.class, repositoryConnectionId);
 		jdbcTemplate.update("""
 				INSERT INTO repository_analysis_runs (
-					id,
-					repository_connection_id,
-					run_number,
-					workflow_path,
-					workflow_content_hash,
-					provider,
-					overall_score,
-					overall_level,
-					overall_status,
-					analysis_schema_version,
-					analyzer_model_version,
-					workflow_content,
-					analysis_json,
-					status,
-					error_message
+				    id,
+				    repository_connection_id,
+				    run_number,
+				    workflow_path,
+				    workflow_content_hash,
+				    provider,
+				    overall_score,
+				    overall_level,
+				    overall_status,
+				    analysis_schema_version,
+				    analyzer_model_version,
+				    workflow_content,
+				    analysis_json,
+				    status,
+				    error_message
 				)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'succeeded', NULL)
 				""",
@@ -213,21 +213,21 @@ public class RepositoryAnalysisRepository {
 				""", Integer.class, repositoryConnectionId);
 		jdbcTemplate.update("""
 				INSERT INTO repository_analysis_runs (
-					id,
-					repository_connection_id,
-					run_number,
-					workflow_path,
-					workflow_content_hash,
-					provider,
-					overall_score,
-					overall_level,
-					overall_status,
-					analysis_schema_version,
-					analyzer_model_version,
-					workflow_content,
-					analysis_json,
-					status,
-					error_message
+				    id,
+				    repository_connection_id,
+				    run_number,
+				    workflow_path,
+				    workflow_content_hash,
+				    provider,
+				    overall_score,
+				    overall_level,
+				    overall_status,
+				    analysis_schema_version,
+				    analyzer_model_version,
+				    workflow_content,
+				    analysis_json,
+				    status,
+				    error_message
 				)
 				VALUES (?, ?, ?, '', NULL, '', 0, 0, 'missing', ?, ?, NULL, '{}', 'failed', ?)
 				""",
@@ -239,19 +239,19 @@ public class RepositoryAnalysisRepository {
 				truncate(errorMessage));
 		return jdbcTemplate.query("""
 				SELECT id,
-					repository_connection_id,
-					run_number,
-					workflow_path,
-					workflow_content_hash,
-					provider,
-					overall_score,
-					overall_level,
-					overall_status,
-					analyzed_at,
-					analysis_schema_version,
-					analyzer_model_version,
-					status,
-					error_message
+				    repository_connection_id,
+				    run_number,
+				    workflow_path,
+				    workflow_content_hash,
+				    provider,
+				    overall_score,
+				    overall_level,
+				    overall_status,
+				    analyzed_at,
+				    analysis_schema_version,
+				    analyzer_model_version,
+				    status,
+				    error_message
 				FROM repository_analysis_runs
 				WHERE id = ?
 				""", this::mapSummary, id).stream().findFirst().orElseThrow();
@@ -267,21 +267,21 @@ public class RepositoryAnalysisRepository {
 	private Optional<PersistedRepositoryAnalysis> findById(UUID id) {
 		return jdbcTemplate.query("""
 				SELECT id,
-					repository_connection_id,
-					run_number,
-					workflow_path,
-					workflow_content_hash,
-					provider,
-					overall_score,
-					overall_level,
-					overall_status,
-					analyzed_at,
-					analysis_schema_version,
-					analyzer_model_version,
-					status,
-					error_message,
-					workflow_content,
-					analysis_json
+				    repository_connection_id,
+				    run_number,
+				    workflow_path,
+				    workflow_content_hash,
+				    provider,
+				    overall_score,
+				    overall_level,
+				    overall_status,
+				    analyzed_at,
+				    analysis_schema_version,
+				    analyzer_model_version,
+				    status,
+				    error_message,
+				    workflow_content,
+				    analysis_json
 				FROM repository_analysis_runs
 				WHERE id = ?
 				""", this::mapPersistedAnalysis, id).stream().findFirst();

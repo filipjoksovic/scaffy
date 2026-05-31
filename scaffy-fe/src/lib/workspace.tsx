@@ -43,7 +43,12 @@ function writeStoredId(workspaceId: string | null) {
   }
 }
 
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
+function pickActiveId(list: Workspace[]): string | null {
+  const stored = readStoredId()
+  return list.some((workspace) => workspace.id === stored) ? stored : (list[0]?.id ?? null)
+}
+
+export function WorkspaceProvider({ children }: Readonly<{ children: ReactNode }>) {
   const { user, loading: authLoading } = useAuth()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [activeId, setActiveId] = useState<string | null>(() => {
@@ -69,26 +74,38 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     try {
       const list = await listWorkspaces()
       setWorkspaces(list)
-      const stored = readStoredId()
-      const next = list.some((workspace) => workspace.id === stored)
-        ? stored
-        : (list[0]?.id ?? null)
-      applyActiveId(next)
+      applyActiveId(pickActiveId(list))
     } finally {
       setLoading(false)
     }
   }, [applyActiveId])
 
   useEffect(() => {
-    if (user) {
-      void refresh()
-    } else if (!authLoading) {
-      // Genuinely signed out (not just the initial auth check) — clear in-memory state without
-      // wiping the stored selection.
-      setWorkspaces([])
-      applyActiveId(null, false)
+    if (!user) {
+      if (!authLoading) {
+        // Genuinely signed out (not just the initial auth check) — clear in-memory state without
+        // wiping the stored selection. Sync state reset on auth change is intentional here.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setWorkspaces([])
+        applyActiveId(null, false)
+      }
+      return
     }
-  }, [user, authLoading, refresh, applyActiveId])
+    let mounted = true
+    setLoading(true)
+    listWorkspaces()
+      .then((list) => {
+        if (!mounted) return
+        setWorkspaces(list)
+        applyActiveId(pickActiveId(list))
+      })
+      .finally(() => {
+        if (mounted) setLoading(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [user, authLoading, applyActiveId])
 
   const selectWorkspace = useCallback(
     (workspaceId: string) => {
@@ -110,6 +127,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
 
+// Context hook co-located with its provider; splitting it out would churn every importer.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useWorkspace() {
   const context = useContext(WorkspaceContext)
   if (context === null) {

@@ -159,7 +159,7 @@ public class GitHubWorkflowClient {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repository files could not be loaded.", ex);
 		}
 		catch (IOException ex) {
-			throw ProviderHttpException.unreachable("GitHub", "api.github.com", ex);
+			throw ProviderHttpErrors.unreachable("GitHub", "api.github.com", ex);
 		}
 	}
 

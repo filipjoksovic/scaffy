@@ -32,16 +32,16 @@ public class WorkspaceInvitationRepository {
 		UUID id = UUID.randomUUID();
 		jdbcTemplate.update("""
 				INSERT INTO workspace_invitations
-					(id, workspace_id, email, role, token, invited_by_user_id, status, expires_at)
+				    (id, workspace_id, email, role, token, invited_by_user_id, status, expires_at)
 				VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
 				ON CONFLICT (workspace_id, email) DO UPDATE
-					SET role = EXCLUDED.role,
-						token = EXCLUDED.token,
-						invited_by_user_id = EXCLUDED.invited_by_user_id,
-						status = 'pending',
-						created_at = CURRENT_TIMESTAMP,
-						expires_at = EXCLUDED.expires_at,
-						accepted_at = NULL
+				    SET role = EXCLUDED.role,
+				        token = EXCLUDED.token,
+				        invited_by_user_id = EXCLUDED.invited_by_user_id,
+				        status = 'pending',
+				        created_at = CURRENT_TIMESTAMP,
+				        expires_at = EXCLUDED.expires_at,
+				        accepted_at = NULL
 				""", id, workspaceId, email, WorkspaceRole.normalize(role), token, invitedByUserId, expiresAt);
 		return findByWorkspaceAndEmail(workspaceId, email).orElseThrow();
 	}
@@ -93,7 +93,7 @@ public class WorkspaceInvitationRepository {
 	private String baseSelect() {
 		return """
 				SELECT i.id, i.workspace_id, w.name AS workspace_name, i.email, i.role, i.token,
-					i.status, i.created_at, i.expires_at
+				    i.status, i.created_at, i.expires_at
 				FROM workspace_invitations i
 				JOIN workspaces w ON w.id = i.workspace_id
 				""";

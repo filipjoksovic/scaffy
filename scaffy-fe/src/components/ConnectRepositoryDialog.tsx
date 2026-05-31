@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Search, X } from 'lucide-react'
 import { connectProviderUrl, listConnections, type ProviderConnection } from '../api/auth'
@@ -44,35 +44,39 @@ export function ConnectRepositoryDialog({
   existingConnections,
   onConnected,
   initialProviderKey,
-}: ConnectRepositoryDialogProps) {
+}: Readonly<ConnectRepositoryDialogProps>) {
   const { activeWorkspace } = useWorkspace()
   const [connections, setConnections] = useState<ProviderConnection[]>([])
   const [instances, setInstances] = useState<WorkspaceGitlabInstance[]>([])
   const [activeKey, setActiveKey] = useState('github')
   const [metaLoading, setMetaLoading] = useState(false)
 
-  const refreshMeta = async () => {
-    setMetaLoading(true)
-    try {
-      const [conns, wsInstances] = await Promise.all([
-        listConnections(),
-        activeWorkspace ? listWorkspaceGitlabInstances(activeWorkspace.id) : Promise.resolve([]),
-      ])
-      setConnections(conns)
-      setInstances(wsInstances)
-    } catch {
-      // Non-fatal: tabs still render their connect CTA.
-    } finally {
-      setMetaLoading(false)
-    }
-  }
-
   useEffect(() => {
-    if (open) {
-      void refreshMeta()
-      if (initialProviderKey) {
-        setActiveKey(initialProviderKey)
-      }
+    if (!open) return
+    if (initialProviderKey) {
+      // Sync prop -> active tab on open; the loading flag below is set synchronously by design.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveKey(initialProviderKey)
+    }
+    let mounted = true
+    setMetaLoading(true)
+    Promise.all([
+      listConnections(),
+      activeWorkspace ? listWorkspaceGitlabInstances(activeWorkspace.id) : Promise.resolve([]),
+    ])
+      .then(([conns, wsInstances]) => {
+        if (!mounted) return
+        setConnections(conns)
+        setInstances(wsInstances)
+      })
+      .catch(() => {
+        // Non-fatal: tabs still render their connect CTA.
+      })
+      .finally(() => {
+        if (mounted) setMetaLoading(false)
+      })
+    return () => {
+      mounted = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activeWorkspace?.id])
@@ -179,7 +183,16 @@ type ProviderPanelProps = {
   onConnected: (connection: RepositoryConnection) => void
 }
 
-function ProviderPanel({ tab, workspaceId, existingConnections, loadingMeta, onConnected }: ProviderPanelProps) {
+function manualLabels(provider: ProviderTab['provider']) {
+  const placeholder = provider === 'github' ? 'owner/repo' : 'group/project'
+  const hint =
+    provider === 'github'
+      ? 'owner/repo or https://github.com/owner/repo'
+      : 'group/subgroup/project path on this instance'
+  return { placeholder, hint }
+}
+
+function ProviderPanel({ tab, workspaceId, existingConnections, loadingMeta, onConnected }: Readonly<ProviderPanelProps>) {
   const [repos, setRepos] = useState<GitHubRepository[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -189,25 +202,41 @@ function ProviderPanel({ tab, workspaceId, existingConnections, loadingMeta, onC
 
   const reconnectNeeded = error?.toLowerCase().includes('connect') ?? false
 
-  const fetchRepos = async () => {
+  const loadRepos = () =>
+    tab.provider === 'github'
+      ? listGitHubRepositories()
+      : listGitLabRepositories(tab.instance)
+
+  const refreshRepos = () => {
     setLoading(true)
     setError(null)
-    try {
-      const items =
-        tab.provider === 'github'
-          ? await listGitHubRepositories()
-          : await listGitLabRepositories(tab.instance)
-      setRepos(items)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load repositories.')
-    } finally {
-      setLoading(false)
-    }
+    return loadRepos()
+      .then((items) => setRepos(items))
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : 'Could not load repositories.'),
+      )
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => {
-    if (tab.connected) {
-      void fetchRepos()
+    if (!tab.connected) return
+    let mounted = true
+    // Mount fetch: loading/error flags are set synchronously by design before the async load.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true)
+    setError(null)
+    loadRepos()
+      .then((items) => {
+        if (mounted) setRepos(items)
+      })
+      .catch((err: unknown) => {
+        if (mounted) setError(err instanceof Error ? err.message : 'Could not load repositories.')
+      })
+      .finally(() => {
+        if (mounted) setLoading(false)
+      })
+    return () => {
+      mounted = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab.key, tab.connected])
@@ -243,7 +272,7 @@ function ProviderPanel({ tab, workspaceId, existingConnections, loadingMeta, onC
     }
   }
 
-  async function submitManual(event: FormEvent<HTMLFormElement>) {
+  async function submitManual(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!manual.trim()) return
     await add(manual.trim())
@@ -280,11 +309,70 @@ function ProviderPanel({ tab, workspaceId, existingConnections, loadingMeta, onC
     )
   }
 
-  const manualPlaceholder = tab.provider === 'github' ? 'owner/repo' : 'group/project'
-  const manualHint =
-    tab.provider === 'github'
-      ? 'owner/repo or https://github.com/owner/repo'
-      : 'group/subgroup/project path on this instance'
+  const { placeholder: manualPlaceholder, hint: manualHint } = manualLabels(tab.provider)
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <StateRow detail={`Fetching repositories from ${tab.label}.`} label="Loading repositories" tone="loading" />
+      )
+    }
+    if (error && repos.length === 0) {
+      return (
+        <div className="repository-dialog__empty">
+          <h4>Could not load repositories</h4>
+          <p>{error}</p>
+          {reconnectNeeded && (
+            <a
+              className="button button--secondary button--small"
+              href={connectProviderUrl(tab.registrationId, { workspaceId, returnTo: '/dashboard' })}
+            >
+              Reconnect {tab.label}
+            </a>
+          )}
+        </div>
+      )
+    }
+    if (filtered.length === 0) {
+      return (
+        <div className="repository-dialog__empty">
+          <h4>No repositories</h4>
+          <p>{filter ? `No repository matches “${filter}”.` : `No repositories found on ${tab.label}.`}</p>
+        </div>
+      )
+    }
+    return (
+      <ul className="repository-picker-list">
+        {filtered.map((repo) => {
+          const connected = isConnected(repo.fullName)
+          return (
+            <li className="repository-picker-list__item" key={repo.fullName}>
+              <button
+                className="repository-picker-list__main"
+                disabled={connected || submitting}
+                onClick={() => void add(repo.fullName)}
+                type="button"
+              >
+                <span className="repository-picker-list__name">{repo.fullName}</span>
+                <span className="repository-picker-list__meta">
+                  <span aria-hidden="true" className="dot" />
+                  {repo.privateRepository ? 'Private' : 'Public'}
+                </span>
+              </button>
+              <Button
+                className="button--small"
+                disabled={connected || submitting}
+                onClick={() => void add(repo.fullName)}
+                variant={connected ? 'secondary' : 'primary'}
+              >
+                {connected ? 'Added' : 'Add'}
+              </Button>
+            </li>
+          )
+        })}
+      </ul>
+    )
+  }
 
   return (
     <>
@@ -299,64 +387,12 @@ function ProviderPanel({ tab, workspaceId, existingConnections, loadingMeta, onC
             value={filter}
           />
         </label>
-        <Button className="button--small" disabled={loading} onClick={() => void fetchRepos()} variant="secondary">
+        <Button className="button--small" disabled={loading} onClick={() => void refreshRepos()} variant="secondary">
           {loading ? 'Refreshing' : 'Refresh'}
         </Button>
       </div>
 
-      <div className="repository-dialog__body">
-        {loading ? (
-          <StateRow detail={`Fetching repositories from ${tab.label}.`} label="Loading repositories" tone="loading" />
-        ) : error && repos.length === 0 ? (
-          <div className="repository-dialog__empty">
-            <h4>Could not load repositories</h4>
-            <p>{error}</p>
-            {reconnectNeeded && (
-              <a
-                className="button button--secondary button--small"
-                href={connectProviderUrl(tab.registrationId, { workspaceId, returnTo: '/dashboard' })}
-              >
-                Reconnect {tab.label}
-              </a>
-            )}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="repository-dialog__empty">
-            <h4>No repositories</h4>
-            <p>{filter ? `No repository matches “${filter}”.` : `No repositories found on ${tab.label}.`}</p>
-          </div>
-        ) : (
-          <ul className="repository-picker-list">
-            {filtered.map((repo) => {
-              const connected = isConnected(repo.fullName)
-              return (
-                <li className="repository-picker-list__item" key={repo.fullName}>
-                  <button
-                    className="repository-picker-list__main"
-                    disabled={connected || submitting}
-                    onClick={() => void add(repo.fullName)}
-                    type="button"
-                  >
-                    <span className="repository-picker-list__name">{repo.fullName}</span>
-                    <span className="repository-picker-list__meta">
-                      <span aria-hidden="true" className="dot" />
-                      {repo.privateRepository ? 'Private' : 'Public'}
-                    </span>
-                  </button>
-                  <Button
-                    className="button--small"
-                    disabled={connected || submitting}
-                    onClick={() => void add(repo.fullName)}
-                    variant={connected ? 'secondary' : 'primary'}
-                  >
-                    {connected ? 'Added' : 'Add'}
-                  </Button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
+      <div className="repository-dialog__body">{renderBody()}</div>
 
       <form className="repository-dialog__manual" onSubmit={submitManual}>
         <div>

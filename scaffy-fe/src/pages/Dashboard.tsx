@@ -9,7 +9,7 @@ import type {
   CapabilityScore,
   DimensionAnalysis,
 } from "../api/analyze";
-import { oauthLoginUrl } from "../api/auth";
+import { listConnections, oauthLoginUrl } from "../api/auth";
 import {
   requestFindingFix,
   type FindingFixEdit,
@@ -56,7 +56,6 @@ import {
   type InitJob,
   type StackCatalogOption,
 } from "../api/init";
-import { listConnections } from "../api/auth";
 import { useAuth } from "../lib/auth";
 import { useWorkspace } from "../lib/workspace";
 import {
@@ -302,7 +301,7 @@ export function Dashboard() {
     if (!user) {
       return;
     }
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     const connected = params.get("connected");
     if (!connected) {
       return;
@@ -312,10 +311,10 @@ export function Dashboard() {
       connected === "gitlab" ? (instance ?? "gitlab.com") : connected,
     );
     setConnectDialogOpen(true);
-    const url = new URL(window.location.href);
+    const url = new URL(globalThis.location.href);
     url.searchParams.delete("connected");
     url.searchParams.delete("instance");
-    window.history.replaceState({}, "", url.toString());
+    globalThis.history.replaceState({}, "", url.toString());
   }, [user]);
 
   function handleConnected(connection: RepositoryConnection) {
@@ -588,7 +587,7 @@ export function Dashboard() {
   }
 
   return (
-    <WorkspaceFrame active="projects">
+    <WorkspaceFrame>
       {body}
       <ConnectRepositoryDialog
         existingConnections={connections}
@@ -628,6 +627,48 @@ function ProjectCard({
   const summary = connection.analysisSummary;
   const succeeded = summary && summary.status !== "failed";
   const failed = !analyzing && (Boolean(analysisError) || summary?.status === "failed");
+  const scoreBadge = (() => {
+    if (succeeded) {
+      return (
+        <span
+          className={`project-card__score project-card__score--${summary.overallStatus.replaceAll("_", "-")}`}
+          title={statusMeta(summary.overallStatus).label}
+        >
+          {formatScore(summary.overallScore)}
+        </span>
+      );
+    }
+    if (failed) {
+      return <span className="project-card__score project-card__score--error">!</span>;
+    }
+    return <span className="project-card__score project-card__score--pending">—</span>;
+  })();
+  const footerContent = (() => {
+    if (analyzing) {
+      return <span className="project-card__runs">Analyzing…</span>;
+    }
+    if (failed) {
+      return (
+        <span className="project-card__runs project-card__runs--error">
+          Analysis failed
+        </span>
+      );
+    }
+    if (succeeded) {
+      return (
+        <>
+          <Badge className={statusBadgeClassName(summary.overallStatus)}>
+            {statusMeta(summary.overallStatus).label}
+          </Badge>
+          <span className="project-card__runs">
+            {connection.analysisRunCount}{" "}
+            {connection.analysisRunCount === 1 ? "run" : "runs"}
+          </span>
+        </>
+      );
+    }
+    return <span className="project-card__runs">Not analyzed yet</span>;
+  })();
   return (
     <div className="project-card-wrap">
       <button className="project-card" onClick={onOpen} type="button">
@@ -639,18 +680,7 @@ function ProjectCard({
             <strong>{connection.name}</strong>
             <span>{connection.owner}</span>
           </div>
-          {succeeded ? (
-            <span
-              className={`project-card__score project-card__score--${summary.overallStatus.replace(/_/g, "-")}`}
-              title={statusMeta(summary.overallStatus).label}
-            >
-              {formatScore(summary.overallScore)}
-            </span>
-          ) : failed ? (
-            <span className="project-card__score project-card__score--error">!</span>
-          ) : (
-            <span className="project-card__score project-card__score--pending">—</span>
-          )}
+          {scoreBadge}
         </div>
         <div className="project-card__meta">
           <ProviderLogo provider={connection.provider} />
@@ -661,25 +691,7 @@ function ProjectCard({
           </span>
         </div>
         <div className="project-card__footer">
-          {analyzing ? (
-            <span className="project-card__runs">Analyzing…</span>
-          ) : failed ? (
-            <span className="project-card__runs project-card__runs--error">
-              Analysis failed
-            </span>
-          ) : succeeded ? (
-            <>
-              <Badge className={statusBadgeClassName(summary.overallStatus)}>
-                {statusMeta(summary.overallStatus).label}
-              </Badge>
-              <span className="project-card__runs">
-                {connection.analysisRunCount}{" "}
-                {connection.analysisRunCount === 1 ? "run" : "runs"}
-              </span>
-            </>
-          ) : (
-            <span className="project-card__runs">Not analyzed yet</span>
-          )}
+          {footerContent}
         </div>
       </button>
       <div className="project-card__quick">
@@ -1940,7 +1952,7 @@ function buildFixDiff(
   workflowContent: string,
   source: CapabilityFinding["source"],
 ): FixDiff | null {
-  if (data.edit && data.edit.code != null) {
+  if (data.edit?.code != null) {
     return {
       collapseUnchanged: true,
       modified: applyWorkflowEdit(workflowContent, data.edit),
@@ -2579,6 +2591,18 @@ function CreateProjectReview({
   const maturity = catalog.maturityPresets.find((p) => p.id === state.pipelineMaturity);
   const dockerIncluded = Boolean(maturity?.dockerRequired);
   const readyToFinish = status.kind === "generated" || (status.kind === "error" && Boolean(status.job));
+  const generateButtonLabel = (() => {
+    if (!inFlight) {
+      return "Generate project";
+    }
+    if (status.kind === "generating") {
+      return "Generating…";
+    }
+    if (status.kind === "publishing") {
+      return "Publishing…";
+    }
+    return "Analyzing…";
+  })();
 
   return (
     <div className="review">
@@ -2667,13 +2691,7 @@ function CreateProjectReview({
           </>
         ) : (
           <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
-            {inFlight
-              ? status.kind === "generating"
-                ? "Generating…"
-                : status.kind === "publishing"
-                  ? "Publishing…"
-                  : "Analyzing…"
-              : "Generate project"}
+            {generateButtonLabel}
           </Button>
         )}
       </div>
@@ -2722,23 +2740,35 @@ function CreateProjectStatusPanel({ status }: { status: CreateProjectStatus }) {
   const title = createProjectStatusTitle(status);
   const copy = createProjectStatusCopy(status);
   const percent = createProjectPercent(status);
-  const logs =
-    status.kind === "generating"
-      ? status.job?.logs
-      : status.kind === "generated"
-        ? status.initJob?.logs
-        : status.kind === "publishing" || status.kind === "analyzing" || status.kind === "success"
-          ? status.publication?.logs
-          : status.kind === "error"
-            ? status.publication?.logs || status.job?.logs
-            : undefined;
+  const logs = (() => {
+    if (status.kind === "generating") {
+      return status.job?.logs;
+    }
+    if (status.kind === "generated") {
+      return status.initJob?.logs;
+    }
+    if (
+      status.kind === "publishing" ||
+      status.kind === "analyzing" ||
+      status.kind === "success"
+    ) {
+      return status.publication?.logs;
+    }
+    if (status.kind === "error") {
+      return status.publication?.logs || status.job?.logs;
+    }
+    return undefined;
+  })();
 
-  const tone =
-    status.kind === "success" || status.kind === "generated"
-      ? "success"
-      : status.kind === "error"
-        ? "error"
-        : "loading";
+  const tone = (() => {
+    if (status.kind === "success" || status.kind === "generated") {
+      return "success";
+    }
+    if (status.kind === "error") {
+      return "error";
+    }
+    return "loading";
+  })();
 
   return (
     <div className={`gen gen--${tone}`}>
@@ -2933,7 +2963,7 @@ function findById<T extends { id: string }>(items: T[], id: string): T | undefin
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
 type SearchInputProps = Readonly<{

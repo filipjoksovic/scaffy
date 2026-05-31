@@ -131,7 +131,7 @@ public class GitLabRepositoryClient {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab projects could not be loaded.", ex);
 		}
 		catch (IOException ex) {
-			throw ProviderHttpException.unreachable("GitLab", host, ex);
+			throw ProviderHttpErrors.unreachable("GitLab", host, ex);
 		}
 		catch (JacksonException ex) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab projects could not be parsed.", ex);

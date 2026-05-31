@@ -118,7 +118,7 @@ public class GitHubRepositoryClient {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repositories could not be loaded.", ex);
 		}
 		catch (IOException ex) {
-			throw ProviderHttpException.unreachable("GitHub", "api.github.com", ex);
+			throw ProviderHttpErrors.unreachable("GitHub", "api.github.com", ex);
 		}
 		catch (JacksonException ex) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repositories could not be parsed.", ex);

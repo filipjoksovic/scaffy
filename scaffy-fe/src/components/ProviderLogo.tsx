@@ -11,7 +11,7 @@ const LABEL: Record<ProviderLogoProps['provider'], string> = {
   gitlab: 'GitLab',
 }
 
-export function ProviderLogo({ provider, size = 16, className, monochrome }: ProviderLogoProps) {
+export function ProviderLogo({ provider, size = 16, className, monochrome }: Readonly<ProviderLogoProps>) {
   const common = {
     width: size,
     height: size,

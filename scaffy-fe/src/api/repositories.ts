@@ -38,8 +38,6 @@ export type GitHubRepository = {
   privateRepository: boolean
 }
 
-export type GitLabRepository = GitHubRepository
-
 export type RepositoryAnalysis = {
   runId: string
   repositoryId: string
@@ -150,13 +148,13 @@ export async function listGitHubRepositories(): Promise<GitHubRepository[]> {
   return (await response.json()) as GitHubRepository[]
 }
 
-export async function listGitLabRepositories(instance = ''): Promise<GitLabRepository[]> {
+export async function listGitLabRepositories(instance = ''): Promise<GitHubRepository[]> {
   const query = instance ? `?instance=${encodeURIComponent(instance)}` : ''
   const response = await apiFetch(`/api/repositories/gitlab${query}`)
   if (!response.ok) {
     await throwApiError(response)
   }
-  return (await response.json()) as GitLabRepository[]
+  return (await response.json()) as GitHubRepository[]
 }
 
 export type ConnectRepositoryInput = {

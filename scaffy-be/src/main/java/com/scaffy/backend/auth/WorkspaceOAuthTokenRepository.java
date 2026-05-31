@@ -42,7 +42,7 @@ public class WorkspaceOAuthTokenRepository {
 		int updated = jdbcTemplate.update("""
 				UPDATE workspace_oauth_tokens
 				SET provider_user_id = ?, display_name = ?, access_token_encrypted = ?,
-					access_token_expires_at = ?, scopes = ?, updated_at = CURRENT_TIMESTAMP
+				    access_token_expires_at = ?, scopes = ?, updated_at = CURRENT_TIMESTAMP
 				WHERE workspace_id = ? AND user_id = ? AND provider = ? AND provider_instance = ?
 				""",
 				providerUserId, displayName, encryptedAccessToken, expires, scopeText,
@@ -50,8 +50,8 @@ public class WorkspaceOAuthTokenRepository {
 		if (updated == 0) {
 			jdbcTemplate.update("""
 					INSERT INTO workspace_oauth_tokens
-						(id, workspace_id, user_id, provider, provider_instance, provider_user_id,
-						 display_name, access_token_encrypted, access_token_expires_at, scopes)
+					    (id, workspace_id, user_id, provider, provider_instance, provider_user_id,
+					     display_name, access_token_encrypted, access_token_expires_at, scopes)
 					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					""",
 					UUID.randomUUID(), workspaceId, userId, provider, normalizedInstance, providerUserId,
@@ -64,7 +64,7 @@ public class WorkspaceOAuthTokenRepository {
 				SELECT access_token_encrypted, access_token_expires_at, scopes
 				FROM workspace_oauth_tokens
 				WHERE workspace_id = ? AND user_id = ? AND provider = ? AND provider_instance = ?
-					AND access_token_encrypted IS NOT NULL
+				    AND access_token_encrypted IS NOT NULL
 				""", (rs, rowNum) -> new OAuthAccessTokenRecord(
 				rs.getString("access_token_encrypted"),
 				rs.getObject("access_token_expires_at", OffsetDateTime.class),

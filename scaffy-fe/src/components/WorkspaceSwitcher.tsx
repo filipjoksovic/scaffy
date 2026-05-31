@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, ChevronsUpDown, Plus } from 'lucide-react'
@@ -20,7 +20,7 @@ export function WorkspaceSwitcher() {
   const initial = label.trim().charAt(0).toUpperCase() || 'W'
   const role = activeWorkspace?.role
 
-  async function handleCreate(event: FormEvent) {
+  async function handleCreate(event: SyntheticEvent) {
     event.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) {

@@ -16,9 +16,9 @@ import org.springframework.web.server.ResponseStatusException;
  * frequently behind a VPN or private network: the user's browser can reach them, but the Scaffy
  * server (which does the token exchange and all API calls) may not. These messages say so.
  */
-final class ProviderHttpException {
+final class ProviderHttpErrors {
 
-	private ProviderHttpException() {
+	private ProviderHttpErrors() {
 	}
 
 	static ResponseStatusException unreachable(String provider, String host, IOException ex) {

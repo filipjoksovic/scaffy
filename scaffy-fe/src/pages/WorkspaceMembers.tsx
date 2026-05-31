@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { SyntheticEvent } from "react";
 import {
   getWorkspace,
   inviteMember,
@@ -44,11 +44,13 @@ export function WorkspaceMembers() {
 
   useEffect(() => {
     if (user) {
+      // Mount fetch via a reused loader; its loading flag is set synchronously by design.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadDetail();
     }
   }, [user, loadDetail]);
 
-  async function handleInvite(event: FormEvent<HTMLFormElement>) {
+  async function handleInvite(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activeWorkspaceId || !inviteEmail.trim()) {
       return;
@@ -87,7 +89,7 @@ export function WorkspaceMembers() {
   }
 
   return (
-    <WorkspaceFrame active="members">
+    <WorkspaceFrame>
       <section className="ws-page" aria-labelledby="members-title">
         <header className="ws-page__header">
           <div className="ws-page__heading">

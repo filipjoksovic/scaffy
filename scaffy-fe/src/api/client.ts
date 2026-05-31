@@ -33,17 +33,15 @@ function rawFetch(path: string, init: RequestInit): Promise<Response> {
 let refreshInFlight: Promise<boolean> | null = null
 
 function attemptRefresh(): Promise<boolean> {
-  if (!refreshInFlight) {
-    refreshInFlight = fetch(apiUrl('/api/auth/refresh'), {
-      method: 'POST',
-      credentials: 'include',
+  refreshInFlight ??= fetch(apiUrl('/api/auth/refresh'), {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then((response) => response.ok)
+    .catch(() => false)
+    .finally(() => {
+      refreshInFlight = null
     })
-      .then((response) => response.ok)
-      .catch(() => false)
-      .finally(() => {
-        refreshInFlight = null
-      })
-  }
   return refreshInFlight
 }
 

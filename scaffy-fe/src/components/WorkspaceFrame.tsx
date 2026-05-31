@@ -9,7 +9,6 @@ import { TopNav } from './TopNav'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 type WorkspaceFrameProps = {
-  active: 'projects' | 'members' | 'settings'
   children: ReactNode
 }
 
@@ -19,7 +18,7 @@ const NAV_ITEMS = [
   { key: 'settings', label: 'Settings', to: '/workspace', end: true, icon: Settings },
 ] as const
 
-export function WorkspaceFrame({ children }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ children }: Readonly<WorkspaceFrameProps>) {
   const { user, loading } = useAuth()
 
   if (loading) {

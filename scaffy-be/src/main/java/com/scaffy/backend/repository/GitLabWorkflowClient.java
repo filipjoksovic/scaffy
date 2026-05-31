@@ -141,7 +141,7 @@ public class GitLabWorkflowClient {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitLab project files could not be loaded.", ex);
 		}
 		catch (IOException ex) {
-			throw ProviderHttpException.unreachable("GitLab", host, ex);
+			throw ProviderHttpErrors.unreachable("GitLab", host, ex);
 		}
 	}
 

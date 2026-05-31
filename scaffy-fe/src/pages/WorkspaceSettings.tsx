@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { Dispatch, ReactElement, SetStateAction, SyntheticEvent } from "react";
 import {
   acceptInvitation,
   addWorkspaceGitlabInstance,
@@ -99,6 +99,8 @@ export function WorkspaceSettings() {
 
   useEffect(() => {
     if (user) {
+      // Mount fetch via reused loaders; their loading flags are set synchronously by design.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadDetail();
       void loadIncoming();
       void loadInstances();
@@ -120,7 +122,7 @@ export function WorkspaceSettings() {
     (c) => c.provider === "gitlab" && (c.instance === "gitlab.com" || c.instance === ""),
   );
 
-  async function handleAddInstance(event: FormEvent<HTMLFormElement>) {
+  async function handleAddInstance(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activeWorkspaceId || !instanceForm.baseUrl.trim()) {
       return;
@@ -154,7 +156,7 @@ export function WorkspaceSettings() {
     }
   }
 
-  async function handleRename(event: FormEvent<HTMLFormElement>) {
+  async function handleRename(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activeWorkspaceId || !renameValue.trim()) {
       return;
@@ -183,8 +185,90 @@ export function WorkspaceSettings() {
     }
   }
 
+  let mainContent: ReactElement
+  if (detailLoading && !detail) {
+    mainContent = (
+      <StateRow detail="Loading workspace settings." label="Loading workspace" tone="loading" />
+    )
+  } else if (detail) {
+    mainContent = (
+      <div className="ws-stack">
+        <Card as="section" className="workspace-card">
+          <Eyebrow>General</Eyebrow>
+          <h3>Workspace name</h3>
+          <form className="workspace-form" onSubmit={handleRename}>
+            <TextInput
+              disabled={!isOwner}
+              onChange={(event) => setRenameValue(event.target.value)}
+              value={renameValue}
+            />
+            {isOwner && (
+              <Button disabled={savingName} type="submit">
+                {savingName ? "Saving…" : "Save"}
+              </Button>
+            )}
+          </form>
+          {!isOwner && (
+            <p className="workspace-card__hint">
+              Only workspace owners can rename the workspace.
+            </p>
+          )}
+        </Card>
+
+        <ProviderConnectionsCard
+          activeWorkspaceId={activeWorkspaceId}
+          githubConnected={Boolean(githubConnection)}
+          gitlabComConnected={Boolean(gitlabComConnection)}
+          onDisconnect={handleDisconnectProvider}
+        />
+
+        <Card as="section" className="workspace-card">
+          <Eyebrow>Details</Eyebrow>
+          <h3>Workspace details</h3>
+          <dl className="workspace-detail-list">
+            <div>
+              <dt>Slug</dt>
+              <dd>
+                <code>{detail.slug}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Your role</dt>
+              <dd>{detail.role}</dd>
+            </div>
+            <div>
+              <dt>Members</dt>
+              <dd>{detail.members.length}</dd>
+            </div>
+          </dl>
+        </Card>
+
+        <GitlabIntegrationsCard
+          activeWorkspaceId={activeWorkspaceId}
+          addingInstance={addingInstance}
+          callbackUrl={callbackUrl}
+          instanceError={instanceError}
+          instanceForm={instanceForm}
+          instances={instances}
+          isOwner={isOwner}
+          onAddInstance={handleAddInstance}
+          onDeleteInstance={handleDeleteInstance}
+          onInstanceFormChange={setInstanceForm}
+        />
+      </div>
+    )
+  } else {
+    mainContent = (
+      <StateRow
+        detail="Select or create a workspace to manage its settings."
+        label="No workspace selected"
+        tone="empty"
+      />
+    )
+  }
+
   return (
-    <WorkspaceFrame active="settings">
+    <WorkspaceFrame>
       <section className="ws-page" aria-labelledby="settings-title">
         <header className="ws-page__header">
           <div className="ws-page__heading">
@@ -221,228 +305,222 @@ export function WorkspaceSettings() {
           </Card>
         )}
 
-        {detailLoading && !detail ? (
-          <StateRow
-            detail="Loading workspace settings."
-            label="Loading workspace"
-            tone="loading"
-          />
-        ) : detail ? (
-          <div className="ws-stack">
-            <Card as="section" className="workspace-card">
-              <Eyebrow>General</Eyebrow>
-              <h3>Workspace name</h3>
-              <form className="workspace-form" onSubmit={handleRename}>
-                <TextInput
-                  disabled={!isOwner}
-                  onChange={(event) => setRenameValue(event.target.value)}
-                  value={renameValue}
-                />
-                {isOwner && (
-                  <Button disabled={savingName} type="submit">
-                    {savingName ? "Saving…" : "Save"}
-                  </Button>
-                )}
-              </form>
-              {!isOwner && (
-                <p className="workspace-card__hint">
-                  Only workspace owners can rename the workspace.
-                </p>
-              )}
-            </Card>
-
-            <Card as="section" className="workspace-card">
-              <Eyebrow>Connections</Eyebrow>
-              <h3>Your repository accounts</h3>
-              <p className="workspace-card__hint">
-                Connect a provider to grant Scaffy access to your repositories. Connecting is
-                personal to your account; after connecting you can add projects to this workspace.
-              </p>
-              <ul className="gitlab-instance-list">
-                <li className="gitlab-instance-list__row">
-                  <div className="gitlab-instance-list__id">
-                    <strong className="provider-name">
-                      <ProviderLogo provider="github" size={15} />
-                      GitHub
-                    </strong>
-                    <span>{githubConnection ? "Connected" : "Not connected"}</span>
-                  </div>
-                  <div className="gitlab-instance-list__actions">
-                    {githubConnection ? (
-                      <Button
-                        className="button--small"
-                        onClick={() => void handleDisconnectProvider("github", "")}
-                        variant="secondary"
-                      >
-                        Disconnect
-                      </Button>
-                    ) : (
-                      <a
-                        className="button button--primary button--small"
-                        href={connectProviderUrl("github-repos", {
-                          workspaceId: activeWorkspaceId,
-                          returnTo: "/workspace",
-                        })}
-                      >
-                        Connect GitHub
-                      </a>
-                    )}
-                  </div>
-                </li>
-                <li className="gitlab-instance-list__row">
-                  <div className="gitlab-instance-list__id">
-                    <strong className="provider-name">
-                      <ProviderLogo provider="gitlab" size={15} />
-                      GitLab.com
-                    </strong>
-                    <span>{gitlabComConnection ? "Connected" : "Not connected"}</span>
-                  </div>
-                  <div className="gitlab-instance-list__actions">
-                    {gitlabComConnection ? (
-                      <Button
-                        className="button--small"
-                        onClick={() => void handleDisconnectProvider("gitlab", "gitlab.com")}
-                        variant="secondary"
-                      >
-                        Disconnect
-                      </Button>
-                    ) : (
-                      <a
-                        className="button button--primary button--small"
-                        href={connectProviderUrl("gitlab", {
-                          workspaceId: activeWorkspaceId,
-                          returnTo: "/workspace",
-                        })}
-                      >
-                        Connect GitLab.com
-                      </a>
-                    )}
-                  </div>
-                </li>
-              </ul>
-            </Card>
-
-            <Card as="section" className="workspace-card">
-              <Eyebrow>Details</Eyebrow>
-              <h3>Workspace details</h3>
-              <dl className="workspace-detail-list">
-                <div>
-                  <dt>Slug</dt>
-                  <dd>
-                    <code>{detail.slug}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Your role</dt>
-                  <dd>{detail.role}</dd>
-                </div>
-                <div>
-                  <dt>Members</dt>
-                  <dd>{detail.members.length}</dd>
-                </div>
-              </dl>
-            </Card>
-
-            <Card as="section" className="workspace-card">
-              <Eyebrow>Integrations</Eyebrow>
-              <h3>Self-hosted GitLab</h3>
-              <p className="workspace-card__hint">
-                Register a self-hosted GitLab instance for this workspace. Each member then
-                connects their own account before adding projects.
-              </p>
-
-              {instances.length > 0 && (
-                <ul className="gitlab-instance-list">
-                  {instances.map((instance) => (
-                    <li className="gitlab-instance-list__row" key={instance.id}>
-                      <div className="gitlab-instance-list__id">
-                        <strong className="provider-name">
-                          <ProviderLogo provider="gitlab" size={15} />
-                          {instance.displayName || instance.host}
-                        </strong>
-                        <span>{instance.host}</span>
-                      </div>
-                      <div className="gitlab-instance-list__actions">
-                        {instance.connected ? (
-                          <Badge>Connected</Badge>
-                        ) : (
-                          <a
-                            className="button button--secondary button--small"
-                            href={connectProviderUrl(instance.registrationId, {
-                              workspaceId: activeWorkspaceId,
-                              returnTo: "/workspace",
-                            })}
-                          >
-                            Connect
-                          </a>
-                        )}
-                        {isOwner && (
-                          <Button
-                            className="button--small"
-                            onClick={() => void handleDeleteInstance(instance.id)}
-                            variant="secondary"
-                          >
-                            Remove
-                          </Button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {isOwner && (
-                <form className="gitlab-instance-form" onSubmit={handleAddInstance}>
-                  <TextInput
-                    onChange={(event) =>
-                      setInstanceForm((current) => ({ ...current, baseUrl: event.target.value }))
-                    }
-                    placeholder="https://gitlab.example.com"
-                    value={instanceForm.baseUrl}
-                  />
-                  <TextInput
-                    onChange={(event) =>
-                      setInstanceForm((current) => ({ ...current, displayName: event.target.value }))
-                    }
-                    placeholder="Display name (optional)"
-                    value={instanceForm.displayName}
-                  />
-                  <TextInput
-                    onChange={(event) =>
-                      setInstanceForm((current) => ({ ...current, clientId: event.target.value }))
-                    }
-                    placeholder="OAuth application ID"
-                    value={instanceForm.clientId}
-                  />
-                  <TextInput
-                    onChange={(event) =>
-                      setInstanceForm((current) => ({ ...current, clientSecret: event.target.value }))
-                    }
-                    placeholder="OAuth application secret"
-                    type="password"
-                    value={instanceForm.clientSecret}
-                  />
-                  <Button disabled={addingInstance} type="submit">
-                    {addingInstance ? "Adding…" : "Add instance"}
-                  </Button>
-                  {callbackUrl && (
-                    <p className="callback-hint">
-                      Add this redirect URI to your GitLab OAuth application: {callbackUrl}
-                    </p>
-                  )}
-                </form>
-              )}
-              {instanceError && <p className="form-error">{instanceError}</p>}
-            </Card>
-          </div>
-        ) : (
-          <StateRow
-            detail="Select or create a workspace to manage its settings."
-            label="No workspace selected"
-            tone="empty"
-          />
-        )}
+        {mainContent}
       </section>
     </WorkspaceFrame>
+  );
+}
+
+type ProviderConnectionsCardProps = {
+  activeWorkspaceId: string | null;
+  githubConnected: boolean;
+  gitlabComConnected: boolean;
+  onDisconnect: (provider: string, instance: string) => void;
+};
+
+function ProviderConnectionsCard({
+  activeWorkspaceId,
+  githubConnected,
+  gitlabComConnected,
+  onDisconnect,
+}: Readonly<ProviderConnectionsCardProps>) {
+  return (
+    <Card as="section" className="workspace-card">
+      <Eyebrow>Connections</Eyebrow>
+      <h3>Your repository accounts</h3>
+      <p className="workspace-card__hint">
+        Connect a provider to grant Scaffy access to your repositories. Connecting is
+        personal to your account; after connecting you can add projects to this workspace.
+      </p>
+      <ul className="gitlab-instance-list">
+        <li className="gitlab-instance-list__row">
+          <div className="gitlab-instance-list__id">
+            <strong className="provider-name">
+              <ProviderLogo provider="github" size={15} />
+              GitHub
+            </strong>
+            <span>{githubConnected ? "Connected" : "Not connected"}</span>
+          </div>
+          <div className="gitlab-instance-list__actions">
+            {githubConnected ? (
+              <Button
+                className="button--small"
+                onClick={() => onDisconnect("github", "")}
+                variant="secondary"
+              >
+                Disconnect
+              </Button>
+            ) : (
+              <a
+                className="button button--primary button--small"
+                href={connectProviderUrl("github-repos", {
+                  workspaceId: activeWorkspaceId,
+                  returnTo: "/workspace",
+                })}
+              >
+                Connect GitHub
+              </a>
+            )}
+          </div>
+        </li>
+        <li className="gitlab-instance-list__row">
+          <div className="gitlab-instance-list__id">
+            <strong className="provider-name">
+              <ProviderLogo provider="gitlab" size={15} />
+              GitLab.com
+            </strong>
+            <span>{gitlabComConnected ? "Connected" : "Not connected"}</span>
+          </div>
+          <div className="gitlab-instance-list__actions">
+            {gitlabComConnected ? (
+              <Button
+                className="button--small"
+                onClick={() => onDisconnect("gitlab", "gitlab.com")}
+                variant="secondary"
+              >
+                Disconnect
+              </Button>
+            ) : (
+              <a
+                className="button button--primary button--small"
+                href={connectProviderUrl("gitlab", {
+                  workspaceId: activeWorkspaceId,
+                  returnTo: "/workspace",
+                })}
+              >
+                Connect GitLab.com
+              </a>
+            )}
+          </div>
+        </li>
+      </ul>
+    </Card>
+  );
+}
+
+type InstanceFormState = {
+  baseUrl: string;
+  clientId: string;
+  clientSecret: string;
+  displayName: string;
+};
+
+type GitlabIntegrationsCardProps = {
+  activeWorkspaceId: string | null;
+  instances: WorkspaceGitlabInstance[];
+  isOwner: boolean;
+  instanceForm: InstanceFormState;
+  addingInstance: boolean;
+  callbackUrl: string | null;
+  instanceError: string | null;
+  onAddInstance: (event: SyntheticEvent<HTMLFormElement>) => void;
+  onDeleteInstance: (instanceId: string) => void;
+  onInstanceFormChange: Dispatch<SetStateAction<InstanceFormState>>;
+};
+
+function GitlabIntegrationsCard({
+  activeWorkspaceId,
+  instances,
+  isOwner,
+  instanceForm,
+  addingInstance,
+  callbackUrl,
+  instanceError,
+  onAddInstance,
+  onDeleteInstance,
+  onInstanceFormChange,
+}: Readonly<GitlabIntegrationsCardProps>) {
+  return (
+    <Card as="section" className="workspace-card">
+      <Eyebrow>Integrations</Eyebrow>
+      <h3>Self-hosted GitLab</h3>
+      <p className="workspace-card__hint">
+        Register a self-hosted GitLab instance for this workspace. Each member then
+        connects their own account before adding projects.
+      </p>
+
+      {instances.length > 0 && (
+        <ul className="gitlab-instance-list">
+          {instances.map((instance) => (
+            <li className="gitlab-instance-list__row" key={instance.id}>
+              <div className="gitlab-instance-list__id">
+                <strong className="provider-name">
+                  <ProviderLogo provider="gitlab" size={15} />
+                  {instance.displayName || instance.host}
+                </strong>
+                <span>{instance.host}</span>
+              </div>
+              <div className="gitlab-instance-list__actions">
+                {instance.connected ? (
+                  <Badge>Connected</Badge>
+                ) : (
+                  <a
+                    className="button button--secondary button--small"
+                    href={connectProviderUrl(instance.registrationId, {
+                      workspaceId: activeWorkspaceId,
+                      returnTo: "/workspace",
+                    })}
+                  >
+                    Connect
+                  </a>
+                )}
+                {isOwner && (
+                  <Button
+                    className="button--small"
+                    onClick={() => onDeleteInstance(instance.id)}
+                    variant="secondary"
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {isOwner && (
+        <form className="gitlab-instance-form" onSubmit={onAddInstance}>
+          <TextInput
+            onChange={(event) =>
+              onInstanceFormChange((current) => ({ ...current, baseUrl: event.target.value }))
+            }
+            placeholder="https://gitlab.example.com"
+            value={instanceForm.baseUrl}
+          />
+          <TextInput
+            onChange={(event) =>
+              onInstanceFormChange((current) => ({ ...current, displayName: event.target.value }))
+            }
+            placeholder="Display name (optional)"
+            value={instanceForm.displayName}
+          />
+          <TextInput
+            onChange={(event) =>
+              onInstanceFormChange((current) => ({ ...current, clientId: event.target.value }))
+            }
+            placeholder="OAuth application ID"
+            value={instanceForm.clientId}
+          />
+          <TextInput
+            onChange={(event) =>
+              onInstanceFormChange((current) => ({ ...current, clientSecret: event.target.value }))
+            }
+            placeholder="OAuth application secret"
+            type="password"
+            value={instanceForm.clientSecret}
+          />
+          <Button disabled={addingInstance} type="submit">
+            {addingInstance ? "Adding…" : "Add instance"}
+          </Button>
+          {callbackUrl && (
+            <p className="callback-hint">
+              Add this redirect URI to your GitLab OAuth application: {callbackUrl}
+            </p>
+          )}
+        </form>
+      )}
+      {instanceError && <p className="form-error">{instanceError}</p>}
+    </Card>
   );
 }

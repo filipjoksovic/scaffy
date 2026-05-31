@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   addGitlabInstance,
@@ -28,7 +28,17 @@ export function GitlabLoginMenu() {
   }
 
   useEffect(() => {
-    void refreshInstances()
+    let mounted = true
+    listGitlabInstances()
+      .then((items) => {
+        if (mounted) setInstances(items)
+      })
+      .catch(() => {
+        // listing is best-effort; the login links still work without it
+      })
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const resetForm = () => {
@@ -40,7 +50,7 @@ export function GitlabLoginMenu() {
     setCallbackUrl(null)
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSubmitting(true)
     setError(null)
@@ -127,6 +137,7 @@ export function GitlabLoginMenu() {
               <form className="gitlab-instance-dialog__form" onSubmit={handleSubmit}>
                 <label>
                   Instance URL
+                  {' '}
                   <input
                     autoFocus
                     onChange={(event) => setBaseUrl(event.target.value)}
@@ -138,6 +149,7 @@ export function GitlabLoginMenu() {
                 </label>
                 <label>
                   Application ID (client id)
+                  {' '}
                   <input
                     onChange={(event) => setClientId(event.target.value)}
                     required

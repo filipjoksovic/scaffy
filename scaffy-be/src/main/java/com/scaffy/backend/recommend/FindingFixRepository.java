@@ -20,7 +20,7 @@ public class FindingFixRepository {
 	public Optional<FindingFixResponse> find(UUID analysisRunId, String findingHash) {
 		return jdbcTemplate.query("""
 				SELECT model, summary, explanation, language, suggested_code,
-					edit_mode, edit_after_line, edit_start_line, edit_end_line, edit_code
+				    edit_mode, edit_after_line, edit_start_line, edit_end_line, edit_code
 				FROM finding_fixes
 				WHERE analysis_run_id = ? AND finding_hash = ?
 				""", this::map, analysisRunId, findingHash).stream().findFirst();
@@ -31,24 +31,24 @@ public class FindingFixRepository {
 		FindingFixEdit edit = response.edit();
 		jdbcTemplate.update("""
 				INSERT INTO finding_fixes (
-					id,
-					analysis_run_id,
-					finding_hash,
-					rule_id,
-					dimension,
-					capability,
-					finding_type,
-					status,
-					model,
-					summary,
-					explanation,
-					language,
-					suggested_code,
-					edit_mode,
-					edit_after_line,
-					edit_start_line,
-					edit_end_line,
-					edit_code
+				    id,
+				    analysis_run_id,
+				    finding_hash,
+				    rule_id,
+				    dimension,
+				    capability,
+				    finding_type,
+				    status,
+				    model,
+				    summary,
+				    explanation,
+				    language,
+				    suggested_code,
+				    edit_mode,
+				    edit_after_line,
+				    edit_start_line,
+				    edit_end_line,
+				    edit_code
 				)
 				VALUES (?, ?, ?, ?, ?, ?, ?, 'ok', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (analysis_run_id, finding_hash) DO NOTHING

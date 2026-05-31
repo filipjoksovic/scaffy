@@ -37,7 +37,7 @@ public class WorkspaceGitLabInstanceRepository {
 		if (updated == 0) {
 			jdbcTemplate.update("""
 					INSERT INTO workspace_gitlab_instances
-						(id, workspace_id, registration_id, host, base_url, display_name, created_by_user_id)
+					    (id, workspace_id, registration_id, host, base_url, display_name, created_by_user_id)
 					VALUES (?, ?, ?, ?, ?, ?, ?)
 					""", UUID.randomUUID(), workspaceId, registrationId, host, baseUrl, displayName, createdByUserId);
 		}

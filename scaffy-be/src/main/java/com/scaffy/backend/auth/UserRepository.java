@@ -58,9 +58,9 @@ public class UserRepository {
 		return jdbcTemplate.update("""
 				UPDATE oauth_accounts
 				SET access_token_encrypted = ?,
-					access_token_expires_at = ?,
-					scopes = ?,
-					updated_at = CURRENT_TIMESTAMP
+				    access_token_expires_at = ?,
+				    scopes = ?,
+				    updated_at = CURRENT_TIMESTAMP
 				WHERE user_id = ? AND provider = ? AND provider_instance = ? AND provider_user_id = ?
 				""",
 				encryptedAccessToken,
@@ -109,8 +109,8 @@ public class UserRepository {
 		int updated = jdbcTemplate.update("""
 				UPDATE oauth_accounts
 				SET user_id = ?, email = ?, display_name = ?, avatar_url = ?,
-					access_token_encrypted = ?, access_token_expires_at = ?, scopes = ?,
-					updated_at = CURRENT_TIMESTAMP
+				    access_token_encrypted = ?, access_token_expires_at = ?, scopes = ?,
+				    updated_at = CURRENT_TIMESTAMP
 				WHERE provider = ? AND provider_instance = ? AND provider_user_id = ?
 				""",
 				userId,
@@ -126,8 +126,8 @@ public class UserRepository {
 		if (updated == 0) {
 			jdbcTemplate.update("""
 					INSERT INTO oauth_accounts
-						(id, user_id, provider, provider_instance, provider_user_id, email, display_name,
-						 avatar_url, access_token_encrypted, access_token_expires_at, scopes)
+					    (id, user_id, provider, provider_instance, provider_user_id, email, display_name,
+					     avatar_url, access_token_encrypted, access_token_expires_at, scopes)
 					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					""",
 					UUID.randomUUID(),
@@ -147,7 +147,7 @@ public class UserRepository {
 	public List<ProviderConnectionRecord> listProviderConnections(UUID userId) {
 		return jdbcTemplate.query("""
 				SELECT provider, provider_instance, display_name, scopes, updated_at,
-					(access_token_encrypted IS NOT NULL) AS has_token
+				    (access_token_encrypted IS NOT NULL) AS has_token
 				FROM oauth_accounts
 				WHERE user_id = ?
 				ORDER BY provider, provider_instance
@@ -206,7 +206,7 @@ public class UserRepository {
 	private void insertOAuthAccount(UUID id, UUID userId, OAuthProfile profile) {
 		jdbcTemplate.update("""
 				INSERT INTO oauth_accounts
-					(id, user_id, provider, provider_instance, provider_user_id, email, display_name, avatar_url)
+				    (id, user_id, provider, provider_instance, provider_user_id, email, display_name, avatar_url)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				""",
 				id,

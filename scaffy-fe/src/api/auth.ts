@@ -34,7 +34,8 @@ export function connectProviderUrl(
     params.set('return', options.returnTo)
   }
   const query = params.toString()
-  return apiUrl(`/api/auth/connect/${registrationId}${query ? `?${query}` : ''}`)
+  const queryString = query ? `?${query}` : ''
+  return apiUrl(`/api/auth/connect/${registrationId}${queryString}`)
 }
 
 export type ProviderConnection = {
