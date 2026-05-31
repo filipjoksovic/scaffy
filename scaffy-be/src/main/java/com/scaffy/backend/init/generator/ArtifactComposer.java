@@ -40,16 +40,27 @@ public class ArtifactComposer {
 			"gitignore", "gitattributes", "editorconfig",
 			"cmd", "sh", "bat", "ps1");
 
+	private final GeneratorCacheManager cacheManager;
+
+	public ArtifactComposer(GeneratorCacheManager cacheManager) {
+		this.cacheManager = cacheManager;
+	}
+
 	public List<EmittedFile> compose(String artifactResourcePath, String destinationPrefix,
 									 Map<String, String> tokens) throws IOException {
-		ClassPathResource resource = new ClassPathResource(artifactResourcePath);
-		if (!resource.exists()) {
-			throw new IOException("Artifact not found on classpath: " + artifactResourcePath
-					+ " (run scaffy-be/scripts/regenerate-artifacts.sh)");
+		byte[] artifactBytes = cacheManager.getArtifact(artifactResourcePath);
+		if (artifactBytes == null) {
+			ClassPathResource resource = new ClassPathResource(artifactResourcePath);
+			if (!resource.exists()) {
+				throw new IOException("Artifact not found on classpath: " + artifactResourcePath
+						+ " (run scaffy-be/scripts/regenerate-artifacts.sh)");
+			}
+			try (InputStream raw = resource.getInputStream()) {
+				artifactBytes = raw.readAllBytes();
+			}
+			cacheManager.putArtifact(artifactResourcePath, artifactBytes);
 		}
-		try (InputStream raw = resource.getInputStream()) {
-			return readAndSubstitute(raw, destinationPrefix, tokens);
-		}
+		return readAndSubstitute(new ByteArrayInputStream(artifactBytes), destinationPrefix, tokens);
 	}
 
 	/** Test seam: compose from raw bytes instead of a classpath resource. */
