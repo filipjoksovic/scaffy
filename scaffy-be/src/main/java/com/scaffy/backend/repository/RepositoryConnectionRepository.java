@@ -97,7 +97,7 @@ public class RepositoryConnectionRepository {
 				SELECT %s
 				FROM repository_connections
 				WHERE workspace_id = ? AND provider = ? AND provider_instance = ?
-					AND repository_owner = ? AND repository_name = ?
+				    AND repository_owner = ? AND repository_name = ?
 				""".formatted(SELECT_COLUMNS), this::mapConnection,
 				workspaceId, provider, providerInstance, owner, name).stream().findFirst();
 	}

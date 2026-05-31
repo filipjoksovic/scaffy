@@ -16,6 +16,13 @@ public class WorkspaceInvitationRepository {
 	public static final String STATUS_PENDING = "pending";
 	public static final String STATUS_ACCEPTED = "accepted";
 
+	private static final String BASE_SELECT = """
+			SELECT i.id, i.workspace_id, w.name AS workspace_name, i.email, i.role, i.token,
+			    i.status, i.created_at, i.expires_at
+			FROM workspace_invitations i
+			JOIN workspaces w ON w.id = i.workspace_id
+			""";
+
 	private final JdbcTemplate jdbcTemplate;
 
 	public WorkspaceInvitationRepository(JdbcTemplate jdbcTemplate) {
@@ -47,30 +54,30 @@ public class WorkspaceInvitationRepository {
 	}
 
 	public Optional<WorkspaceInvitation> findByToken(String token) {
-		return jdbcTemplate.query(baseSelect() + " WHERE i.token = ?", this::mapInvitation, token)
+		return jdbcTemplate.query(BASE_SELECT + " WHERE i.token = ?", this::mapInvitation, token)
 				.stream().findFirst();
 	}
 
 	public Optional<WorkspaceInvitation> findById(UUID id) {
-		return jdbcTemplate.query(baseSelect() + " WHERE i.id = ?", this::mapInvitation, id)
+		return jdbcTemplate.query(BASE_SELECT + " WHERE i.id = ?", this::mapInvitation, id)
 				.stream().findFirst();
 	}
 
 	private Optional<WorkspaceInvitation> findByWorkspaceAndEmail(UUID workspaceId, String email) {
 		return jdbcTemplate.query(
-				baseSelect() + " WHERE i.workspace_id = ? AND i.email = ?",
+				BASE_SELECT + " WHERE i.workspace_id = ? AND i.email = ?",
 				this::mapInvitation, workspaceId, email).stream().findFirst();
 	}
 
 	public List<WorkspaceInvitation> listPendingForWorkspace(UUID workspaceId) {
 		return jdbcTemplate.query(
-				baseSelect() + " WHERE i.workspace_id = ? AND i.status = 'pending' ORDER BY i.created_at DESC",
+				BASE_SELECT + " WHERE i.workspace_id = ? AND i.status = 'pending' ORDER BY i.created_at DESC",
 				this::mapInvitation, workspaceId);
 	}
 
 	public List<WorkspaceInvitation> listPendingForEmail(String email) {
 		return jdbcTemplate.query(
-				baseSelect() + " WHERE LOWER(i.email) = LOWER(?) AND i.status = 'pending'"
+				BASE_SELECT + " WHERE LOWER(i.email) = LOWER(?) AND i.status = 'pending'"
 						+ " AND i.expires_at > CURRENT_TIMESTAMP ORDER BY i.created_at DESC",
 				this::mapInvitation, email);
 	}
@@ -88,15 +95,6 @@ public class WorkspaceInvitationRepository {
 				DELETE FROM workspace_invitations
 				WHERE id = ? AND workspace_id = ?
 				""", id, workspaceId) > 0;
-	}
-
-	private String baseSelect() {
-		return """
-				SELECT i.id, i.workspace_id, w.name AS workspace_name, i.email, i.role, i.token,
-				    i.status, i.created_at, i.expires_at
-				FROM workspace_invitations i
-				JOIN workspaces w ON w.id = i.workspace_id
-				""";
 	}
 
 	private WorkspaceInvitation mapInvitation(ResultSet rs, int rowNum) throws SQLException {

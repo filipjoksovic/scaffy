@@ -158,6 +158,7 @@ export function GitlabLoginMenu() {
                 </label>
                 <label>
                   Secret (client secret)
+                  {' '}
                   <input
                     onChange={(event) => setClientSecret(event.target.value)}
                     required
@@ -167,6 +168,7 @@ export function GitlabLoginMenu() {
                 </label>
                 <label>
                   Display name (optional)
+                  {' '}
                   <input
                     onChange={(event) => setDisplayName(event.target.value)}
                     placeholder="Company GitLab"

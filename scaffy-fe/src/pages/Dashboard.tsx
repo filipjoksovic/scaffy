@@ -469,6 +469,88 @@ export function Dashboard() {
       </section>
     );
   } else {
+    let projectsContent: React.ReactNode;
+    if (connectionsLoading) {
+      projectsContent = (
+        <StateRow
+          detail="Loading repositories connected to this workspace."
+          label="Loading projects"
+          tone="loading"
+        />
+      );
+    } else if (connections.length === 0 && hasProviderConnections === false) {
+      projectsContent = (
+        <div className="projects-empty">
+          <Eyebrow>No accounts connected</Eyebrow>
+          <h3>Connect GitHub or GitLab to get started</h3>
+          <p>
+            No repository providers are connected yet. Open workspace settings to
+            connect your GitHub or GitLab account — then you can add projects here.
+          </p>
+          <div className="dashboard-empty-actions">
+            <Link className="button button--primary" to="/workspace">
+              Go to settings
+            </Link>
+            <Button
+              onClick={() => {
+                setConnectInitialKey(null);
+                setConnectDialogOpen(true);
+              }}
+              variant="secondary"
+            >
+              Connect now
+            </Button>
+          </div>
+        </div>
+      );
+    } else if (connections.length === 0) {
+      projectsContent = (
+        <div className="projects-empty">
+          <Eyebrow>No projects yet</Eyebrow>
+          <h3>Add your first repository</h3>
+          <p>
+            Your accounts are connected. Add an existing repository, or generate a
+            brand new project and publish it.
+          </p>
+          <div className="dashboard-empty-actions">
+            <Button
+              onClick={() => {
+                setConnectInitialKey(null);
+                setConnectDialogOpen(true);
+              }}
+            >
+              Add repository
+            </Button>
+            <Button onClick={() => setCreatingProject(true)} variant="secondary">
+              Create project
+            </Button>
+          </div>
+        </div>
+      );
+    } else if (filteredConnections.length === 0) {
+      projectsContent = (
+        <div className="projects-empty projects-empty--compact">
+          <h3>No matches</h3>
+          <p>No connected project matches “{filter}”.</p>
+        </div>
+      );
+    } else {
+      projectsContent = (
+        <div className="projects-grid">
+          {filteredConnections.map((connection) => (
+            <ProjectCard
+              analysisError={analysisErrorByRepository[connection.id] ?? null}
+              analyzing={analyzingId === connection.id}
+              connection={connection}
+              key={connection.id}
+              onAnalyze={() => void handleAnalyzeRepository(connection)}
+              onDelete={() => void handleDisconnect(connection.id)}
+              onOpen={() => setSelectedRepositoryId(connection.id)}
+            />
+          ))}
+        </div>
+      );
+    }
     body = (
       <section className="ws-page projects-page" aria-labelledby="projects-title">
         <header className="ws-page__header">
@@ -511,77 +593,7 @@ export function Dashboard() {
           </div>
         )}
 
-        {connectionsLoading ? (
-          <StateRow
-            detail="Loading repositories connected to this workspace."
-            label="Loading projects"
-            tone="loading"
-          />
-        ) : connections.length === 0 && hasProviderConnections === false ? (
-          <div className="projects-empty">
-            <Eyebrow>No accounts connected</Eyebrow>
-            <h3>Connect GitHub or GitLab to get started</h3>
-            <p>
-              No repository providers are connected yet. Open workspace settings to
-              connect your GitHub or GitLab account — then you can add projects here.
-            </p>
-            <div className="dashboard-empty-actions">
-              <Link className="button button--primary" to="/workspace">
-                Go to settings
-              </Link>
-              <Button
-                onClick={() => {
-                  setConnectInitialKey(null);
-                  setConnectDialogOpen(true);
-                }}
-                variant="secondary"
-              >
-                Connect now
-              </Button>
-            </div>
-          </div>
-        ) : connections.length === 0 ? (
-          <div className="projects-empty">
-            <Eyebrow>No projects yet</Eyebrow>
-            <h3>Add your first repository</h3>
-            <p>
-              Your accounts are connected. Add an existing repository, or generate a
-              brand new project and publish it.
-            </p>
-            <div className="dashboard-empty-actions">
-              <Button
-                onClick={() => {
-                  setConnectInitialKey(null);
-                  setConnectDialogOpen(true);
-                }}
-              >
-                Add repository
-              </Button>
-              <Button onClick={() => setCreatingProject(true)} variant="secondary">
-                Create project
-              </Button>
-            </div>
-          </div>
-        ) : filteredConnections.length === 0 ? (
-          <div className="projects-empty projects-empty--compact">
-            <h3>No matches</h3>
-            <p>No connected project matches “{filter}”.</p>
-          </div>
-        ) : (
-          <div className="projects-grid">
-            {filteredConnections.map((connection) => (
-              <ProjectCard
-                analysisError={analysisErrorByRepository[connection.id] ?? null}
-                analyzing={analyzingId === connection.id}
-                connection={connection}
-                key={connection.id}
-                onAnalyze={() => void handleAnalyzeRepository(connection)}
-                onDelete={() => void handleDisconnect(connection.id)}
-                onOpen={() => setSelectedRepositoryId(connection.id)}
-              />
-            ))}
-          </div>
-        )}
+        {projectsContent}
       </section>
     );
   }
@@ -2011,7 +2023,7 @@ function SuggestedFixDiff({
   modified,
   original,
 }: SuggestedFixDiffProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -2068,10 +2080,9 @@ function SuggestedFixDiff({
   }, [collapseUnchanged, language, modified, original]);
 
   return (
-    <div
+    <section
       className="source-viewer source-viewer--monaco finding-fix__editor"
       ref={containerRef}
-      role="region"
       aria-label="Suggested fix diff"
     />
   );
@@ -2083,7 +2094,7 @@ type SourceCodeViewerProps = Readonly<{
 }>;
 
 function SourceCodeViewer({ content, source }: SourceCodeViewerProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(
@@ -2175,10 +2186,9 @@ function SourceCodeViewer({ content, source }: SourceCodeViewerProps) {
   }, [editorReadyKey, source.endLine, source.startLine]);
 
   return (
-    <div
+    <section
       className="source-viewer source-viewer--monaco"
       ref={containerRef}
-      role="region"
       aria-label="Workflow YAML"
     />
   );
@@ -2604,6 +2614,54 @@ function CreateProjectReview({
     return "Analyzing…";
   })();
 
+  let actionButtons: React.ReactNode;
+  if (status.kind === "success") {
+    actionButtons = (
+      <>
+        <Button onClick={onCancel}>Back to projects</Button>
+        <Button onClick={onDownload} variant="secondary">
+          Download ZIP
+        </Button>
+      </>
+    );
+  } else if (readyToFinish) {
+    actionButtons = (
+      <>
+        <Button
+          disabled={!canPublish}
+          onClick={onPublish}
+          title={canPublish ? undefined : "Choose GitHub Actions to publish to GitHub."}
+          variant="download"
+        >
+          Publish to GitHub
+        </Button>
+        <Button onClick={onDownload} variant="secondary">
+          Download ZIP
+        </Button>
+        <Button onClick={onStartOver} variant="secondary">
+          Start over
+        </Button>
+      </>
+    );
+  } else if (status.kind === "error") {
+    actionButtons = (
+      <>
+        <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
+          Retry generation
+        </Button>
+        <Button onClick={onCancel} variant="secondary">
+          Cancel
+        </Button>
+      </>
+    );
+  } else {
+    actionButtons = (
+      <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
+        {generateButtonLabel}
+      </Button>
+    );
+  }
+
   return (
     <div className="review">
       <div className="review__head">
@@ -2655,46 +2713,7 @@ function CreateProjectReview({
         </li>
       </ul>
 
-      <div className="review__actions">
-        {status.kind === "success" ? (
-          <>
-            <Button onClick={onCancel}>Back to projects</Button>
-            <Button onClick={onDownload} variant="secondary">
-              Download ZIP
-            </Button>
-          </>
-        ) : readyToFinish ? (
-          <>
-            <Button
-              disabled={!canPublish}
-              onClick={onPublish}
-              title={canPublish ? undefined : "Choose GitHub Actions to publish to GitHub."}
-              variant="download"
-            >
-              Publish to GitHub
-            </Button>
-            <Button onClick={onDownload} variant="secondary">
-              Download ZIP
-            </Button>
-            <Button onClick={onStartOver} variant="secondary">
-              Start over
-            </Button>
-          </>
-        ) : status.kind === "error" ? (
-          <>
-            <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
-              Retry generation
-            </Button>
-            <Button onClick={onCancel} variant="secondary">
-              Cancel
-            </Button>
-          </>
-        ) : (
-          <Button disabled={!canGenerate} onClick={onGenerate} variant="download">
-            {generateButtonLabel}
-          </Button>
-        )}
-      </div>
+      <div className="review__actions">{actionButtons}</div>
 
       <CreateProjectStatusPanel status={status} />
     </div>
