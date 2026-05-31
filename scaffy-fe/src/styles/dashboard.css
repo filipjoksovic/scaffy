@@ -590,7 +590,7 @@
 
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
   align-items: start;
   gap: var(--space-xl);
 }
@@ -729,7 +729,137 @@
   min-width: 0;
   gap: var(--space-base);
   max-width: 1100px;
-  padding-right: var(--space-base);
+}
+
+.dashboard-aside {
+  position: sticky;
+  top: calc(var(--nav-height) + var(--space-base));
+  min-width: 0;
+  max-height: calc(100svh - var(--nav-height) - var(--space-xl));
+  overflow: hidden;
+}
+
+.recent-projects {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-sm);
+  max-height: inherit;
+  padding: var(--space-base);
+}
+
+.recent-projects__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-base);
+}
+
+.recent-projects__header h3 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.recent-projects__header p {
+  margin: 2px 0 0;
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+
+.recent-projects__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas-soft);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.recent-projects__list {
+  display: grid;
+  align-content: start;
+  gap: var(--space-xs);
+  min-height: 0;
+  max-height: calc(100svh - var(--nav-height) - 150px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-projects__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-base);
+  min-height: 58px;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+}
+
+.recent-projects__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.recent-projects__copy strong {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-projects__copy span {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-projects__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  min-width: 0;
+  color: var(--color-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.recent-projects__status {
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.recent-projects__status--succeeded {
+  color: var(--color-success);
+}
+
+.recent-projects__status--failed {
+  color: var(--color-error);
+}
+
+.recent-projects__status--queued,
+.recent-projects__status--running {
+  color: var(--color-timeline-done);
 }
 
 .dashboard-empty-actions {
@@ -2427,6 +2557,19 @@
     border-right: 0;
     border-bottom: 1px solid var(--color-hairline);
     padding-bottom: var(--space-base);
+  }
+
+  .dashboard-aside {
+    position: static;
+    max-height: none;
+  }
+
+  .recent-projects {
+    max-height: none;
+  }
+
+  .recent-projects__list {
+    max-height: 360px;
   }
 }
 

@@ -1,6 +1,7 @@
 package com.scaffy.backend.init;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.MediaType;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.scaffy.backend.auth.ScaffyPrincipal;
@@ -61,6 +63,13 @@ public class InitController {
 	@GetMapping("/jobs/{jobId}")
 	public InitJobResponse getJob(@PathVariable UUID jobId) {
 		return initJobService.get(jobId);
+	}
+
+	@GetMapping("/history")
+	public List<InitHistoryItem> history(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@RequestParam(defaultValue = "5") int limit) {
+		return initJobService.history(principal.userId(), limit);
 	}
 
 	@GetMapping("/jobs/{jobId}/download")

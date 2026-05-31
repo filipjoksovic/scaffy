@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   deleteFavouriteStack,
+  getInitHistory,
   getFavouriteStacks,
   initProject,
   saveFavouriteStack,
@@ -52,6 +53,49 @@ describe('initProject', () => {
     )
 
     await expect(initProject(request)).rejects.toThrow('projectName: must start with a letter')
+  })
+})
+
+describe('getInitHistory', () => {
+  it('gets recent generated projects with a limit', async () => {
+    const history = [
+      {
+        jobId: 'job-1',
+        projectName: 'demo-app',
+        stack: {
+          frontend: 'React',
+          backend: 'Spring Boot',
+          pipeline: 'GitHub Actions',
+        },
+        status: 'succeeded',
+        createdAt: '2026-01-01T12:00:00Z',
+      },
+    ]
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(history),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getInitHistory(3)).resolves.toEqual(history)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/init\/history\?limit=3$/),
+      expect.objectContaining({ credentials: 'include' }),
+    )
+  })
+
+  it('throws on a non-ok history response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: 'Unauthorized' }),
+      }),
+    )
+
+    await expect(getInitHistory()).rejects.toThrow()
   })
 })
 
