@@ -39,7 +39,8 @@ public class SecurityConfig {
 								"/api/auth/connections/**",
 								"/api/repositories/**",
 								"/api/workspaces/**",
-								"/api/init/favourites/**").authenticated()
+								"/api/init/favourites/**",
+								"/api/init/history").authenticated()
 						.anyRequest().permitAll())
 				.oauth2Login(oauth -> oauth
 						.userInfoEndpoint(userInfo -> userInfo.userService(oauth2UserService))
