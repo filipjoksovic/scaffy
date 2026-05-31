@@ -12,6 +12,8 @@ export function readConfig(): GeneratorConfig {
     s3SecretKey: env('SCAFFY_INIT_STORAGE_SECRET_KEY', 'scaffy-secret'),
     s3PathStyle: env('SCAFFY_INIT_STORAGE_PATH_STYLE', 'true') !== 'false',
     jobTimeoutMs: Number(env('SCAFFY_GENERATOR_JOB_TIMEOUT_MS', '300000')),
+    heartbeatIntervalMs: Number(env('SCAFFY_GENERATOR_HEARTBEAT_INTERVAL_MS', '10000')),
+    retryBackoffBaseMs: Number(env('SCAFFY_GENERATOR_RETRY_BACKOFF_BASE_MS', '15000')),
     mode: env('SCAFFY_GENERATOR_MODE', 'runtime') === 'fixture' ? 'fixture' : 'runtime',
   }
 }

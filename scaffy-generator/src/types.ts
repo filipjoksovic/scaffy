@@ -52,6 +52,8 @@ export type InitGenerationJob = {
   projectName: string
   request: InitJobRequest
   selection: InitSelection
+  attemptCount: number
+  maxAttempts: number
 }
 
 export type CommandSpec = {
@@ -79,5 +81,7 @@ export type GeneratorConfig = {
   s3SecretKey: string
   s3PathStyle: boolean
   jobTimeoutMs: number
+  heartbeatIntervalMs: number
+  retryBackoffBaseMs: number
   mode: 'runtime' | 'fixture'
 }

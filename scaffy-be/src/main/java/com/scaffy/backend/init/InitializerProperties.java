@@ -9,6 +9,7 @@ public class InitializerProperties {
 
 	private final Queue queue = new Queue();
 	private final Storage storage = new Storage();
+	private final Jobs jobs = new Jobs();
 
 	public Queue getQueue() {
 		return queue;
@@ -16,6 +17,40 @@ public class InitializerProperties {
 
 	public Storage getStorage() {
 		return storage;
+	}
+
+	public Jobs getJobs() {
+		return jobs;
+	}
+
+	public static class Jobs {
+		private int maxInFlightPerUser = 3;
+		private long leaseTimeoutSeconds = 120;
+		private long reaperIntervalMs = 20000;
+
+		public int getMaxInFlightPerUser() {
+			return maxInFlightPerUser;
+		}
+
+		public void setMaxInFlightPerUser(int maxInFlightPerUser) {
+			this.maxInFlightPerUser = maxInFlightPerUser;
+		}
+
+		public long getLeaseTimeoutSeconds() {
+			return leaseTimeoutSeconds;
+		}
+
+		public void setLeaseTimeoutSeconds(long leaseTimeoutSeconds) {
+			this.leaseTimeoutSeconds = leaseTimeoutSeconds;
+		}
+
+		public long getReaperIntervalMs() {
+			return reaperIntervalMs;
+		}
+
+		public void setReaperIntervalMs(long reaperIntervalMs) {
+			this.reaperIntervalMs = reaperIntervalMs;
+		}
 	}
 
 	public static class Queue {

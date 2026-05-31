@@ -50,6 +50,12 @@ public class InitExceptionHandler {
 				.body(body("Initializer job unavailable", ex.getMessage()));
 	}
 
+	@ExceptionHandler(InitJobLimitExceededException.class)
+	public ResponseEntity<Map<String, Object>> handleJobLimit(InitJobLimitExceededException ex) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+				.body(body("Too many concurrent jobs", ex.getMessage()));
+	}
+
 	private Map<String, Object> body(String error, String message) {
 		Map<String, Object> body = new LinkedHashMap<>();
 		body.put("error", error);

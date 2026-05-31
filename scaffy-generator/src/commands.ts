@@ -177,6 +177,13 @@ function commandFailure(spec: CommandSpec, error: unknown): Error {
   return new Error(`${spec.label} failed${err.exitCode ? ` (exit ${err.exitCode})` : ''}. ${reason}\n\nCommand: ${command}\n\n${details}`)
 }
 
+const TRANSIENT_FAILURE_PATTERN =
+  /_cacache|NPM_CONFIG_CACHE|npm cache|EACCES|EEXIST|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|network request|registry\.npmjs\.org|timed out|ESOCKETTIMEDOUT/i
+
+export function isTransientFailure(message: string): boolean {
+  return TRANSIENT_FAILURE_PATTERN.test(message)
+}
+
 function classifyCommandFailure(output: string): string {
   if (/_cacache|NPM_CONFIG_CACHE|npm cache|npm error code EACCES|npm error code EEXIST/i.test(output)) {
     return 'npm failed while using its package cache. The generator now isolates npm cache per job; restart the generator and run this job again.'

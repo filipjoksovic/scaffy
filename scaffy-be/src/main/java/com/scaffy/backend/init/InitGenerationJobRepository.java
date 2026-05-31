@@ -2,6 +2,7 @@ package com.scaffy.backend.init;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +25,8 @@ public class InitGenerationJobRepository {
 			UUID userId,
 			InitJobRequest request,
 			String requestJson,
-			String selectionJson) {
+			String selectionJson,
+			String idempotencyKey) {
 		jdbcTemplate.update("""
 				INSERT INTO initializer_generation_jobs (
 					id,
@@ -33,11 +35,93 @@ public class InitGenerationJobRepository {
 					project_name,
 					request_json,
 					selection_json,
-					progress_message
+					progress_message,
+					idempotency_key
 				)
-				VALUES (?, ?, 'queued', ?, ?, ?, 'Waiting for generator')
-				""", id, userId, request.projectName(), requestJson, selectionJson);
+				VALUES (?, ?, 'queued', ?, ?, ?, 'Waiting for generator', ?)
+				""", id, userId, request.projectName(), requestJson, selectionJson, idempotencyKey);
 		return findById(id).orElseThrow();
+	}
+
+	public int countActiveByUser(UUID userId) {
+		Integer count = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM initializer_generation_jobs
+				WHERE user_id = ?
+					AND status IN ('queued', 'running')
+				""", Integer.class, userId);
+		return count == null ? 0 : count;
+	}
+
+	public Optional<InitGenerationJob> findByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey) {
+		return jdbcTemplate.query("""
+				SELECT
+					id,
+					user_id,
+					status,
+					project_name,
+					request_json,
+					selection_json,
+					progress_message,
+					error_message,
+					artifact_object_key,
+					created_at,
+					started_at,
+					completed_at
+				FROM initializer_generation_jobs
+				WHERE user_id = ?
+					AND idempotency_key = ?
+				""", this::mapJob, userId, idempotencyKey).stream().findFirst();
+	}
+
+	/**
+	 * Reclaims jobs whose worker stopped heart-beating but still have attempts left.
+	 * Returns the ids so the caller can re-enqueue them; {@code next_attempt_at} is left
+	 * NULL so the reaper's due-retry sweep will not push them a second time.
+	 */
+	public List<UUID> requeueStaleRunning(Duration lease) {
+		return jdbcTemplate.queryForList("""
+				UPDATE initializer_generation_jobs
+				SET status = 'queued',
+					progress_message = 'Requeued after worker timeout',
+					heartbeat_at = NULL,
+					next_attempt_at = NULL
+				WHERE status = 'running'
+					AND attempt_count < max_attempts
+					AND COALESCE(heartbeat_at, started_at) < CURRENT_TIMESTAMP - (? || ' seconds')::interval
+				RETURNING id
+				""", UUID.class, lease.toSeconds());
+	}
+
+	/**
+	 * Fails jobs whose worker stopped heart-beating and have no attempts left.
+	 */
+	public int failExhaustedStaleRunning(Duration lease) {
+		return jdbcTemplate.update("""
+				UPDATE initializer_generation_jobs
+				SET status = 'failed',
+					progress_message = 'Generation timed out',
+					error_message = 'Worker stopped reporting progress and no retry attempts remained.',
+					completed_at = CURRENT_TIMESTAMP
+				WHERE status = 'running'
+					AND attempt_count >= max_attempts
+					AND COALESCE(heartbeat_at, started_at) < CURRENT_TIMESTAMP - (? || ' seconds')::interval
+				""", lease.toSeconds());
+	}
+
+	/**
+	 * Atomically claims queued retries whose backoff window has elapsed, clearing
+	 * {@code next_attempt_at} so concurrent reapers cannot push the same job twice.
+	 */
+	public List<UUID> claimDueRetries() {
+		return jdbcTemplate.queryForList("""
+				UPDATE initializer_generation_jobs
+				SET next_attempt_at = NULL
+				WHERE status = 'queued'
+					AND next_attempt_at IS NOT NULL
+					AND next_attempt_at <= CURRENT_TIMESTAMP
+				RETURNING id
+				""", UUID.class);
 	}
 
 	public Optional<InitGenerationJob> findById(UUID id) {
