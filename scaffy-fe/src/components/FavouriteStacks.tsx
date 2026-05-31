@@ -8,14 +8,14 @@ import {
 } from "../api/init";
 import { Button } from "./Button";
 
-type Props = {
+type Props = Readonly<{
   /** Current wizard selection — used when saving a new favourite. */
   currentSelection: FavouriteStackRequest;
   /** Called when the user clicks "Load" on a saved favourite. */
   onLoad: (favourite: FavouriteStack) => void;
   /** Whether the wizard has enough state to save a meaningful favourite. */
   canSave: boolean;
-};
+}>;
 
 export function FavouriteStacks({ currentSelection, onLoad, canSave }: Props) {
   const [favourites, setFavourites] = useState<FavouriteStack[]>([]);
@@ -79,7 +79,7 @@ export function FavouriteStacks({ currentSelection, onLoad, canSave }: Props) {
     <section aria-labelledby="favourites-heading" className="review favourites">
       {/* Header row — matches the .review__head style */}
       <div className="review__head favourites__head">
-        <span className="review__eyebrow">Favourites</span>
+        <span id="favourites-heading" className="review__eyebrow">Favourites</span>
         {canSave && !showSaveForm && !unauthenticated && (
           <Button
             className="button--small"
@@ -130,7 +130,7 @@ export function FavouriteStacks({ currentSelection, onLoad, canSave }: Props) {
 
       {/* Saved items list */}
       {favourites.length > 0 && (
-        <ul className="favourites__list" role="list">
+        <ul className="favourites__list">
           {favourites.map((fav) => (
             <li key={fav.id} className="favourites__item">
               <div className="favourites__item-body">

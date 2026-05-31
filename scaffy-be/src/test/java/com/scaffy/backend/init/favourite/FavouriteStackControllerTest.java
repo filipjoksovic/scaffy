@@ -236,10 +236,6 @@ class FavouriteStackControllerTest {
 				.andExpect(status().isCreated());
 	}
 
-	// ------------------------------------------------------------------
-	// DELETE /api/init/favourites/{id}
-	// ------------------------------------------------------------------
-
 	@Test
 	void deleteOwnFavouriteReturns204() throws Exception {
 		FavouriteStack fav = build(user.id(), "Delete Me");

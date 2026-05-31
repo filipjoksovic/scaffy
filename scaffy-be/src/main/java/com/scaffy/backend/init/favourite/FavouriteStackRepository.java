@@ -46,10 +46,10 @@ public class FavouriteStackRepository {
 	}
 
 	public int countByUserId(UUID userId) {
-		Integer count = jdbc.queryForObject(
+		return jdbc.query(
 				"SELECT COUNT(*) FROM favourite_stacks WHERE user_id = ?",
-				Integer.class, userId);
-		return count == null ? 0 : count;
+				rs -> rs.next() ? rs.getInt(1) : 0,
+				userId);
 	}
 
 	public FavouriteStack save(FavouriteStack favourite) {
