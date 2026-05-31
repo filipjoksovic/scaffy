@@ -164,6 +164,66 @@ export async function downloadInitJob(jobId: string): Promise<Blob> {
   return response.blob()
 }
 
+// ---------------------------------------------------------------------------
+// Favourite stacks
+// ---------------------------------------------------------------------------
+
+export type FavouriteStack = {
+  id: string
+  userId: string
+  name: string
+  frontend: string
+  frontendVersion: string
+  frontendRuntime: string
+  backend: string
+  backendVersion: string
+  backendRuntime: string
+  pipeline: string
+  pipelineMaturity: string
+  includeDocker: boolean
+  createdAt: string
+}
+
+export type FavouriteStackRequest = {
+  name: string
+  frontend: string
+  frontendVersion: string
+  frontendRuntime: string
+  backend: string
+  backendVersion: string
+  backendRuntime: string
+  pipeline: string
+  pipelineMaturity: string
+  includeDocker: boolean
+}
+
+export async function getFavouriteStacks(): Promise<FavouriteStack[]> {
+  const response = await apiFetch('/api/init/favourites')
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return response.json()
+}
+
+export async function saveFavouriteStack(request: FavouriteStackRequest): Promise<FavouriteStack> {
+  const response = await apiFetch('/api/init/favourites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return response.json()
+}
+
+export async function deleteFavouriteStack(id: string): Promise<void> {
+  const response = await apiFetch(`/api/init/favourites/${id}`, { method: 'DELETE' })
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+}
+
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

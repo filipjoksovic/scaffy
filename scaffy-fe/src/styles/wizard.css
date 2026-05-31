@@ -65,6 +65,9 @@
   position: sticky;
   top: calc(var(--nav-height) + var(--space-base));
   min-width: 0;
+  display: grid;
+  gap: var(--space-base);
+  align-content: start;
 }
 
 /* Step cards
@@ -929,6 +932,116 @@
 @keyframes tooltip-in {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Favourite stacks card (sits below the Review card in the aside)
+   ----------------------------------------------------------- */
+
+/* .review is already applied for card chrome; these rules handle internals */
+.favourites__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+
+.favourites__save-form {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.favourites__name-input {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.favourites__name-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.favourites__form-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.favourites__error {
+  font-size: 12px;
+  color: var(--color-error, #e05);
+}
+
+.favourites__hint {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.favourites__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.favourites__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: 13px;
+}
+
+.favourites__item-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.favourites__item-name {
+  font-weight: 500;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favourites__item-meta {
+  font-size: 11px;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favourites__item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.favourites__delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+
+.favourites__delete:hover {
+  color: var(--color-ink);
+  background: var(--color-hairline-soft);
 }
 
 /* Generation panel (status + log)
