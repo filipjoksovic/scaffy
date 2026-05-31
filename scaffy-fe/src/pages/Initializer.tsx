@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AppFrame, Button, StateRow, TextInput } from '../components'
+import { AppFrame, Button, FavouriteStacks, StateRow, TextInput } from '../components'
 import {
   CheckIcon,
   MaturityPicker,
@@ -13,6 +13,7 @@ import {
   downloadInitJob,
   getInitCatalog,
   getInitJob,
+  type FavouriteStack,
   type InitCatalog,
   type InitJob,
   type MaturityPreset,
@@ -164,6 +165,41 @@ export function Initializer() {
     }
   }
 
+  const canSaveFavourite = Boolean(
+    catalog &&
+      state.frontend &&
+      state.frontendVersion &&
+      state.frontendRuntime &&
+      state.backend &&
+      state.backendVersion &&
+      state.backendRuntime &&
+      state.pipeline &&
+      state.pipelineMaturity,
+  )
+
+  function loadFavourite(fav: FavouriteStack) {
+    if (!catalog) return
+    setState((prev) =>
+      withCatalogDefaults(
+        {
+          ...initialState,
+          projectName: prev.projectName,
+          frontend: fav.frontend,
+          frontendVersion: fav.frontendVersion,
+          frontendRuntime: fav.frontendRuntime,
+          backend: fav.backend,
+          backendVersion: fav.backendVersion,
+          backendRuntime: fav.backendRuntime,
+          pipeline: fav.pipeline,
+          pipelineMaturity: fav.pipelineMaturity,
+          includeDocker: fav.includeDocker,
+        },
+        catalog,
+      ),
+    )
+    setStatus({ kind: 'idle' })
+  }
+
   async function downloadGeneratedJob(job: InitJob) {
     try {
       const blob = await downloadInitJob(job.jobId)
@@ -270,6 +306,22 @@ export function Initializer() {
                 onStartOver={startOver}
                 state={state}
                 status={status}
+              />
+              <FavouriteStacks
+                canSave={canSaveFavourite}
+                currentSelection={{
+                  name: '',
+                  frontend: state.frontend,
+                  frontendVersion: state.frontendVersion,
+                  frontendRuntime: state.frontendRuntime,
+                  backend: state.backend,
+                  backendVersion: state.backendVersion,
+                  backendRuntime: state.backendRuntime,
+                  pipeline: state.pipeline,
+                  pipelineMaturity: state.pipelineMaturity,
+                  includeDocker: state.includeDocker,
+                }}
+                onLoad={loadFavourite}
               />
             </aside>
           </div>

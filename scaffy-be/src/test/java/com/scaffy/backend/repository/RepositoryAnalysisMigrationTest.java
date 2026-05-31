@@ -69,11 +69,11 @@ class RepositoryAnalysisMigrationTest {
 						{"provider":"github-actions","overallScore":0.42,"overallLevel":2,"overallStatus":"partial","dimensions":[]}
 						""");
 
-		// Stop before V13, which intentionally wipes all projects/analyses for the fresh-start reset.
+		// Stop before V14, which intentionally wipes all projects/analyses for the fresh-start reset.
 		Flyway.configure()
 				.dataSource(dataSource)
 				.locations("classpath:db/migration")
-				.target("12")
+				.target("13")
 				.load()
 				.migrate();
 

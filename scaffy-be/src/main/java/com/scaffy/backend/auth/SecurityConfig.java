@@ -38,7 +38,8 @@ public class SecurityConfig {
 								"/api/auth/connect/**",
 								"/api/auth/connections/**",
 								"/api/repositories/**",
-								"/api/workspaces/**").authenticated()
+								"/api/workspaces/**",
+								"/api/init/favourites/**").authenticated()
 						.anyRequest().permitAll())
 				.oauth2Login(oauth -> oauth
 						.userInfoEndpoint(userInfo -> userInfo.userService(oauth2UserService))
