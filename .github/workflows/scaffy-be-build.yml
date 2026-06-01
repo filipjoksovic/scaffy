@@ -44,3 +44,9 @@ jobs:
           path: scaffy-be/target/*.jar
           if-no-files-found: error
           retention-days: 7
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: scaffy-be/target/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
