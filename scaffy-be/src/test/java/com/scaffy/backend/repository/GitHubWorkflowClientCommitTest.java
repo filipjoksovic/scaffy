@@ -143,6 +143,40 @@ class GitHubWorkflowClientCommitTest {
 	}
 
 	@Test
+	void commitWorkflowMaps404ToNotFound() throws Exception {
+		HttpResponse<String> repoMeta = okResponse("""
+				{ "default_branch": "main" }
+				""");
+		HttpResponse<String> fileMeta = okResponse("""
+				{ "sha": "old-sha" }
+				""");
+		HttpResponse<String> notFound = stringResponse(404, "{}");
+		doReturn(repoMeta, fileMeta, notFound).when(httpClient).send(any(HttpRequest.class), any());
+
+		assertThatThrownBy(() -> client.commitWorkflow(
+				workspaceId, userId, connection(), ".github/workflows/ci.yml", "yaml", "msg"))
+				.isInstanceOf(ResponseStatusException.class)
+				.hasMessageContaining("not found");
+	}
+
+	@Test
+	void commitWorkflowMapsGeneric500ToBadGateway() throws Exception {
+		HttpResponse<String> repoMeta = okResponse("""
+				{ "default_branch": "main" }
+				""");
+		HttpResponse<String> fileMeta = okResponse("""
+				{ "sha": "old-sha" }
+				""");
+		HttpResponse<String> serverError = stringResponse(500, "server error");
+		doReturn(repoMeta, fileMeta, serverError).when(httpClient).send(any(HttpRequest.class), any());
+
+		assertThatThrownBy(() -> client.commitWorkflow(
+				workspaceId, userId, connection(), ".github/workflows/ci.yml", "yaml", "msg"))
+				.isInstanceOf(ResponseStatusException.class)
+				.hasMessageContaining("could not be created");
+	}
+
+	@Test
 	void commitWorkflowPropagatesIoErrorsAsBadGateway() throws Exception {
 		doThrow(new IOException("network")).when(httpClient).send(any(HttpRequest.class), any());
 
