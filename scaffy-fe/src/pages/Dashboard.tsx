@@ -18,9 +18,7 @@ import type {
 } from "../api/analyze";
 import { listConnections, oauthLoginUrl } from "../api/auth";
 import {
-  applyFindingFix,
   requestFindingFix,
-  type FindingFixApplyResponse,
   type FindingFixEdit,
   type FindingFixResponse,
 } from "../api/recommend";
@@ -69,13 +67,8 @@ import {
   type StackCatalogOption,
 } from "../api/init";
 import { useAuth } from "../lib/auth";
-import {
-  DEFAULT_COMMIT_MESSAGE,
-  applyFixView,
-  buildApplyRequest,
-  canSubmitCommit,
-} from "../lib/recommendations";
 import { useWorkspace } from "../lib/workspace";
+import { ApplyFixActions as SharedApplyFixActions } from "../components/ApplyFixActions";
 import {
   capabilityMeta,
   dimensionMeta,
@@ -1817,12 +1810,6 @@ type FindingFixState =
   | { kind: "ready"; data: FindingFixResponse }
   | { kind: "error"; message: string };
 
-type ApplyFixState =
-  | { kind: "idle" }
-  | { kind: "submitting" }
-  | { kind: "success"; result: FindingFixApplyResponse }
-  | { kind: "error"; message: string };
-
 function FindingSourceDialog({
   finding,
   fixCache,
@@ -2124,94 +2111,25 @@ function ApplyFixActions({
   workflowPath,
 }: ApplyFixActionsProps) {
   const { activeWorkspace } = useWorkspace();
-  const [commitMessage, setCommitMessage] = useState(DEFAULT_COMMIT_MESSAGE);
-  const [state, setState] = useState<ApplyFixState>({ kind: "idle" });
-
-  async function handleCommit() {
-    setState({ kind: "submitting" });
-    try {
-      const result = await applyFindingFix(
-        buildApplyRequest({
-          runId,
-          workflowPath,
-          modifiedContent,
-          commitMessage,
-          finding: {
-            ruleId: finding.finding.ruleId,
-            ruleLabel: finding.ruleLabel,
-            ruleDescription: finding.ruleDescription,
-            dimension: finding.finding.dimension,
-            capability: finding.finding.capability,
-            type: finding.finding.type,
-            evidence: finding.finding.evidence,
-            location: finding.finding.location,
-            startLine: finding.finding.source?.startLine ?? null,
-            endLine: finding.finding.source?.endLine ?? null,
-          },
-        }),
-        activeWorkspace?.id ?? null,
-      );
-      setState({ kind: "success", result });
-    } catch (error: unknown) {
-      setState({
-        kind: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Could not commit the suggested change.",
-      });
-    }
-  }
-
-  const view = applyFixView(state);
-
-  if (view.kind === "success") {
-    return (
-      <div className="finding-fix__apply finding-fix__apply--success">
-        <strong>Committed to {view.branch}.</strong>
-        {view.commitUrl ? (
-          <a href={view.commitUrl} rel="noreferrer" target="_blank">
-            View commit
-          </a>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (view.kind === "soft-error") {
-    return (
-      <StateRow
-        detail={view.message ?? ""}
-        icon="!"
-        label="Commit not applied"
-        tone="empty"
-      />
-    );
-  }
-
   return (
-    <div className="finding-fix__apply">
-      <label className="finding-fix__apply-field">
-        <span>Commit message</span>
-        <input
-          className="text-input"
-          onChange={(event) => setCommitMessage(event.target.value)}
-          type="text"
-          value={commitMessage}
-        />
-      </label>
-      <div className="finding-fix__apply-actions">
-        <Button
-          disabled={!canSubmitCommit(state, commitMessage)}
-          onClick={handleCommit}
-        >
-          {view.kind === "submitting" ? "Committing..." : "Commit suggested change"}
-        </Button>
-        {view.kind === "error" && (
-          <span className="finding-fix__apply-error">{view.message}</span>
-        )}
-      </div>
-    </div>
+    <SharedApplyFixActions
+      finding={{
+        ruleId: finding.finding.ruleId,
+        ruleLabel: finding.ruleLabel,
+        ruleDescription: finding.ruleDescription,
+        dimension: finding.finding.dimension,
+        capability: finding.finding.capability,
+        type: finding.finding.type,
+        evidence: finding.finding.evidence,
+        location: finding.finding.location,
+        startLine: finding.finding.source?.startLine ?? null,
+        endLine: finding.finding.source?.endLine ?? null,
+      }}
+      modifiedContent={modifiedContent}
+      runId={runId}
+      workflowPath={workflowPath}
+      workspaceId={activeWorkspace?.id ?? null}
+    />
   );
 }
 
