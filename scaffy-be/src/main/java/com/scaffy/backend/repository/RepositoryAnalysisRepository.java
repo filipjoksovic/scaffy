@@ -27,6 +27,7 @@ public class RepositoryAnalysisRepository {
 
 	public static final int ANALYSIS_SCHEMA_VERSION = 1;
 	public static final String ANALYZER_MODEL_VERSION = "capability-analyzer-v1";
+	private static final String COL_REPOSITORY_CONNECTION_ID = "repository_connection_id";
 
 	private final JdbcTemplate jdbcTemplate;
 	private final ObjectMapper objectMapper;
@@ -152,7 +153,7 @@ public class RepositoryAnalysisRepository {
 				WHERE repository_connection_id IN (%s)
 				GROUP BY repository_connection_id
 				""".formatted(placeholders), (rs, rowNum) -> Map.entry(
-				rs.getObject("repository_connection_id", UUID.class),
+				rs.getObject(COL_REPOSITORY_CONNECTION_ID, UUID.class),
 				rs.getInt("analysis_run_count")), ids.toArray())
 				.stream()
 				.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -264,6 +265,13 @@ public class RepositoryAnalysisRepository {
 		return value.length() > 2000 ? value.substring(0, 2000) : value;
 	}
 
+	public Optional<UUID> findRunConnectionId(UUID runId) {
+		return jdbcTemplate.query(
+				"SELECT repository_connection_id FROM repository_analysis_runs WHERE id = ?",
+				(rs, rowNum) -> rs.getObject(COL_REPOSITORY_CONNECTION_ID, UUID.class),
+				runId).stream().findFirst();
+	}
+
 	private Optional<PersistedRepositoryAnalysis> findById(UUID id) {
 		return jdbcTemplate.query("""
 				SELECT id,
@@ -297,7 +305,7 @@ public class RepositoryAnalysisRepository {
 	private RepositoryAnalysisSummary mapSummary(ResultSet rs, int rowNum) throws SQLException {
 		return new RepositoryAnalysisSummary(
 				rs.getObject("id", UUID.class),
-				rs.getObject("repository_connection_id", UUID.class),
+				rs.getObject(COL_REPOSITORY_CONNECTION_ID, UUID.class),
 				rs.getInt("run_number"),
 				rs.getString("workflow_path"),
 				rs.getString("workflow_content_hash"),

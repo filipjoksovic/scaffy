@@ -72,6 +72,17 @@ public class FindingFixRepository {
 				edit == null ? null : edit.code());
 	}
 
+	public void markCommitted(UUID analysisRunId, String findingHash, String commitSha, String commitUrl, String branch) {
+		jdbcTemplate.update("""
+				UPDATE finding_fixes
+				SET committed_at = CURRENT_TIMESTAMP,
+				    commit_sha = ?,
+				    commit_url = ?,
+				    commit_branch = ?
+				WHERE analysis_run_id = ? AND finding_hash = ?
+				""", commitSha, commitUrl, branch, analysisRunId, findingHash);
+	}
+
 	private FindingFixResponse map(ResultSet rs, int rowNum) throws SQLException {
 		return FindingFixResponse.ok(
 				rs.getString("model"),

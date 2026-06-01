@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  applyFindingFix,
   requestFindingFix,
   requestRecommendations,
+  type FindingFixApplyRequest,
+  type FindingFixApplyResponse,
   type FindingFixRequest,
   type FindingFixResponse,
   type RecommendationResponse,
@@ -176,5 +179,91 @@ describe('requestFindingFix', () => {
     )
 
     await expect(requestFindingFix(sampleFixRequest)).rejects.toThrow('Internal failure')
+  })
+})
+
+const sampleApplyRequest: FindingFixApplyRequest = {
+  analysisRunId: 'run-1',
+  workflowPath: '.github/workflows/ci.yml',
+  workflowContent: 'name: ci\n',
+  commitMessage: 'Improve CI/CD pipeline quality',
+  finding: sampleFixRequest.finding,
+}
+
+const sampleApplyResponse: FindingFixApplyResponse = {
+  status: 'ok',
+  commitSha: 'abc123',
+  commitUrl: 'https://github.com/o/r/commit/abc123',
+  branch: 'main',
+  message: null,
+}
+
+describe('applyFindingFix', () => {
+  it('posts to /api/recommend/finding/apply with JSON body and returns commit info', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(sampleApplyResponse),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(applyFindingFix(sampleApplyRequest, 'workspace-1')).resolves.toEqual(sampleApplyResponse)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toMatch(/\/api\/recommend\/finding\/apply$/)
+    expect(init.method).toBe('POST')
+    expect(init.credentials).toBe('include')
+    const headers = new Headers(init.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('X-Workspace-Id')).toBe('workspace-1')
+    expect(JSON.parse(init.body as string)).toEqual(sampleApplyRequest)
+  })
+
+  it('omits the workspace header when no workspace id is provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(sampleApplyResponse),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await applyFindingFix(sampleApplyRequest)
+
+    const [, init] = fetchMock.mock.calls[0]
+    const headers = new Headers(init.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('X-Workspace-Id')).toBeNull()
+  })
+
+  it('throws when the apply endpoint returns a non-OK status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ message: 'Unauthorized' }),
+      }),
+    )
+
+    await expect(applyFindingFix(sampleApplyRequest, 'workspace-1'))
+      .rejects.toThrow('Unauthorized')
+  })
+
+  it('returns the unavailable response body when the workspace has no integration', async () => {
+    const unavailable: FindingFixApplyResponse = {
+      status: 'unavailable',
+      commitSha: null,
+      commitUrl: null,
+      branch: null,
+      message: 'Connect a repository in this workspace before committing AI suggestions.',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(unavailable),
+      }),
+    )
+
+    await expect(applyFindingFix(sampleApplyRequest, 'workspace-1')).resolves.toEqual(unavailable)
   })
 })

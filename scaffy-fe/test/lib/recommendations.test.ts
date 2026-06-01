@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { Recommendation, RecommendationResponse } from '../../src/api/recommend'
+import type {
+  FindingFixApplyResponse,
+  Recommendation,
+  RecommendationResponse,
+} from '../../src/api/recommend'
 import {
+  applyFixView,
+  buildApplyRequest,
+  canSubmitCommit,
+  DEFAULT_COMMIT_MESSAGE,
   errorMessage,
   loadingView,
   normalizePriority,
@@ -8,6 +16,7 @@ import {
   recommendationKey,
   viewFromError,
   viewFromResponse,
+  type FixFinding,
 } from '../../src/lib/recommendations'
 
 function recommendation(overrides: Partial<Recommendation> = {}): Recommendation {
@@ -132,5 +141,133 @@ describe('errorMessage', () => {
     expect(errorMessage('something')).toContain('Failed')
     expect(errorMessage(null)).toContain('Failed')
     expect(errorMessage(undefined)).toContain('Failed')
+  })
+})
+
+function sampleFinding(overrides: Partial<FixFinding> = {}): FixFinding {
+  return {
+    ruleId: 'MISSING_TIMEOUT',
+    ruleLabel: 'Missing timeout',
+    ruleDescription: 'Each job should set timeout-minutes.',
+    dimension: 'workflow_quality',
+    capability: 'Execution safety',
+    type: 'SMELL',
+    evidence: 'timeout-minutes not set',
+    location: 'jobs.build',
+    startLine: 10,
+    endLine: 12,
+    ...overrides,
+  }
+}
+
+describe('buildApplyRequest', () => {
+  it('builds the wire payload for the apply endpoint', () => {
+    const request = buildApplyRequest({
+      runId: 'run-1',
+      workflowPath: '.github/workflows/ci.yml',
+      modifiedContent: 'name: ci\n',
+      commitMessage: '  Improve CI/CD pipeline quality  ',
+      finding: sampleFinding(),
+    })
+
+    expect(request.analysisRunId).toBe('run-1')
+    expect(request.workflowPath).toBe('.github/workflows/ci.yml')
+    expect(request.workflowContent).toBe('name: ci\n')
+    expect(request.commitMessage).toBe('Improve CI/CD pipeline quality')
+    expect(request.finding.ruleId).toBe('MISSING_TIMEOUT')
+    expect(request.finding.startLine).toBe(10)
+  })
+
+  it('sets commitMessage to null when the user clears the field', () => {
+    const request = buildApplyRequest({
+      runId: 'run-1',
+      workflowPath: '.github/workflows/ci.yml',
+      modifiedContent: 'name: ci\n',
+      commitMessage: '   ',
+      finding: sampleFinding(),
+    })
+    expect(request.commitMessage).toBeNull()
+  })
+})
+
+describe('DEFAULT_COMMIT_MESSAGE', () => {
+  it('is the spec-mandated default', () => {
+    expect(DEFAULT_COMMIT_MESSAGE).toBe('Improve CI/CD pipeline quality')
+  })
+})
+
+describe('applyFixView', () => {
+  function success(overrides: Partial<FindingFixApplyResponse> = {}): FindingFixApplyResponse {
+    return {
+      status: 'ok',
+      commitSha: 'abc123',
+      commitUrl: 'https://example.test/commit/abc123',
+      branch: 'main',
+      message: null,
+      ...overrides,
+    }
+  }
+
+  it('returns the form view for idle state', () => {
+    const view = applyFixView({ kind: 'idle' })
+    expect(view.kind).toBe('form')
+    expect(view.branch).toBeNull()
+    expect(view.commitUrl).toBeNull()
+    expect(view.message).toBeNull()
+  })
+
+  it('returns the submitting view while in flight', () => {
+    expect(applyFixView({ kind: 'submitting' }).kind).toBe('submitting')
+  })
+
+  it('returns the error view when the request fails locally', () => {
+    const view = applyFixView({ kind: 'error', message: 'network down' })
+    expect(view.kind).toBe('error')
+    expect(view.message).toBe('network down')
+  })
+
+  it('returns the success view with branch and commit url when status is ok', () => {
+    const view = applyFixView({ kind: 'success', result: success() })
+    expect(view.kind).toBe('success')
+    expect(view.branch).toBe('main')
+    expect(view.commitUrl).toBe('https://example.test/commit/abc123')
+  })
+
+  it('falls back to "default branch" when branch is missing on success', () => {
+    const view = applyFixView({ kind: 'success', result: success({ branch: null }) })
+    expect(view.branch).toBe('default branch')
+  })
+
+  it('returns the soft-error view when the response is unavailable', () => {
+    const view = applyFixView({
+      kind: 'success',
+      result: success({ status: 'unavailable', message: 'no integration' }),
+    })
+    expect(view.kind).toBe('soft-error')
+    expect(view.message).toBe('no integration')
+  })
+
+  it('returns a default message when soft-error has none', () => {
+    const view = applyFixView({
+      kind: 'success',
+      result: success({ status: 'error', message: null }),
+    })
+    expect(view.kind).toBe('soft-error')
+    expect(view.message).toContain('Reconnect')
+  })
+})
+
+describe('canSubmitCommit', () => {
+  it('allows submission when the message is non-empty and not submitting', () => {
+    expect(canSubmitCommit({ kind: 'idle' }, 'Fix workflow')).toBe(true)
+  })
+
+  it('blocks submission when already submitting', () => {
+    expect(canSubmitCommit({ kind: 'submitting' }, 'Fix workflow')).toBe(false)
+  })
+
+  it('blocks submission when the message is blank', () => {
+    expect(canSubmitCommit({ kind: 'idle' }, '   ')).toBe(false)
+    expect(canSubmitCommit({ kind: 'idle' }, '')).toBe(false)
   })
 })

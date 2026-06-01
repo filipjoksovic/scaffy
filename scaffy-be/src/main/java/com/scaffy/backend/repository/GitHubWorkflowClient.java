@@ -7,6 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -31,6 +32,9 @@ import com.scaffy.backend.auth.WorkspaceOAuthTokenRepository;
 public class GitHubWorkflowClient {
 
 	private static final Logger log = LoggerFactory.getLogger(GitHubWorkflowClient.class);
+	private static final String GITHUB_JSON_ACCEPT = "application/vnd.github+json";
+	@SuppressWarnings("java:S5144") // Standard public GitHub REST path fragment, not a user-facing URI.
+	private static final String CONTENTS_PATH = "/contents/";
 	private static final TypeReference<Map<String, Object>> OBJECT_TYPE = new TypeReference<>() {
 	};
 
@@ -56,6 +60,107 @@ public class GitHubWorkflowClient {
 		this.objectMapper = objectMapper;
 		this.providerTokenCrypto = providerTokenCrypto;
 		this.tokenRepository = tokenRepository;
+	}
+
+	public WorkflowCommitResult commitWorkflow(
+			UUID workspaceId,
+			UUID userId,
+			RepositoryConnection repository,
+			String workflowPath,
+			String newContent,
+			String commitMessage) {
+		String accessToken = accessToken(workspaceId, userId);
+		String defaultBranch = defaultBranch(repository, accessToken);
+		String existingSha = fileSha(repository, defaultBranch, workflowPath, accessToken);
+		String encodedContent = Base64.getEncoder().encodeToString(newContent.getBytes(StandardCharsets.UTF_8));
+
+		String requestBody = jsonString(Map.of(
+				"message", commitMessage,
+				"content", encodedContent,
+				"sha", existingSha,
+				"branch", defaultBranch));
+
+		String responseBody = sendJson(
+				"PUT",
+				repoBasePath(repository) + CONTENTS_PATH + encodePath(workflowPath),
+				accessToken,
+				requestBody);
+
+		Map<String, Object> body = jsonObject(responseBody);
+		Object commitNode = body.get("commit");
+		String commitSha = null;
+		String commitUrl = null;
+		if (commitNode instanceof Map<?, ?> commitMap) {
+			commitSha = string(commitMap.get("sha"));
+			commitUrl = string(commitMap.get("html_url"));
+		}
+		log.info(
+				"Committed workflow update userId={} repository={}/{} path={} branch={} sha={}",
+				userId,
+				repository.owner(),
+				repository.name(),
+				workflowPath,
+				defaultBranch,
+				commitSha);
+		return new WorkflowCommitResult(commitSha, commitUrl, defaultBranch);
+	}
+
+	private String fileSha(RepositoryConnection repository, String branch, String workflowPath, String accessToken) {
+		Map<String, Object> body = jsonObject(gitHubRequest(
+				repoBasePath(repository) + CONTENTS_PATH + encodePath(workflowPath) + "?ref=" + encode(branch),
+				accessToken,
+				GITHUB_JSON_ACCEPT));
+		String sha = string(body.get("sha"));
+		if (sha == null) {
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub file metadata is missing a sha.");
+		}
+		return sha;
+	}
+
+	private String sendJson(String method, String pathAndQuery, String accessToken, String requestBody) {
+		HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.github.com" + pathAndQuery))
+				.header("Accept", GITHUB_JSON_ACCEPT)
+				.header("Authorization", "Bearer " + accessToken)
+				.header("Content-Type", "application/json")
+				.method(method, HttpRequest.BodyPublishers.ofString(requestBody))
+				.build();
+		try {
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+			if (response.statusCode() == 401 || response.statusCode() == 403) {
+				throw new ResponseStatusException(
+						HttpStatus.CONFLICT,
+						"GitHub authorization cannot write to this repository. Reconnect GitHub and grant write access.");
+			}
+			if (response.statusCode() == 404) {
+				throw new ResponseStatusException(HttpStatus.NOT_FOUND, "GitHub repository or workflow file was not found.");
+			}
+			if (response.statusCode() == 409 || response.statusCode() == 422) {
+				throw new ResponseStatusException(
+						HttpStatus.CONFLICT,
+						"The workflow file has changed since the suggestion was generated. Reload the analysis and try again.");
+			}
+			if (response.statusCode() < 200 || response.statusCode() >= 300) {
+				log.warn("GitHub write failed status={} path={} body={}", response.statusCode(), pathAndQuery, response.body());
+				throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub commit could not be created.");
+			}
+			return response.body();
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub commit could not be created.", ex);
+		}
+		catch (IOException ex) {
+			throw ProviderHttpErrors.unreachable("GitHub", "api.github.com", ex);
+		}
+	}
+
+	private String jsonString(Map<String, Object> value) {
+		try {
+			return objectMapper.writeValueAsString(value);
+		}
+		catch (JacksonException ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not encode GitHub commit body.", ex);
+		}
 	}
 
 	public GitHubWorkflowFile findWorkflow(UUID workspaceId, UUID userId, RepositoryConnection repository) {
@@ -91,7 +196,7 @@ public class GitHubWorkflowClient {
 		Map<String, Object> body = jsonObject(gitHubRequest(
 				repoBasePath(repository),
 				accessToken,
-				"application/vnd.github+json"));
+				GITHUB_JSON_ACCEPT));
 		String defaultBranch = string(body.get("default_branch"));
 		if (defaultBranch == null) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repository metadata could not be read.");
@@ -104,7 +209,7 @@ public class GitHubWorkflowClient {
 		Map<String, Object> body = jsonObject(gitHubRequest(
 				repoBasePath(repository) + "/git/trees/" + encode(defaultBranch) + "?recursive=1",
 				accessToken,
-				"application/vnd.github+json"));
+				GITHUB_JSON_ACCEPT));
 		Object treeValue = body.get("tree");
 		if (!(treeValue instanceof List<?> tree)) {
 			throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "GitHub repository tree could not be read.");
@@ -127,7 +232,7 @@ public class GitHubWorkflowClient {
 			String path,
 			String accessToken) {
 		return gitHubRequest(
-				repoBasePath(repository) + "/contents/" + encodePath(path) + "?ref=" + encode(defaultBranch),
+				repoBasePath(repository) + CONTENTS_PATH + encodePath(path) + "?ref=" + encode(defaultBranch),
 				accessToken,
 				"application/vnd.github.raw");
 	}

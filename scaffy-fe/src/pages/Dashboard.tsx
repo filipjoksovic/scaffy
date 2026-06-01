@@ -68,6 +68,7 @@ import {
 } from "../api/init";
 import { useAuth } from "../lib/auth";
 import { useWorkspace } from "../lib/workspace";
+import { ApplyFixActions as SharedApplyFixActions } from "../components/ApplyFixActions";
 import {
   capabilityMeta,
   dimensionMeta,
@@ -2084,7 +2085,51 @@ function FindingFixSection({
           original={diff.original}
         />
       )}
+      {diff?.modified && diff.modified !== workflowContent && (
+        <ApplyFixActions
+          finding={finding}
+          modifiedContent={diff.modified}
+          runId={runId}
+          workflowPath={workflowPath}
+        />
+      )}
     </div>
+  );
+}
+
+type ApplyFixActionsProps = Readonly<{
+  finding: FlattenedAnalysisFinding;
+  modifiedContent: string;
+  runId: string;
+  workflowPath: string;
+}>;
+
+function ApplyFixActions({
+  finding,
+  modifiedContent,
+  runId,
+  workflowPath,
+}: ApplyFixActionsProps) {
+  const { activeWorkspace } = useWorkspace();
+  return (
+    <SharedApplyFixActions
+      finding={{
+        ruleId: finding.finding.ruleId,
+        ruleLabel: finding.ruleLabel,
+        ruleDescription: finding.ruleDescription,
+        dimension: finding.finding.dimension,
+        capability: finding.finding.capability,
+        type: finding.finding.type,
+        evidence: finding.finding.evidence,
+        location: finding.finding.location,
+        startLine: finding.finding.source?.startLine ?? null,
+        endLine: finding.finding.source?.endLine ?? null,
+      }}
+      modifiedContent={modifiedContent}
+      runId={runId}
+      workflowPath={workflowPath}
+      workspaceId={activeWorkspace?.id ?? null}
+    />
   );
 }
 
