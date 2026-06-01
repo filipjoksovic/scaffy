@@ -69,6 +69,12 @@ import {
   type StackCatalogOption,
 } from "../api/init";
 import { useAuth } from "../lib/auth";
+import {
+  DEFAULT_COMMIT_MESSAGE,
+  applyFixView,
+  buildApplyRequest,
+  canSubmitCommit,
+} from "../lib/recommendations";
 import { useWorkspace } from "../lib/workspace";
 import {
   capabilityMeta,
@@ -2118,18 +2124,18 @@ function ApplyFixActions({
   workflowPath,
 }: ApplyFixActionsProps) {
   const { activeWorkspace } = useWorkspace();
-  const [commitMessage, setCommitMessage] = useState("Improve CI/CD pipeline quality");
+  const [commitMessage, setCommitMessage] = useState(DEFAULT_COMMIT_MESSAGE);
   const [state, setState] = useState<ApplyFixState>({ kind: "idle" });
 
   async function handleCommit() {
     setState({ kind: "submitting" });
     try {
       const result = await applyFindingFix(
-        {
-          analysisRunId: runId,
+        buildApplyRequest({
+          runId,
           workflowPath,
-          workflowContent: modifiedContent,
-          commitMessage: commitMessage.trim() || null,
+          modifiedContent,
+          commitMessage,
           finding: {
             ruleId: finding.finding.ruleId,
             ruleLabel: finding.ruleLabel,
@@ -2142,7 +2148,7 @@ function ApplyFixActions({
             startLine: finding.finding.source?.startLine ?? null,
             endLine: finding.finding.source?.endLine ?? null,
           },
-        },
+        }),
         activeWorkspace?.id ?? null,
       );
       setState({ kind: "success", result });
@@ -2157,12 +2163,14 @@ function ApplyFixActions({
     }
   }
 
-  if (state.kind === "success" && state.result.status === "ok") {
+  const view = applyFixView(state);
+
+  if (view.kind === "success") {
     return (
       <div className="finding-fix__apply finding-fix__apply--success">
-        <strong>Committed to {state.result.branch ?? "default branch"}.</strong>
-        {state.result.commitUrl ? (
-          <a href={state.result.commitUrl} rel="noreferrer" target="_blank">
+        <strong>Committed to {view.branch}.</strong>
+        {view.commitUrl ? (
+          <a href={view.commitUrl} rel="noreferrer" target="_blank">
             View commit
           </a>
         ) : null}
@@ -2170,13 +2178,10 @@ function ApplyFixActions({
     );
   }
 
-  if (state.kind === "success" && state.result.status !== "ok") {
+  if (view.kind === "soft-error") {
     return (
       <StateRow
-        detail={
-          state.result.message ??
-          "The commit was rejected. Reconnect the repository and try again."
-        }
+        detail={view.message ?? ""}
         icon="!"
         label="Commit not applied"
         tone="empty"
@@ -2197,13 +2202,13 @@ function ApplyFixActions({
       </label>
       <div className="finding-fix__apply-actions">
         <Button
-          disabled={state.kind === "submitting" || !commitMessage.trim()}
+          disabled={!canSubmitCommit(state, commitMessage)}
           onClick={handleCommit}
         >
-          {state.kind === "submitting" ? "Committing..." : "Commit suggested change"}
+          {view.kind === "submitting" ? "Committing..." : "Commit suggested change"}
         </Button>
-        {state.kind === "error" && (
-          <span className="finding-fix__apply-error">{state.message}</span>
+        {view.kind === "error" && (
+          <span className="finding-fix__apply-error">{view.message}</span>
         )}
       </div>
     </div>

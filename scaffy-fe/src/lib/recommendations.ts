@@ -1,4 +1,7 @@
 import type {
+  FindingFixApplyRequest,
+  FindingFixApplyResponse,
+  FindingFixRequest,
   Recommendation,
   RecommendationResponse,
   RecommendationStatus,
@@ -92,6 +95,91 @@ export function recommendationKey(recommendation: Recommendation, index: number)
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return 'Failed to load recommendations.'
+}
+
+export const DEFAULT_COMMIT_MESSAGE = 'Improve CI/CD pipeline quality'
+
+export type FixFinding = Readonly<{
+  ruleId: string
+  ruleLabel: string
+  ruleDescription: string
+  dimension: string
+  capability: string
+  type: string
+  evidence: string | null
+  location: string | null
+  startLine: number | null
+  endLine: number | null
+}>
+
+export type BuildApplyRequestInput = Readonly<{
+  runId: string
+  workflowPath: string
+  modifiedContent: string
+  commitMessage: string
+  finding: FixFinding
+}>
+
+export function buildApplyRequest(input: BuildApplyRequestInput): FindingFixApplyRequest {
+  return {
+    analysisRunId: input.runId,
+    workflowPath: input.workflowPath,
+    workflowContent: input.modifiedContent,
+    commitMessage: input.commitMessage.trim() || null,
+    finding: input.finding satisfies FindingFixRequest['finding'],
+  }
+}
+
+export type ApplyFixViewKind = 'form' | 'submitting' | 'success' | 'soft-error' | 'error'
+
+export type ApplyFixView = Readonly<{
+  kind: ApplyFixViewKind
+  branch: string | null
+  commitUrl: string | null
+  message: string | null
+}>
+
+export function applyFixView(
+  state:
+    | { kind: 'idle' }
+    | { kind: 'submitting' }
+    | { kind: 'success'; result: FindingFixApplyResponse }
+    | { kind: 'error'; message: string },
+): ApplyFixView {
+  if (state.kind === 'idle') {
+    return { kind: 'form', branch: null, commitUrl: null, message: null }
+  }
+  if (state.kind === 'submitting') {
+    return { kind: 'submitting', branch: null, commitUrl: null, message: null }
+  }
+  if (state.kind === 'error') {
+    return { kind: 'error', branch: null, commitUrl: null, message: state.message }
+  }
+  const result = state.result
+  if (result.status === 'ok') {
+    return {
+      kind: 'success',
+      branch: result.branch ?? 'default branch',
+      commitUrl: result.commitUrl,
+      message: null,
+    }
+  }
+  return {
+    kind: 'soft-error',
+    branch: null,
+    commitUrl: null,
+    message:
+      result.message
+      ?? 'The commit was rejected. Reconnect the repository and try again.',
+  }
+}
+
+export function canSubmitCommit(
+  state: { kind: 'idle' | 'submitting' | 'success' | 'error' },
+  commitMessage: string,
+): boolean {
+  if (state.kind === 'submitting') return false
+  return commitMessage.trim().length > 0
 }
 
 function buildView(

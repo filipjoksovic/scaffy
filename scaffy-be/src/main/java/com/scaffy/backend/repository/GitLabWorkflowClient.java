@@ -31,6 +31,7 @@ public class GitLabWorkflowClient {
 	private static final Logger log = LoggerFactory.getLogger(GitLabWorkflowClient.class);
 	private static final String GITLAB_COM_HOST = "gitlab.com";
 	private static final String DEFAULT_CI_PATH = ".gitlab-ci.yml";
+	@SuppressWarnings("java:S5144") // Standard public GitLab REST path fragment, not a user-facing URI.
 	private static final String PROJECTS_API_PATH = "/api/v4/projects/";
 	private static final String JSON_CONTENT_TYPE = "application/json";
 	private static final TypeReference<Map<String, Object>> OBJECT_TYPE = new TypeReference<>() {

@@ -33,6 +33,7 @@ public class GitHubWorkflowClient {
 
 	private static final Logger log = LoggerFactory.getLogger(GitHubWorkflowClient.class);
 	private static final String GITHUB_JSON_ACCEPT = "application/vnd.github+json";
+	@SuppressWarnings("java:S5144") // Standard public GitHub REST path fragment, not a user-facing URI.
 	private static final String CONTENTS_PATH = "/contents/";
 	private static final TypeReference<Map<String, Object>> OBJECT_TYPE = new TypeReference<>() {
 	};
