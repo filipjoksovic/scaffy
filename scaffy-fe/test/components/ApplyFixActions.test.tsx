@@ -58,7 +58,8 @@ describe('ApplyFixActions', () => {
 
     const input = screen.getByLabelText('Commit message') as HTMLInputElement
     expect(input.value).toBe('Improve CI/CD pipeline quality')
-    expect(screen.getByRole('button', { name: 'Commit suggested change' })).not.toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Commit suggested change' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
   })
 
   it('disables the submit button when the commit message is cleared', () => {
@@ -67,7 +68,8 @@ describe('ApplyFixActions', () => {
     const input = screen.getByLabelText('Commit message')
     fireEvent.change(input, { target: { value: '   ' } })
 
-    expect(screen.getByRole('button', { name: 'Commit suggested change' })).toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Commit suggested change' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
   })
 
   it('shows a success state with the commit link after a successful apply', async () => {
@@ -133,6 +135,7 @@ describe('ApplyFixActions', () => {
     await waitFor(() => {
       expect(screen.getByText('upstream broke')).toBeTruthy()
     })
-    expect(screen.getByRole('button', { name: 'Commit suggested change' })).not.toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Commit suggested change' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
   })
 })
