@@ -3,6 +3,58 @@ import type { AnalysisResponse } from './analyze'
 
 export type RepositoryProvider = 'github' | 'gitlab'
 
+export type MetricsStatus =
+  | 'AVAILABLE'
+  | 'TOKEN_MISSING'
+  | 'TOKEN_EXPIRED'
+  | 'SCOPE_INSUFFICIENT'
+  | 'RATE_LIMITED'
+  | 'WORKFLOW_NOT_FOUND'
+  | 'NO_RUNS_IN_WINDOW'
+  | 'PROVIDER_ERROR'
+  | 'UNSUPPORTED'
+
+export type RecentRunSummary = {
+  id: number
+  displayName: string
+  branch: string | null
+  conclusion: string | null
+  durationSec: number
+  startedAt: string
+}
+
+export type BranchHealth = {
+  totalRuns: number
+  failureCount: number
+  failureRate: number
+}
+
+export type WorkflowMetrics = {
+  totalRuns: number
+  successCount: number
+  failureCount: number
+  successRate: number
+  failureRate: number
+  recentFailures7d: number
+  medianDurationSec: number
+  p95DurationSec: number
+  deployStability: number | null
+  durationTrend: 'improving' | 'stable' | 'degrading' | 'insufficient_data'
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  windowDays: number
+  source: string
+  recentRuns: RecentRunSummary[]
+  triggerDistribution: Record<string, number>
+  branchBreakdown: Record<string, BranchHealth>
+}
+
+export type WorkflowMetricsResult = {
+  status: MetricsStatus
+  metrics?: WorkflowMetrics | null
+  message?: string | null
+}
+
 export type RepositoryConnection = {
   id: string
   provider: RepositoryProvider
@@ -50,6 +102,7 @@ export type RepositoryAnalysis = {
   analysisSchemaVersion: number
   analyzerModelVersion: string
   analysis: AnalysisResponse
+  workflowMetrics?: WorkflowMetricsResult | null
 }
 
 export type RepositoryAnalysisRunSummary = RepositoryAnalysisSummary

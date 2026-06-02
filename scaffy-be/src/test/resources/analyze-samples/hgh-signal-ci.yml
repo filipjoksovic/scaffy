@@ -1,0 +1,235 @@
+name: High Signal Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/**"
+
+jobs:
+  quality_gate:
+    name: Quality gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: quality-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+        node-version: [20, 22]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+      - name: Setup Node with cache
+        uses: actions/setup-node@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Verify formatting
+        run: npx prettier --check .
+
+      - name: Run type check
+        run: npx tsc --noEmit
+
+  unit_tests:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    needs: [quality_gate]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+      - name: Setup Node with cache
+        uses: actions/setup-node@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npm test -- --coverage
+
+      - name: Upload unit test report
+        if: github.repository_owner == 'acme'
+        uses: actions/upload-artifact@cccccccccccccccccccccccccccccccccccccccc
+        with:
+          name: unit-test-report
+          path: coverage
+
+  integration_suite:
+    name: Integration suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    needs: [quality_gate]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+      - name: Setup Node with cache
+        uses: actions/setup-node@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+      - name: Upload integration test report
+        if: github.repository_owner == 'acme'
+        uses: actions/upload-artifact@cccccccccccccccccccccccccccccccccccccccc
+        with:
+          name: integration-test-report
+          path: reports/integration
+
+  security_scan:
+    name: Security scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+    needs: [quality_gate]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+      - name: Setup Node with cache
+        uses: actions/setup-node@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run SAST scan
+        run: semgrep --config auto .
+
+      - name: Run dependency vulnerability scan
+        run: npm audit --audit-level=high
+
+      - name: Run secret scan
+        run: gitleaks detect --no-git --source .
+
+      - name: Run container scan
+        run: trivy image ghcr.io/acme/high-signal-app:${{ github.sha }}
+
+      - name: Run policy as code checks
+        run: conftest test k8s/
+
+  package_release:
+    name: Package and release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: true
+    needs: [unit_tests, integration_suite, security_scan]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+      - name: Setup Node with cache
+        uses: actions/setup-node@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Upload build artifact
+        if: github.repository_owner == 'acme'
+        uses: actions/upload-artifact@cccccccccccccccccccccccccccccccccccccccc
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Build and publish container image
+        uses: docker/build-push-action@dddddddddddddddddddddddddddddddddddddddd
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/acme/high-signal-app:${{ github.sha }}
+
+  deploy_prod:
+    name: Deploy production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    needs: [package_release]
+    environment: production
+    steps:
+      - name: Checkout deployment manifests
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+      - name: Download build artifact
+        if: github.repository_owner == 'acme'
+        uses: actions/download-artifact@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+        with:
+          name: web-dist
+          path: dist
+
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f k8s/
+
+      - name: Update deployed image
+        run: kubectl set image deployment/high-signal-app web=ghcr.io/acme/high-signal-app:${{ github.sha }}
+
+      - name: Validate rollout
+        run: kubectl rollout status deployment/high-signal-app
+
+  notify_failure:
+    name: Notify on failure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    needs: [deploy_prod]
+    if: failure()
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@ffffffffffffffffffffffffffffffffffffffff
+        with:
+          payload: |
+            {
+              "text": "Pipeline failure for ${{ github.repository }} on commit ${{ github.sha }}"
+            }

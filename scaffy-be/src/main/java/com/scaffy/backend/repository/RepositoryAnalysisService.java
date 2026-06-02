@@ -9,11 +9,18 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.scaffy.backend.analyze.AnalysisResponse;
+import com.scaffy.backend.repository.metrics.MetricsRequest;
+import com.scaffy.backend.repository.metrics.MetricsStatus;
+import com.scaffy.backend.repository.metrics.WorkflowMetricsProvider;
+import com.scaffy.backend.repository.metrics.WorkflowMetricsResult;
 import com.scaffy.backend.analyze.AnalysisStatus;
 import com.scaffy.backend.analyze.CapabilityFinding;
 import com.scaffy.backend.analyze.CapabilityScore;
@@ -24,25 +31,30 @@ import com.scaffy.backend.analyze.PipelineAnalyzer;
 @Service
 public class RepositoryAnalysisService {
 
+	private static final Logger log = LoggerFactory.getLogger(RepositoryAnalysisService.class);
 	private static final String CONNECTION_NOT_FOUND = "Repository connection not found.";
+	private static final int METRICS_WINDOW_DAYS = 30;
 
 	private final GitHubWorkflowClient gitHubWorkflowClient;
 	private final GitLabWorkflowClient gitLabWorkflowClient;
 	private final PipelineAnalyzer pipelineAnalyzer;
 	private final RepositoryConnectionRepository repository;
 	private final RepositoryAnalysisRepository analysisRepository;
+	private final Map<String, WorkflowMetricsProvider> metricsProviders;
 
 	public RepositoryAnalysisService(
 			GitHubWorkflowClient gitHubWorkflowClient,
 			GitLabWorkflowClient gitLabWorkflowClient,
 			PipelineAnalyzer pipelineAnalyzer,
 			RepositoryConnectionRepository repository,
-			RepositoryAnalysisRepository analysisRepository) {
+			RepositoryAnalysisRepository analysisRepository,
+			@Qualifier("cachedMetricsProvidersByName") Map<String, WorkflowMetricsProvider> metricsProviders) {
 		this.gitHubWorkflowClient = gitHubWorkflowClient;
 		this.gitLabWorkflowClient = gitLabWorkflowClient;
 		this.pipelineAnalyzer = pipelineAnalyzer;
 		this.repository = repository;
 		this.analysisRepository = analysisRepository;
+		this.metricsProviders = metricsProviders;
 	}
 
 	public RepositoryAnalysisResponse analyze(UUID workspaceId, UUID repositoryId) {
@@ -107,9 +119,44 @@ public class RepositoryAnalysisService {
 	private RepositoryAnalysisResponse runAndPersist(RepositoryConnection connection) {
 		WorkflowSource workflow = fetchWorkflow(connection);
 		AnalysisResponse analysis = pipelineAnalyzer.analyze(workflow.path(), workflow.content());
+		WorkflowMetricsResult metricsResult = fetchMetricsSafely(connection, workflow.path());
+		PersistedAnalysisBlob blob = PersistedAnalysisBlob.of(analysis, metricsResult);
 		PersistedRepositoryAnalysis persisted = analysisRepository.insert(
-				connection.id(), workflow.path(), workflow.content(), analysis);
+				connection.id(), workflow.path(), workflow.content(), blob);
 		return RepositoryAnalysisResponse.from(connection, persisted);
+	}
+
+	private WorkflowMetricsResult fetchMetricsSafely(RepositoryConnection connection, String workflowFile) {
+		String metricsProviderName = switch (connection.provider()) {
+			case "github" -> "github-actions";
+			default -> null;
+		};
+		if (metricsProviderName == null) {
+			return WorkflowMetricsResult.unsupported();
+		}
+		WorkflowMetricsProvider provider = metricsProviders.get(metricsProviderName);
+		if (provider == null) {
+			return WorkflowMetricsResult.unsupported();
+		}
+		MetricsRequest request = new MetricsRequest(
+				connection.workspaceId(),
+				connection.userId(),
+				metricsProviderName,
+				connection.providerInstance() != null ? connection.providerInstance() : "",
+				connection.owner(),
+				connection.name(),
+				workflowFile,
+				METRICS_WINDOW_DAYS);
+		try {
+			return provider.fetchMetrics(request);
+		}
+		catch (Exception ex) {
+			log.warn("Metrics fetch failed unexpectedly for {}/{}: {}",
+					connection.owner(), connection.name(), ex.getMessage());
+			return WorkflowMetricsResult.unavailable(
+					MetricsStatus.PROVIDER_ERROR,
+					"Unexpected error during metrics fetch");
+		}
 	}
 
 	private WorkflowSource fetchWorkflow(RepositoryConnection connection) {

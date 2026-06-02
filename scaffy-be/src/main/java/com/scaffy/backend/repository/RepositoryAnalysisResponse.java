@@ -2,7 +2,9 @@ package com.scaffy.backend.repository;
 
 import java.time.OffsetDateTime;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.scaffy.backend.analyze.AnalysisResponse;
+import com.scaffy.backend.repository.metrics.WorkflowMetricsResult;
 
 public record RepositoryAnalysisResponse(
 		String runId,
@@ -15,7 +17,8 @@ public record RepositoryAnalysisResponse(
 		OffsetDateTime analyzedAt,
 		int analysisSchemaVersion,
 		String analyzerModelVersion,
-		AnalysisResponse analysis) {
+		AnalysisResponse analysis,
+		@JsonInclude(JsonInclude.Include.NON_NULL) WorkflowMetricsResult workflowMetrics) {
 
 	static RepositoryAnalysisResponse from(RepositoryConnection connection, PersistedRepositoryAnalysis persisted) {
 		RepositoryAnalysisSummary summary = persisted.summary();
@@ -30,6 +33,8 @@ public record RepositoryAnalysisResponse(
 				summary.analyzedAt(),
 				summary.analysisSchemaVersion(),
 				summary.analyzerModelVersion(),
-				persisted.analysis());
+				persisted.analysis(),
+				persisted.workflowMetrics());
 	}
 }
+
