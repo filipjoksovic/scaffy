@@ -41,6 +41,7 @@ import {
   Button,
   Card,
   Eyebrow,
+  OperationalHealthCard,
   ProviderLogo,
   RecentProjectsPanel,
   StateRow,
@@ -80,6 +81,7 @@ import {
   statusMeta,
   statusBadgeClassName,
 } from "../lib/analyzer";
+import { formatRelativeTime } from "../lib/time";
 
 const monacoGlobal = globalThis as typeof globalThis & {
   MonacoEnvironment?: { getWorker: () => Worker };
@@ -788,8 +790,8 @@ function ProjectCard({
           <ProviderLogo provider={connection.provider} />
           <span>
             {succeeded
-              ? `Analyzed ${formatRelative(summary.analyzedAt)}`
-              : `Connected ${formatRelative(connection.connectedAt)}`}
+              ? `Analyzed ${formatRelativeTime(summary.analyzedAt)}`
+              : `Connected ${formatRelativeTime(connection.connectedAt)}`}
           </span>
         </div>
         <div className="project-card__footer">{footerContent}</div>
@@ -952,6 +954,8 @@ function ProjectDetail({
           delta={delta}
           onReanalyze={() => onAnalyze(connection)}
           reanalyzing={loading}
+          repositoryName={connection.name}
+          repositoryOwner={connection.owner}
         />
       ) : (
         <div className="analysis-empty">
@@ -1002,7 +1006,7 @@ function ProjectDetailHeader({
           {connection.owner}/{connection.name}
         </h3>
         <p>
-          Connected {formatRelative(connection.connectedAt)} ·{" "}
+          Connected {formatRelativeTime(connection.connectedAt)} ·{" "}
           <a href={connection.url} rel="noreferrer" target="_blank">
             Open repository
           </a>
@@ -1016,7 +1020,7 @@ function ProjectDetailHeader({
               {statusMeta(analysis.analysis.overallStatus).label}
             </Badge>
             <span>Run {analysis.runNumber}</span>
-            <span>Analyzed {formatRelative(analysis.analyzedAt)}</span>
+            <span>Analyzed {formatRelativeTime(analysis.analyzedAt)}</span>
             <code>{analysis.workflowPath}</code>
           </div>
         )}
@@ -1071,6 +1075,8 @@ type AnalysisBreakdownProps = Readonly<{
   delta: RepositoryAnalysisDelta | null;
   onReanalyze: () => Promise<void>;
   reanalyzing: boolean;
+  repositoryName: string;
+  repositoryOwner: string;
 }>;
 
 type AnalysisDetailTab = "findings" | "quality" | "delta";
@@ -1080,6 +1086,8 @@ function AnalysisBreakdown({
   delta,
   onReanalyze,
   reanalyzing,
+  repositoryName,
+  repositoryOwner,
 }: AnalysisBreakdownProps) {
   const [activeTab, setActiveTab] = useState<AnalysisDetailTab>("quality");
   const [findingFilter, setFindingFilter] = useState<FindingFilter>("missing");
@@ -1187,6 +1195,12 @@ function AnalysisBreakdown({
       )}
 
       {activeTab === "delta" && <AnalysisDeltaPanel delta={delta} />}
+
+      <OperationalHealthCard
+        owner={repositoryOwner}
+        repo={repositoryName}
+        result={analysis.workflowMetrics}
+      />
     </div>
   );
 }
@@ -1279,7 +1293,7 @@ function AnalysisDeltaPanel({ delta }: AnalysisDeltaPanelProps) {
           <h4>
             Run {delta.currentRun.runNumber} vs run {delta.baseRun.runNumber}
           </h4>
-          <p>Compared against {formatRelative(delta.baseRun.analyzedAt)}.</p>
+          <p>Compared against {formatRelativeTime(delta.baseRun.analyzedAt)}.</p>
         </div>
         <Badge
           className={`delta-badge delta-badge--${delta.overall.direction}`}
@@ -3377,28 +3391,3 @@ function IconTrash() {
   return <Trash2 aria-hidden="true" size={16} />;
 }
 
-function formatRelative(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "—";
-  const diffMs = date.getTime() - Date.now();
-  const diffSec = Math.round(diffMs / 1000);
-  const abs = Math.abs(diffSec);
-
-  if (abs < 60) return "just now";
-  const minutes = Math.round(diffSec / 60);
-  if (Math.abs(minutes) < 60) return formatChunk(minutes, "minute");
-  const hours = Math.round(minutes / 60);
-  if (Math.abs(hours) < 24) return formatChunk(hours, "hour");
-  const days = Math.round(hours / 24);
-  if (Math.abs(days) < 30) return formatChunk(days, "day");
-  const months = Math.round(days / 30);
-  if (Math.abs(months) < 12) return formatChunk(months, "month");
-  const years = Math.round(days / 365);
-  return formatChunk(years, "year");
-}
-
-function formatChunk(value: number, unit: string): string {
-  const n = Math.abs(value);
-  const plural = n === 1 ? unit : `${unit}s`;
-  return value < 0 ? `${n} ${plural} ago` : `in ${n} ${plural}`;
-}

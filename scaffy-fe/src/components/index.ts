@@ -7,6 +7,7 @@ export { Card } from "./Card";
 export { CodeBlock } from "./CodeBlock";
 export { Eyebrow } from "./Eyebrow";
 export { NotificationBell } from "./NotificationBell";
+export { OperationalHealthCard } from "./OperationalHealthCard";
 export { ProviderLogo } from "./ProviderLogo";
 export { RecentProjectsPanel } from "./RecentProjectsPanel";
 export { RecommendationsPanel } from "./RecommendationsPanel";
