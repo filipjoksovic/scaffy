@@ -21,3 +21,6 @@ output/playwright/
 node_modules/
 
 .env
+docs/refactor-47-implementation-plan.md
+scaffy-ops/compose.override.yml
+.vscode/settings.json
