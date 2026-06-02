@@ -35,11 +35,15 @@ public class OAuthClientConfig {
 					.clientSecret(properties.github().clientSecret())
 					.scope("read:user", "user:email")
 					.build());
-			// Connect: same GitHub app, but requests repository + workflow access.
+		}
+		// Connect: separate GitHub OAuth App for repository + workflow access.
+		OAuthClientProperties.Provider githubRepos = (properties.githubRepos() != null && properties.githubRepos().configured())
+				? properties.githubRepos() : null;
+		if (githubRepos != null) {
 			registrations.put(GITHUB_CONNECT_REGISTRATION_ID,
 					CommonOAuth2Provider.GITHUB.getBuilder(GITHUB_CONNECT_REGISTRATION_ID)
-							.clientId(properties.github().clientId())
-							.clientSecret(properties.github().clientSecret())
+							.clientId(githubRepos.clientId())
+							.clientSecret(githubRepos.clientSecret())
 							.scope("repo", "workflow", "read:user", "user:email")
 							.build());
 		}
