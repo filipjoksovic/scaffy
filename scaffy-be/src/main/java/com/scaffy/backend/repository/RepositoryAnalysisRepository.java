@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import com.scaffy.backend.analyze.AnalysisResponse;
@@ -161,7 +162,7 @@ public class RepositoryAnalysisRepository {
 
 	@Transactional
 	public PersistedRepositoryAnalysis insert(UUID repositoryConnectionId, String workflowPath, String workflowContent,
-			AnalysisResponse analysis) {
+			PersistedAnalysisBlob blob) {
 		UUID id = UUID.randomUUID();
 		Integer nextRunNumber = jdbcTemplate.queryForObject("""
 				SELECT COALESCE(MAX(run_number), 0) + 1
@@ -193,14 +194,14 @@ public class RepositoryAnalysisRepository {
 				nextRunNumber,
 				workflowPath,
 				sha256(workflowContent),
-				analysis.provider().value(),
-				analysis.overallScore(),
-				analysis.overallLevel(),
-				analysis.overallStatus().value(),
+				blob.analysis().provider().value(),
+				blob.analysis().overallScore(),
+				blob.analysis().overallLevel(),
+				blob.analysis().overallStatus().value(),
 				ANALYSIS_SCHEMA_VERSION,
 				ANALYZER_MODEL_VERSION,
 				workflowContent,
-				analysisJson(analysis));
+				analysisJson(blob));
 		return findById(id).orElseThrow();
 	}
 
@@ -296,10 +297,12 @@ public class RepositoryAnalysisRepository {
 	}
 
 	private PersistedRepositoryAnalysis mapPersistedAnalysis(ResultSet rs, int rowNum) throws SQLException {
+		PersistedAnalysisBlob blob = deserializeAnalysisBlob(rs.getString("analysis_json"));
 		return new PersistedRepositoryAnalysis(
 				mapSummary(rs, rowNum),
 				rs.getString("workflow_content"),
-				analysisResponse(rs.getString("analysis_json")));
+				blob.analysis(),
+				blob.workflowMetrics());
 	}
 
 	private RepositoryAnalysisSummary mapSummary(ResultSet rs, int rowNum) throws SQLException {
@@ -320,18 +323,24 @@ public class RepositoryAnalysisRepository {
 				rs.getString("error_message"));
 	}
 
-	private String analysisJson(AnalysisResponse analysis) {
+	private String analysisJson(PersistedAnalysisBlob blob) {
 		try {
-			return objectMapper.writeValueAsString(analysis);
+			return objectMapper.writeValueAsString(blob);
 		}
 		catch (JacksonException ex) {
 			throw new IllegalStateException("Repository analysis could not be serialized.", ex);
 		}
 	}
 
-	private AnalysisResponse analysisResponse(String json) {
+	private PersistedAnalysisBlob deserializeAnalysisBlob(String json) {
 		try {
-			return objectMapper.readValue(json, AnalysisResponse.class);
+			JsonNode node = objectMapper.readTree(json);
+			if (node.has("analysis")) {
+				return objectMapper.readValue(json, PersistedAnalysisBlob.class);
+			} else {
+				AnalysisResponse legacy = objectMapper.readValue(json, AnalysisResponse.class);
+				return PersistedAnalysisBlob.legacy(legacy);
+			}
 		}
 		catch (JacksonException ex) {
 			throw new IllegalStateException("Repository analysis could not be read.", ex);
