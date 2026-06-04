@@ -1,0 +1,127 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Scaffy-Network" id="Scaffy-Network">
+    <mxGraphModel dx="1727" dy="1213" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="920" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;" value="Scaffy — Network &amp; Data-Flow Diagram" vertex="1">
+          <mxGeometry height="30" width="800" x="40" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="n_browser" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" value="User&#39;s Browser SPA + auth cookies" vertex="1">
+          <mxGeometry height="70" width="190" x="50" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="n_dock" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#6c8ebf;dashed=1;verticalAlign=top;fontSize=14;fontStyle=2;align=left;spacingLeft=14;spacingTop=10;" value="Docker network “scaffy” (bridge)" vertex="1">
+          <mxGeometry height="760" width="770" x="310" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="n_traefik" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;" value="Traefik :80 → :443 (TLS) · Host/Path routing" vertex="1">
+          <mxGeometry height="60" width="250" x="470" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="n_fe" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;" value="scaffy-fe :4173 (static)" vertex="1">
+          <mxGeometry height="64" width="190" x="400" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="n_be" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;" value="scaffy-be :8080 REST API" vertex="1">
+          <mxGeometry height="84" width="240" x="610" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="n_gen" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" value="scaffy-generator no inbound port" vertex="1">
+          <mxGeometry height="58" width="210" x="350" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="n_pub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" value="scaffy-publisher no inbound port" vertex="1">
+          <mxGeometry height="58" width="210" x="320" y="534" as="geometry" />
+        </mxCell>
+        <mxCell id="n_data" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#6c8ebf;fontSize=14;fontStyle=2;verticalAlign=top;align=left;spacingLeft=14;spacingTop=10;dashed=1;" value="Data layer" vertex="1">
+          <mxGeometry height="165" width="660" x="360" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="n_pg" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" value="PostgreSQL :5432" vertex="1">
+          <mxGeometry height="90" width="175" x="395" y="705" as="geometry" />
+        </mxCell>
+        <mxCell id="n_redis" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" value="Redis :6379" vertex="1">
+          <mxGeometry height="90" width="165" x="605" y="705" as="geometry" />
+        </mxCell>
+        <mxCell id="n_minio" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;" value="MinIO :9000" vertex="1">
+          <mxGeometry height="90" width="165" x="810" y="705" as="geometry" />
+        </mxCell>
+        <mxCell id="n_llm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" value="LLM Provider" vertex="1">
+          <mxGeometry height="56" width="190" x="1140" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="n_gh" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" value="GitHub API" vertex="1">
+          <mxGeometry height="56" width="190" x="1140" y="326" as="geometry" />
+        </mxCell>
+        <mxCell id="n_gl" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" value="GitLab API" vertex="1">
+          <mxGeometry height="56" width="190" x="1140" y="402" as="geometry" />
+        </mxCell>
+        <mxCell id="n_goog" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" value="Google OAuth" vertex="1">
+          <mxGeometry height="56" width="190" x="1140" y="478" as="geometry" />
+        </mxCell>
+        <mxCell id="ne1" edge="1" parent="1" source="n_browser" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;fontColor=#333333;" target="n_traefik" value="HTTPS 443">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="290" y="170" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ne2" edge="1" parent="1" source="n_traefik" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=0.2;exitY=1;entryX=0.5;entryY=0;fontSize=10;fontColor=#333333;entryDx=0;entryDy=0;" target="n_fe" value="Host → SPA">
+          <mxGeometry relative="1" x="-0.3939" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ne3" edge="1" parent="1" source="n_traefik" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=0.75;exitY=1;entryX=0.4;entryY=0;fontSize=10;fontColor=#333333;" target="n_be" value="/api · /oauth2 · /login">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ne4" edge="1" parent="1" source="n_be" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=0.5;exitY=1;entryX=0.56;entryY=-0.008;fontSize=10;fontColor=#333333;entryDx=0;entryDy=0;entryPerimeter=0;" target="n_data" value="TCP 5432 · 6379 · S3 9000">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ne5" edge="1" parent="1" source="n_gen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=1;exitY=0.5;entryX=0.35;entryY=0.011;fontSize=10;fontColor=#333333;entryDx=0;entryDy=0;entryPerimeter=0;" target="n_data" value="consume jobs · put ZIP">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="590" y="479" />
+              <mxPoint x="590" y="662" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ne6" edge="1" parent="1" source="n_pub" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=0.5;exitY=1;entryX=0.1;entryY=0;fontSize=10;fontColor=#333333;" target="n_data" value="consume jobs · get ZIP">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ne7" edge="1" parent="1" source="n_be" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=1;exitY=0.15;entryX=0;entryY=0.5;fontSize=10;fontColor=#333333;" target="n_llm" value="HTTPS">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="850" y="278" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ne8" edge="1" parent="1" source="n_be" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=1;exitY=0.4;entryX=0;entryY=0.5;fontSize=10;fontColor=#333333;" target="n_gh" value="HTTPS">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="850" y="340" />
+              <mxPoint x="1140" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ne9" edge="1" parent="1" source="n_be" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=1;exitY=0.6;entryX=0;entryY=0.5;fontSize=10;fontColor=#333333;" target="n_gl" value="HTTPS">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="850" y="430" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ne10" edge="1" parent="1" source="n_be" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=1;exitY=0.85;entryX=0;entryY=0.5;fontSize=10;fontColor=#333333;" target="n_goog" value="OAuth">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="850" y="506" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ne11" edge="1" parent="1" source="n_pub" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;endArrow=classic;exitX=0.132;exitY=1.011;entryX=1;entryY=0.5;fontSize=10;fontColor=#333333;exitDx=0;exitDy=0;exitPerimeter=0;" target="n_gh" value="push commits">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="348" y="610" />
+              <mxPoint x="330" y="610" />
+              <mxPoint x="330" y="870" />
+              <mxPoint x="1390" y="870" />
+              <mxPoint x="1390" y="354" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
