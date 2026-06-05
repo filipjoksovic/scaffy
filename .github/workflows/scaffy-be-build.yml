@@ -42,7 +42,5 @@ jobs:
         with:
           name: scaffy-be-jar
           path: scaffy-be/target/*.jar
-       - name: Publish backend artifact
-         run: echo 'Publishing artifact...'
           if-no-files-found: error
           retention-days: 7
