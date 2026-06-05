@@ -1,0 +1,222 @@
+.login-screen {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.88fr) minmax(360px, 0.72fr);
+  gap: var(--space-xxl);
+  align-items: center;
+  width: min(var(--container-max), calc(100% - 48px));
+  min-height: calc(100svh - var(--nav-height));
+  margin: 0 auto;
+  padding: 72px 0 96px;
+}
+
+.login-screen__intro {
+  display: grid;
+  gap: var(--space-md);
+  align-content: center;
+}
+
+.login-screen__intro h1 {
+  max-width: 700px;
+  font-size: 64px;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.login-screen__intro > p {
+  max-width: 560px;
+  color: var(--color-body);
+  font-size: 18px;
+}
+
+.login-screen__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+}
+
+.login-screen__signals span {
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas-soft);
+  color: var(--color-ink);
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.login-panel {
+  display: grid;
+  gap: var(--space-lg);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  padding: var(--space-xl);
+  box-shadow: 0 22px 48px rgba(38, 37, 30, 0.1);
+}
+
+.login-panel__header,
+.login-panel__state {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.login-panel__header h2,
+.login-panel__state h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.login-panel__header p,
+.login-panel__state p {
+  margin: 0;
+  color: var(--color-body);
+}
+
+.login-provider-list {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.login-provider {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: center;
+  min-height: 76px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+  color: var(--color-ink);
+  padding: var(--space-sm);
+  text-decoration: none;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+.login-provider:hover,
+.login-provider:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-surface-card);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.login-provider > svg {
+  justify-self: center;
+}
+
+.login-provider span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.login-provider strong {
+  font-size: 15px;
+}
+
+.login-provider small {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.login-instances {
+  display: grid;
+  gap: var(--space-xs);
+  border-top: 1px solid var(--color-hairline-soft);
+  padding-top: var(--space-base);
+}
+
+.login-instances h3 {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.login-instances > div {
+  display: grid;
+  gap: 6px;
+}
+
+.login-instance-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: fit-content;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-instance-link:hover {
+  color: var(--color-primary);
+}
+
+.login-gitlab-instance {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: var(--color-body);
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.login-gitlab-instance:hover {
+  color: var(--color-ink);
+}
+
+@media (max-width: 1024px) {
+  .login-screen {
+    grid-template-columns: 1fr;
+    width: min(100% - 40px, 760px);
+    min-height: auto;
+    padding-top: 56px;
+  }
+
+  .login-screen__intro h1 {
+    font-size: 52px;
+  }
+}
+
+@media (max-width: 640px) {
+  .login-screen {
+    width: calc(100% - 32px);
+    padding: 32px 0 56px;
+  }
+
+  .login-screen__intro h1 {
+    font-size: 38px;
+  }
+
+  .login-panel {
+    padding: var(--space-lg);
+  }
+
+  .login-screen__signals {
+    display: none;
+  }
+
+  .login-provider {
+    grid-template-columns: 36px minmax(0, 1fr);
+    min-height: 56px;
+  }
+
+  .login-provider small {
+    display: none;
+  }
+}

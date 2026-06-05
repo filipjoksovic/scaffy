@@ -287,7 +287,7 @@ function OperationalHealthStatus({ message, status, workspaceId }: StatusCardPro
     );
   }
 
-  const reconnectUrl = connectProviderUrl("github-repos", {
+  const reconnectUrl = connectProviderUrl("github", {
     workspaceId,
     returnTo: "/dashboard",
   });

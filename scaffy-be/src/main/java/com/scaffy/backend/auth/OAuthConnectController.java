@@ -96,7 +96,7 @@ public class OAuthConnectController {
 	}
 
 	private boolean isAllowedRegistration(String registrationId) {
-		return "github-repos".equals(registrationId)
+		return "github".equals(registrationId)
 				|| "gitlab".equals(registrationId)
 				|| (registrationId != null && registrationId.startsWith("gitlab-"));
 	}

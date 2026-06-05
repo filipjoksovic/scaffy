@@ -1,8 +1,6 @@
 import * as Popover from '@radix-ui/react-popover'
 import { Link, NavLink } from 'react-router-dom'
-import { oauthLoginUrl } from '../api/auth'
 import { useAuth } from '../lib/auth'
-import { GitlabLoginMenu } from './GitlabLoginMenu'
 import { NotificationBell } from './NotificationBell'
 
 export function TopNav() {
@@ -94,15 +92,9 @@ export function TopNav() {
     )
   } else {
     authContent = (
-      <div className="auth-menu">
-        <a className="text-link" href={oauthLoginUrl.google}>
-          Google login
-        </a>
-        <a className="text-link" href={oauthLoginUrl.github}>
-          GitHub login
-        </a>
-        <GitlabLoginMenu />
-      </div>
+      <NavLink className="top-login-link" to="/login">
+        Login
+      </NavLink>
     )
   }
 
@@ -114,19 +106,22 @@ export function TopNav() {
         Scaffy
       </Link>
       <div className="nav-links">
-        <NavLink end to="/">
-          Home
-        </NavLink>
-        {user && <NavLink to="/dashboard">Projects</NavLink>}
-        <NavLink to="/init">Initializer</NavLink>
-        <NavLink to="/analyze">Pipeline Analyzer</NavLink>
-        <NavLink to="/design">Design Language</NavLink>
+        {user && (
+          <>
+            <NavLink to="/dashboard">Projects</NavLink>
+            <NavLink to="/init">Initializer</NavLink>
+            <NavLink to="/analyze">Pipeline Analyzer</NavLink>
+            <NavLink to="/design">Design Language</NavLink>
+          </>
+        )}
       </div>
-      <div className="nav-actions">{authContent}</div>
-      <button aria-label="Open menu" className="menu-button" type="button">
-        <span />
-        <span />
-      </button>
+      <div className={user ? 'nav-actions' : 'nav-actions nav-actions--public'}>{authContent}</div>
+      {user ? (
+        <button aria-label="Open menu" className="menu-button" type="button">
+          <span />
+          <span />
+        </button>
+      ) : null}
     </nav>
   )
 }

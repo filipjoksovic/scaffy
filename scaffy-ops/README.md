@@ -149,7 +149,6 @@ Configure OAuth applications with backend callback URLs:
 ```txt
 https://api.scaffy.fijol.io/login/oauth2/code/google
 https://api.scaffy.fijol.io/login/oauth2/code/github
-https://api.scaffy.fijol.io/login/oauth2/code/github-repos
 https://api.scaffy.fijol.io/login/oauth2/code/gitlab
 ```
 
@@ -158,17 +157,10 @@ For local development, use:
 ```txt
 http://localhost:8080/login/oauth2/code/google
 http://localhost:8080/login/oauth2/code/github
-http://localhost:8080/login/oauth2/code/github-repos
 http://localhost:8080/login/oauth2/code/gitlab
 ```
 
-The GitHub login (`github`) and repository connect (`github-repos`) flows share the same GitHub OAuth App. A GitHub OAuth App only allows a single Authorization callback URL, but matching is by path prefix, so set its callback to the common parent to cover both registrations:
-
-```txt
-https://api.scaffy.fijol.io/login/oauth2/code
-```
-
-Google should request `openid profile email`. The GitHub login flow (`github`) requests identity scopes only: `read:user` and `user:email`. The repository connect flow (`github-repos`) additionally requests `repo` and `workflow`.
+Google should request `openid profile email`. GitHub (`github`) requests `repo`, `workflow`, `read:user`, and `user:email` so repository connect can browse repositories and publish workflow updates.
 
 ### GitLab (gitlab.com and self-hosted)
 

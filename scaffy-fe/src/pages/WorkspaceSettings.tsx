@@ -353,7 +353,7 @@ function ProviderConnectionsCard({
             ) : (
               <a
                 className="button button--primary button--small"
-                href={connectProviderUrl("github-repos", {
+                href={connectProviderUrl("github", {
                   workspaceId: activeWorkspaceId,
                   returnTo: "/workspace",
                 })}

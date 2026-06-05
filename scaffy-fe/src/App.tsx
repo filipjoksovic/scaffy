@@ -4,6 +4,7 @@ import { DesignSystem } from './pages/DesignSystem'
 import { Analyzer } from './pages/Analyzer'
 import { Dashboard } from './pages/Dashboard'
 import { Landing } from './pages/Landing'
+import { Login } from './pages/Login'
 import { WorkspaceMembers } from './pages/WorkspaceMembers'
 import { WorkspaceSettings } from './pages/WorkspaceSettings'
 import { AuthProvider } from './lib/auth'
@@ -19,6 +20,7 @@ function App() {
           <AuthErrorBanner />
           <Routes>
             <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/init" element={<Initializer />} />
             <Route path="/analyze" element={<Analyzer />} />

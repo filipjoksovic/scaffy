@@ -95,7 +95,7 @@ describe('auth URL builders', () => {
   })
 
   it('builds a connect url with no query when no options are given', () => {
-    expect(connectProviderUrl('github-repos')).toMatch(/\/api\/auth\/connect\/github-repos$/)
+    expect(connectProviderUrl('github')).toMatch(/\/api\/auth\/connect\/github$/)
   })
 
   it('builds a connect url with workspace and return query params', () => {

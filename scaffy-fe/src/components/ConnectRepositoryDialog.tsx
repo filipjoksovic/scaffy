@@ -92,7 +92,7 @@ export function ConnectRepositoryDialog({
         label: 'GitHub',
         provider: 'github',
         instance: '',
-        registrationId: 'github-repos',
+        registrationId: 'github',
         connected: githubConnected,
       },
       {

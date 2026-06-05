@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { LayoutGrid, Settings, Users } from 'lucide-react'
-import { oauthLoginUrl } from '../api/auth'
 import { useAuth } from '../lib/auth'
 import { Card } from './Card'
 import { Eyebrow } from './Eyebrow'
@@ -46,12 +45,9 @@ export function WorkspaceFrame({ children }: Readonly<WorkspaceFrameProps>) {
             <h2>Sign in to open your workspace</h2>
             <p>Connect an account to manage projects, members, and workspace settings.</p>
             <div className="dashboard-signin__actions">
-              <a className="button button--primary" href={oauthLoginUrl.github}>
-                Continue with GitHub
-              </a>
-              <a className="button button--secondary" href={oauthLoginUrl.google}>
-                Continue with Google
-              </a>
+              <Link className="button button--primary" to="/login">
+                Login
+              </Link>
             </div>
           </Card>
         </section>
@@ -82,4 +78,3 @@ export function WorkspaceFrame({ children }: Readonly<WorkspaceFrameProps>) {
     </main>
   )
 }
-

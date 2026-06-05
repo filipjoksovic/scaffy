@@ -78,6 +78,36 @@
   gap: var(--space-xs);
 }
 
+.top-login-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+.top-login-link:hover,
+.top-login-link.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.top-login-link:hover {
+  transform: translateY(-1px);
+}
+
 .auth-menu {
   display: flex;
   align-items: center;
@@ -594,6 +624,10 @@
   .nav-links,
   .nav-actions {
     display: none;
+  }
+
+  .nav-actions--public {
+    display: flex;
   }
 
   .menu-button {
