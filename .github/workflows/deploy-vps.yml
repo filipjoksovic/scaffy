@@ -58,6 +58,8 @@ env:
   GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
   GITHUB_OAUTH_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
   GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
+  GITLAB_OAUTH_CLIENT_ID: ${{ secrets.GITLAB_OAUTH_CLIENT_ID }}
+  GITLAB_OAUTH_CLIENT_SECRET: ${{ secrets.GITLAB_OAUTH_CLIENT_SECRET }}
 
 jobs:
   deploy:
@@ -295,6 +297,8 @@ jobs:
             printf 'GOOGLE_OAUTH_CLIENT_SECRET=%s\n' "$GOOGLE_OAUTH_CLIENT_SECRET"
             printf 'GITHUB_OAUTH_CLIENT_ID=%s\n' "$GITHUB_OAUTH_CLIENT_ID"
             printf 'GITHUB_OAUTH_CLIENT_SECRET=%s\n' "$GITHUB_OAUTH_CLIENT_SECRET"
+            printf 'GITLAB_OAUTH_CLIENT_ID=%s\n' "$GITLAB_OAUTH_CLIENT_ID"
+            printf 'GITLAB_OAUTH_CLIENT_SECRET=%s\n' "$GITLAB_OAUTH_CLIENT_SECRET"
           } > /tmp/scaffy.env
 
       - name: Install Compose files on VPS

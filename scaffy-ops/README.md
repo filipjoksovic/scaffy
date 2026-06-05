@@ -118,6 +118,8 @@ GOOGLE_OAUTH_CLIENT_ID=<google-oauth-client-id>
 GOOGLE_OAUTH_CLIENT_SECRET=<google-oauth-client-secret>
 OAUTH_GITHUB_CLIENT_ID=<github-oauth-client-id>
 OAUTH_GITHUB_CLIENT_SECRET=<github-oauth-client-secret>
+GITLAB_OAUTH_CLIENT_ID=<gitlab-oauth-client-id>
+GITLAB_OAUTH_CLIENT_SECRET=<gitlab-oauth-client-secret>
 ```
 
 Add these repository variables under `Settings -> Secrets and variables -> Actions -> Variables`:
