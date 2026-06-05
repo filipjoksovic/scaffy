@@ -134,6 +134,7 @@ function backendCommands(workspace: string, backend: InitSelection['backend']): 
       cwd: workspace,
       timeoutMs: CLI_TIMEOUT_MS,
       label: 'Create .NET backend',
+      env: { ...process.env, DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: '1' },
     }]
   }
   if (backend.id === 'spring-boot') {
