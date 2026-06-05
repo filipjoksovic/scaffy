@@ -128,3 +128,4 @@ STACK=angular bash scaffy-be/scripts/regenerate-artifacts.sh     # one stack onl
 | Member | Jernej Jerot |
 | Member | Georgi Dimov |
 | Member | Andrej Delimanchev |
+
