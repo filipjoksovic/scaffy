@@ -12,6 +12,19 @@ on:
       - ".github/workflows/deploy-vps.yml"
       - ".github/workflows/scaffy-be-build.yml"
   workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: "Build and deploy scaffy-be"
+        type: boolean
+        default: true
+      deploy_generator:
+        description: "Build and deploy scaffy-generator"
+        type: boolean
+        default: false
+      deploy_publisher:
+        description: "Build and deploy scaffy-publisher"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,13 +63,74 @@ jobs:
   deploy:
     name: Build, publish, and deploy API stack
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: production
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed services
+        id: changes
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_BACKEND: ${{ inputs.deploy_backend }}
+          DISPATCH_GENERATOR: ${{ inputs.deploy_generator }}
+          DISPATCH_PUBLISHER: ${{ inputs.deploy_publisher }}
+        run: |
+          set -euo pipefail
+          backend=false
+          generator=false
+          publisher=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            backend="${DISPATCH_BACKEND:-true}"
+            generator="${DISPATCH_GENERATOR:-false}"
+            publisher="${DISPATCH_PUBLISHER:-false}"
+          elif [ -z "$BEFORE_SHA" ] || [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            backend=true
+            generator=true
+            publisher=true
+          else
+            if ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$BEFORE_SHA"
+            fi
+            while IFS= read -r file; do
+              case "$file" in
+                scaffy-be/*|scaffy-ops/docker/scaffy-be.Dockerfile)
+                  backend=true
+                  ;;
+                scaffy-generator/*|scaffy-ops/docker/scaffy-generator.Dockerfile)
+                  generator=true
+                  ;;
+                scaffy-publisher/*|scaffy-ops/docker/scaffy-publisher.Dockerfile)
+                  publisher=true
+                  ;;
+              esac
+            done < <(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")
+          fi
+
+          echo "backend=${backend}" >> "$GITHUB_OUTPUT"
+          echo "generator=${generator}" >> "$GITHUB_OUTPUT"
+          echo "publisher=${publisher}" >> "$GITHUB_OUTPUT"
+          pull_services=""
+          if [ "$backend" = "true" ]; then
+            pull_services="${pull_services} scaffy-be"
+          fi
+          if [ "$generator" = "true" ]; then
+            pull_services="${pull_services} scaffy-generator"
+          fi
+          if [ "$publisher" = "true" ]; then
+            pull_services="${pull_services} scaffy-publisher"
+          fi
+          echo "pull_services=${pull_services# }" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java
+        if: steps.changes.outputs.backend == 'true'
+        timeout-minutes: 3
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -64,11 +138,17 @@ jobs:
           cache: maven
 
       - name: Test backend
+        if: steps.changes.outputs.backend == 'true'
+        timeout-minutes: 6
         working-directory: scaffy-be
         run: ./mvnw --batch-mode test
 
       - name: Prepare image tags
         id: image
+        env:
+          BACKEND_CHANGED: ${{ steps.changes.outputs.backend }}
+          GENERATOR_CHANGED: ${{ steps.changes.outputs.generator }}
+          PUBLISHER_CHANGED: ${{ steps.changes.outputs.publisher }}
         run: |
           set -euo pipefail
           repository="${GITHUB_REPOSITORY,,}"
@@ -81,6 +161,21 @@ jobs:
           echo "generator_latest_tag=${generator_image}:latest" >> "$GITHUB_OUTPUT"
           echo "publisher_sha_tag=${publisher_image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "publisher_latest_tag=${publisher_image}:latest" >> "$GITHUB_OUTPUT"
+          if [ "$BACKEND_CHANGED" = "true" ]; then
+            echo "be_deploy_tag=${be_image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "be_deploy_tag=${be_image}:latest" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$GENERATOR_CHANGED" = "true" ]; then
+            echo "generator_deploy_tag=${generator_image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "generator_deploy_tag=${generator_image}:latest" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$PUBLISHER_CHANGED" = "true" ]; then
+            echo "publisher_deploy_tag=${publisher_image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "publisher_deploy_tag=${publisher_image}:latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Validate required deployment config
         run: |
@@ -102,12 +197,13 @@ jobs:
 
       - name: Validate API Compose config
         env:
-          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.be_sha_tag }}
-          SCAFFY_GENERATOR_IMAGE: ${{ steps.image.outputs.generator_sha_tag }}
-          SCAFFY_PUBLISHER_IMAGE: ${{ steps.image.outputs.publisher_sha_tag }}
+          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.be_deploy_tag }}
+          SCAFFY_GENERATOR_IMAGE: ${{ steps.image.outputs.generator_deploy_tag }}
+          SCAFFY_PUBLISHER_IMAGE: ${{ steps.image.outputs.publisher_deploy_tag }}
         run: docker compose -f scaffy-ops/compose.api.yml config >/dev/null
 
       - name: Log in to GHCR
+        if: steps.changes.outputs.pull_services != ''
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -115,34 +211,48 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
+        if: steps.changes.outputs.pull_services != ''
+        timeout-minutes: 3
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push backend image
+        if: steps.changes.outputs.backend == 'true'
+        timeout-minutes: 6
         uses: docker/build-push-action@v6
         with:
           context: ./scaffy-be
           file: ./scaffy-ops/docker/scaffy-be.Dockerfile
           push: true
+          cache-from: type=gha,scope=scaffy-be
+          cache-to: type=gha,mode=max,scope=scaffy-be
           tags: |
             ${{ steps.image.outputs.be_sha_tag }}
             ${{ steps.image.outputs.be_latest_tag }}
 
       - name: Build and push generator image
+        if: steps.changes.outputs.generator == 'true'
+        timeout-minutes: 6
         uses: docker/build-push-action@v6
         with:
           context: ./scaffy-generator
           file: ./scaffy-ops/docker/scaffy-generator.Dockerfile
           push: true
+          cache-from: type=gha,scope=scaffy-generator
+          cache-to: type=gha,mode=max,scope=scaffy-generator
           tags: |
             ${{ steps.image.outputs.generator_sha_tag }}
             ${{ steps.image.outputs.generator_latest_tag }}
 
       - name: Build and push publisher image
+        if: steps.changes.outputs.publisher == 'true'
+        timeout-minutes: 6
         uses: docker/build-push-action@v6
         with:
           context: ./scaffy-publisher
           file: ./scaffy-ops/docker/scaffy-publisher.Dockerfile
           push: true
+          cache-from: type=gha,scope=scaffy-publisher
+          cache-to: type=gha,mode=max,scope=scaffy-publisher
           tags: |
             ${{ steps.image.outputs.publisher_sha_tag }}
             ${{ steps.image.outputs.publisher_latest_tag }}
@@ -157,9 +267,9 @@ jobs:
 
       - name: Write production env file
         env:
-          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.be_sha_tag }}
-          SCAFFY_GENERATOR_IMAGE: ${{ steps.image.outputs.generator_sha_tag }}
-          SCAFFY_PUBLISHER_IMAGE: ${{ steps.image.outputs.publisher_sha_tag }}
+          SCAFFY_BE_IMAGE: ${{ steps.image.outputs.be_deploy_tag }}
+          SCAFFY_GENERATOR_IMAGE: ${{ steps.image.outputs.generator_deploy_tag }}
+          SCAFFY_PUBLISHER_IMAGE: ${{ steps.image.outputs.publisher_deploy_tag }}
         run: |
           set -euo pipefail
           umask 077
@@ -195,9 +305,13 @@ jobs:
           scp -i ~/.ssh/hetzner -P "$HETZNER_PORT" /tmp/scaffy.env "$HETZNER_USER@$HETZNER_HOST:$DEPLOY_PATH/scaffy-ops/.env"
 
       - name: Pull and restart backend stack
+        timeout-minutes: 5
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PULL_SERVICES: ${{ steps.changes.outputs.pull_services }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$GHCR_TOKEN" | ssh -i ~/.ssh/hetzner -p "$HETZNER_PORT" "$HETZNER_USER@$HETZNER_HOST" "docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
-          ssh -i ~/.ssh/hetzner -p "$HETZNER_PORT" "$HETZNER_USER@$HETZNER_HOST" "cd '$DEPLOY_PATH/scaffy-ops' && docker compose pull scaffy-be scaffy-generator scaffy-publisher && docker compose up -d --remove-orphans traefik postgres redis minio minio-bucket scaffy-be scaffy-generator scaffy-publisher && docker compose ps"
+          if [ -n "$PULL_SERVICES" ]; then
+            printf '%s\n' "$GHCR_TOKEN" | ssh -i ~/.ssh/hetzner -p "$HETZNER_PORT" "$HETZNER_USER@$HETZNER_HOST" "docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
+          fi
+          ssh -i ~/.ssh/hetzner -p "$HETZNER_PORT" "$HETZNER_USER@$HETZNER_HOST" "cd '$DEPLOY_PATH/scaffy-ops' && if [ -n '$PULL_SERVICES' ]; then time docker compose pull $PULL_SERVICES && docker compose images $PULL_SERVICES; fi && docker compose up -d --remove-orphans traefik postgres redis minio minio-bucket scaffy-be scaffy-generator scaffy-publisher && docker compose ps"

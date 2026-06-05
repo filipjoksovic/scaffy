@@ -142,6 +142,34 @@ MINIO_ROOT_USER=scaffy
 
 `MINIO_ROOT_USER` can also be stored as a secret if you do not want the object storage username in repository variables.
 
+## Direct VPS deploy without GitHub Actions minutes
+
+If an image has already been built and pushed, SSH into the VPS and pull/restart it directly:
+
+```sh
+cd /opt/scaffy/scaffy-ops
+docker compose pull scaffy-be
+docker compose up -d --remove-orphans traefik postgres redis minio minio-bucket scaffy-be scaffy-generator scaffy-publisher
+docker compose ps
+```
+
+If you want to avoid GitHub Actions completely for a code change, build from the checked-out repo on the VPS instead:
+
+```sh
+cd /opt/scaffy
+git pull
+./scaffy-ops/deploy-local-api.sh
+```
+
+By default `deploy-local-api.sh` builds and restarts only `scaffy-be`. To build another API worker locally on the VPS, pass the service name:
+
+```sh
+./scaffy-ops/deploy-local-api.sh scaffy-generator
+./scaffy-ops/deploy-local-api.sh scaffy-publisher
+```
+
+Local VPS builds avoid GitHub Actions minutes and GHCR pulls for application images, but they use VPS CPU, disk, and network for Docker base image/dependency downloads.
+
 ## OAuth callbacks
 
 Configure OAuth applications with backend callback URLs:

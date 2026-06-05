@@ -1,0 +1,18 @@
+services:
+  scaffy-be:
+    image: ${SCAFFY_BE_IMAGE:-scaffy/scaffy-be:local}
+    build:
+      context: ../scaffy-be
+      dockerfile: ../scaffy-ops/docker/scaffy-be.Dockerfile
+
+  scaffy-generator:
+    image: ${SCAFFY_GENERATOR_IMAGE:-scaffy/scaffy-generator:local}
+    build:
+      context: ../scaffy-generator
+      dockerfile: ../scaffy-ops/docker/scaffy-generator.Dockerfile
+
+  scaffy-publisher:
+    image: ${SCAFFY_PUBLISHER_IMAGE:-scaffy/scaffy-publisher:local}
+    build:
+      context: ../scaffy-publisher
+      dockerfile: ../scaffy-ops/docker/scaffy-publisher.Dockerfile
