@@ -302,7 +302,8 @@ public class RepositoryAnalysisRepository {
 				mapSummary(rs, rowNum),
 				rs.getString("workflow_content"),
 				blob.analysis(),
-				blob.workflowMetrics());
+				blob.workflowMetrics(),
+				blob.workflowAnalyses());
 	}
 
 	private RepositoryAnalysisSummary mapSummary(ResultSet rs, int rowNum) throws SQLException {

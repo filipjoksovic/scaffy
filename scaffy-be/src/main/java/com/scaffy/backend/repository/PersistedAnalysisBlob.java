@@ -1,6 +1,7 @@
 package com.scaffy.backend.repository;
 
 import java.util.Objects;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.scaffy.backend.analyze.AnalysisResponse;
@@ -20,15 +21,20 @@ import com.scaffy.backend.repository.metrics.WorkflowMetricsResult;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PersistedAnalysisBlob(
         AnalysisResponse analysis,
-        WorkflowMetricsResult workflowMetrics) {
+    WorkflowMetricsResult workflowMetrics,
+    List<WorkflowAnalysisItem> workflowAnalyses) {
 
     public PersistedAnalysisBlob {
         Objects.requireNonNull(analysis, "analysis must not be null");
+        workflowAnalyses = workflowAnalyses == null ? List.of() : List.copyOf(workflowAnalyses);
     }
 
     /** Creates a blob for a freshly-run analysis that includes runtime metrics. */
-    public static PersistedAnalysisBlob of(AnalysisResponse analysis, WorkflowMetricsResult workflowMetrics) {
-        return new PersistedAnalysisBlob(analysis, workflowMetrics);
+    public static PersistedAnalysisBlob of(
+            AnalysisResponse analysis,
+            WorkflowMetricsResult workflowMetrics,
+            List<WorkflowAnalysisItem> workflowAnalyses) {
+        return new PersistedAnalysisBlob(analysis, workflowMetrics, workflowAnalyses);
     }
 
     /**
@@ -36,6 +42,6 @@ public record PersistedAnalysisBlob(
      * Used when deserializing pre-#70 rows or when metrics are unavailable.
      */
     public static PersistedAnalysisBlob legacy(AnalysisResponse analysis) {
-        return new PersistedAnalysisBlob(analysis, null);
+        return new PersistedAnalysisBlob(analysis, null, List.of());
     }
 }

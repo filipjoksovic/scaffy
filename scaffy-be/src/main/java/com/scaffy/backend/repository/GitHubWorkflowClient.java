@@ -164,6 +164,11 @@ public class GitHubWorkflowClient {
 	}
 
 	public GitHubWorkflowFile findWorkflow(UUID workspaceId, UUID userId, RepositoryConnection repository) {
+		List<GitHubWorkflowFile> workflows = findWorkflows(workspaceId, userId, repository);
+		return workflows.get(0);
+	}
+
+	public List<GitHubWorkflowFile> findWorkflows(UUID workspaceId, UUID userId, RepositoryConnection repository) {
 		String accessToken = accessToken(workspaceId, userId);
 		String defaultBranch = defaultBranch(repository, accessToken);
 		List<String> workflowPaths = workflowPaths(repository, defaultBranch, accessToken);
@@ -172,16 +177,19 @@ public class GitHubWorkflowClient {
 					HttpStatus.UNPROCESSABLE_ENTITY,
 					"No GitHub Actions workflow files were found under .github/workflows.");
 		}
-		String selectedPath = workflowPaths.stream()
-				.min(Comparator.comparingInt(this::workflowPriority).thenComparing(path -> path))
-				.orElseThrow();
+		List<String> orderedPaths = workflowPaths.stream()
+				.sorted(Comparator.comparingInt(this::workflowPriority).thenComparing(path -> path))
+				.toList();
 		log.info(
-				"Selected GitHub Actions workflow userId={} repository={}/{} path={}",
+				"Selected {} GitHub Actions workflows userId={} repository={}/{} primaryPath={}",
+				orderedPaths.size(),
 				userId,
 				repository.owner(),
 				repository.name(),
-				selectedPath);
-		return new GitHubWorkflowFile(selectedPath, rawContent(repository, defaultBranch, selectedPath, accessToken));
+				orderedPaths.get(0));
+		return orderedPaths.stream()
+				.map(path -> new GitHubWorkflowFile(path, rawContent(repository, defaultBranch, path, accessToken)))
+				.toList();
 	}
 
 	private String accessToken(UUID workspaceId, UUID userId) {

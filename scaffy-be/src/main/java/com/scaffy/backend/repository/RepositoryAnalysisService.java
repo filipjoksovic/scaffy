@@ -27,6 +27,7 @@ import com.scaffy.backend.analyze.CapabilityScore;
 import com.scaffy.backend.analyze.DomainScore;
 import com.scaffy.backend.analyze.FindingType;
 import com.scaffy.backend.analyze.PipelineAnalyzer;
+import com.scaffy.backend.analyze.PipelineProvider;
 
 @Service
 public class RepositoryAnalysisService {
@@ -41,6 +42,7 @@ public class RepositoryAnalysisService {
 	private final RepositoryConnectionRepository repository;
 	private final RepositoryAnalysisRepository analysisRepository;
 	private final Map<String, WorkflowMetricsProvider> metricsProviders;
+	private final com.scaffy.backend.analyze.ScoringEngine scoringEngine;
 
 	public RepositoryAnalysisService(
 			GitHubWorkflowClient gitHubWorkflowClient,
@@ -48,13 +50,15 @@ public class RepositoryAnalysisService {
 			PipelineAnalyzer pipelineAnalyzer,
 			RepositoryConnectionRepository repository,
 			RepositoryAnalysisRepository analysisRepository,
-			@Qualifier("cachedMetricsProvidersByName") Map<String, WorkflowMetricsProvider> metricsProviders) {
+			@Qualifier("cachedMetricsProvidersByName") Map<String, WorkflowMetricsProvider> metricsProviders,
+			com.scaffy.backend.analyze.ScoringEngine scoringEngine) {
 		this.gitHubWorkflowClient = gitHubWorkflowClient;
 		this.gitLabWorkflowClient = gitLabWorkflowClient;
 		this.pipelineAnalyzer = pipelineAnalyzer;
 		this.repository = repository;
 		this.analysisRepository = analysisRepository;
 		this.metricsProviders = metricsProviders;
+		this.scoringEngine = scoringEngine;
 	}
 
 	public RepositoryAnalysisResponse analyze(UUID workspaceId, UUID repositoryId) {
@@ -117,13 +121,69 @@ public class RepositoryAnalysisService {
 	}
 
 	private RepositoryAnalysisResponse runAndPersist(RepositoryConnection connection) {
-		WorkflowSource workflow = fetchWorkflow(connection);
-		AnalysisResponse analysis = pipelineAnalyzer.analyze(workflow.path(), workflow.content());
-		WorkflowMetricsResult metricsResult = fetchMetricsSafely(connection, workflow.path());
-		PersistedAnalysisBlob blob = PersistedAnalysisBlob.of(analysis, metricsResult);
+		List<WorkflowSource> workflows = fetchWorkflows(connection);
+		List<WorkflowSource> successfulWorkflows = new ArrayList<>();
+		List<WorkflowAnalysisItem> workflowAnalyses = new ArrayList<>();
+		for (WorkflowSource workflow : workflows) {
+			try {
+				AnalysisResponse analysis = pipelineAnalyzer.analyze(workflow.path(), workflow.content());
+				WorkflowMetricsResult metricsResult = fetchMetricsSafely(connection, workflow.path());
+				workflowAnalyses.add(WorkflowAnalysisItem.success(workflow.path(), analysis, metricsResult));
+				successfulWorkflows.add(workflow);
+			}
+			catch (RuntimeException ex) {
+				log.warn("Workflow analysis failed for {}/{} path={}: {}",
+						connection.owner(), connection.name(), workflow.path(), ex.getMessage());
+				workflowAnalyses.add(WorkflowAnalysisItem.failure(workflow.path(), failureReason(ex.getMessage(), ex)));
+			}
+		}
+
+		List<WorkflowAnalysisItem> successfulAnalyses = workflowAnalyses.stream()
+				.filter(WorkflowAnalysisItem::succeeded)
+				.toList();
+		if (successfulAnalyses.isEmpty()) {
+			throw new ResponseStatusException(
+					HttpStatus.UNPROCESSABLE_ENTITY,
+					"Workflow files were found, but none could be analyzed successfully.");
+		}
+
+		AnalysisResponse aggregatedAnalysis = aggregateAnalysis(successfulAnalyses);
+		WorkflowSource primaryWorkflow = successfulWorkflows.get(0);
+		WorkflowMetricsResult primaryMetrics = successfulAnalyses.get(0).workflowMetrics();
+		PersistedAnalysisBlob blob = PersistedAnalysisBlob.of(aggregatedAnalysis, primaryMetrics, workflowAnalyses);
 		PersistedRepositoryAnalysis persisted = analysisRepository.insert(
-				connection.id(), workflow.path(), workflow.content(), blob);
+				connection.id(), primaryWorkflow.path(), primaryWorkflow.content(), blob);
 		return RepositoryAnalysisResponse.from(connection, persisted);
+	}
+
+	private AnalysisResponse aggregateAnalysis(List<WorkflowAnalysisItem> successfulAnalyses) {
+		PipelineProvider provider = successfulAnalyses.get(0).analysis().provider();
+
+		Map<String, List<CapabilityFinding>> findingsByDimension = new LinkedHashMap<>();
+		for (WorkflowAnalysisItem workflow : successfulAnalyses) {
+			for (DomainScore dimension : workflow.analysis().dimensions()) {
+				List<CapabilityFinding> findings = dimension.capabilityScores().stream()
+						.flatMap(capability -> capability.findings().stream())
+						.toList();
+				findingsByDimension.computeIfAbsent(dimension.dimension(), ignored -> new ArrayList<>())
+						.addAll(findings);
+			}
+		}
+
+		List<DomainScore> domainScores = findingsByDimension.entrySet().stream()
+				.map(entry -> scoringEngine.score(entry.getKey(), entry.getValue()))
+				.toList();
+		List<CapabilityFinding> allFindings = findingsByDimension.values().stream()
+				.flatMap(List::stream)
+				.toList();
+		double overallScore = scoringEngine.overallScore(domainScores);
+		int overallLevel = scoringEngine.maturityLevel(overallScore, domainScores, allFindings);
+		return new AnalysisResponse(
+				provider,
+				overallScore,
+				overallLevel,
+				scoringEngine.overallStatus(overallScore, domainScores),
+				domainScores);
 	}
 
 	private WorkflowMetricsResult fetchMetricsSafely(RepositoryConnection connection, String workflowFile) {
@@ -159,17 +219,17 @@ public class RepositoryAnalysisService {
 		}
 	}
 
-	private WorkflowSource fetchWorkflow(RepositoryConnection connection) {
+	private List<WorkflowSource> fetchWorkflows(RepositoryConnection connection) {
 		return switch (connection.provider()) {
 			case "github" -> {
-				GitHubWorkflowFile file = gitHubWorkflowClient.findWorkflow(
+				List<GitHubWorkflowFile> files = gitHubWorkflowClient.findWorkflows(
 						connection.workspaceId(), connection.userId(), connection);
-				yield new WorkflowSource(file.path(), file.content());
+				yield files.stream().map(file -> new WorkflowSource(file.path(), file.content())).toList();
 			}
 			case "gitlab" -> {
 				GitLabCiFile file = gitLabWorkflowClient.findCiFile(
 						connection.workspaceId(), connection.userId(), connection);
-				yield new WorkflowSource(file.path(), file.content());
+				yield List.of(new WorkflowSource(file.path(), file.content()));
 			}
 			default -> throw new ResponseStatusException(
 					HttpStatus.BAD_REQUEST,
