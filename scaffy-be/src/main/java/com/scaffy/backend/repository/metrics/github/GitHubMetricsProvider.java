@@ -77,10 +77,11 @@ public class GitHubMetricsProvider implements WorkflowMetricsProvider {
         }
 
         OAuthAccessTokenRecord token = tokenRecord.get();
-        if (isExpired(token)) {
-            return WorkflowMetricsResult.unavailable(
-                    MetricsStatus.TOKEN_EXPIRED,
-                    "GitHub token expired. Reconnect GitHub to refresh metrics.");
+        if (token.expiresAt() != null) {
+            log.info(
+                    "Stored GitHub OAuth token has expiry metadata userId={} expiresAt={}; deferring validity check to GitHub API",
+                    request.userId(),
+                    token.expiresAt());
         }
 
         String accessToken = tokenCrypto.decrypt(token.encryptedAccessToken());
@@ -330,10 +331,6 @@ public class GitHubMetricsProvider implements WorkflowMetricsProvider {
             return "improving";
         }
         return "stable";
-    }
-
-    private static boolean isExpired(OAuthAccessTokenRecord token) {
-        return token.expiresAt() != null && token.expiresAt().toInstant().isBefore(Instant.now());
     }
 
     private static long percentile(List<Long> sortedAsc, double p) {
