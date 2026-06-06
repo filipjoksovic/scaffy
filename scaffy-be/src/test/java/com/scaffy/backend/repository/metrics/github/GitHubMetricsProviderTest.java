@@ -107,8 +107,14 @@ class GitHubMetricsProviderTest {
 		assertThat(result.metrics()).isNotNull();
 		assertThat(result.metrics().totalRuns()).isEqualTo(5);
 		assertThat(result.metrics().successCount()).isEqualTo(3);
-		assertThat(result.metrics().failureRate()).isCloseTo(0.2, org.assertj.core.data.Offset.offset(0.0001));
+		assertThat(result.metrics().failureRate()).isCloseTo(0.4, org.assertj.core.data.Offset.offset(0.0001));
 		assertThat(result.metrics().triggerDistribution()).isNotEmpty();
 		assertThat(result.metrics().recentRuns()).isNotEmpty();
+		assertThat(result.metrics().riskSummary()).isNotNull();
+		assertThat(result.metrics().nextBestAction()).isNotNull();
+		assertThat(result.metrics().periodDelta()).isNotNull();
+		assertThat(result.metrics().topFailureReasons()).isNotEmpty();
+		assertThat(result.metrics().recentRuns().get(0).workflowName()).isNotBlank();
+		assertThat(result.metrics().recentRuns().get(0).event()).isNotBlank();
 	}
 }

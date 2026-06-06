@@ -1799,16 +1799,29 @@
 
 .operational-health {
   display: grid;
-  gap: var(--space-base);
+  gap: var(--space-sm);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-lg);
   background: var(--color-canvas-soft);
-  padding: var(--space-lg);
+  padding: var(--space-base);
 }
 
 .operational-health__header {
   display: grid;
   gap: var(--space-xxs);
+}
+
+.operational-health__header--compact {
+  border-bottom: 1px solid var(--color-hairline-soft);
+  padding-bottom: var(--space-sm);
+}
+
+.operational-health__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
 }
 
 .operational-health__title {
@@ -1828,10 +1841,179 @@
   font-size: 12px;
 }
 
+.operational-health__risk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-hairline-strong);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+.operational-health__risk-badge--critical {
+  border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+.operational-health__risk-badge--warning {
+  border-color: color-mix(in srgb, var(--color-timeline-done) 45%, transparent);
+  color: var(--color-timeline-done);
+  background: color-mix(in srgb, var(--color-timeline-done) 12%, transparent);
+}
+
+.operational-health__risk-badge--stable {
+  border-color: color-mix(in srgb, var(--color-success) 45%, transparent);
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+
+.operational-health__kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.operational-health__kpi-card {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-card);
+  padding: var(--space-sm);
+}
+
+.operational-health__kpi-card span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.operational-health__kpi-card strong {
+  color: var(--color-ink);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.operational-health__kpi-danger {
+  color: var(--color-error) !important;
+}
+
+.operational-health__insights {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-xs);
+}
+
+.operational-health__next-action,
+.operational-health__delta {
+  display: grid;
+  gap: var(--space-xxs);
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-card);
+  padding: var(--space-sm);
+}
+
+.operational-health__next-action strong {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.operational-health__next-action p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.operational-health__delta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.operational-health__delta-grid > div {
+  display: grid;
+  gap: 1px;
+}
+
+.operational-health__delta-grid span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.operational-health__delta-grid strong {
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.operational-health__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.operational-health__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.operational-health__reason-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-card);
+  color: var(--color-body);
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.operational-health__signal-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas-soft);
+  color: var(--color-muted);
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.operational-health__signal-chip--warn {
+  border-color: color-mix(in srgb, var(--color-timeline-done) 40%, transparent);
+  color: var(--color-timeline-done);
+}
+
+.operational-health__meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-xs);
+}
+
+.operational-health__section--tight {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.operational-health__section--card {
+  border: 1px solid var(--color-hairline-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-card);
+  padding: var(--space-sm);
+}
+
 .operational-health__section {
   display: grid;
   gap: var(--space-xs);
-  padding-top: var(--space-base);
+  padding-top: var(--space-sm);
   border-top: 1px solid var(--color-hairline-soft);
 }
 
@@ -1933,7 +2115,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1960,6 +2142,35 @@
 .operational-health__runs {
   display: grid;
   gap: var(--space-xs);
+}
+
+.operational-health__recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.operational-health__recent-header span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.operational-health__filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.operational-health__filters select {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+  color: var(--color-body);
+  font-size: 12px;
+  padding: 0 10px;
 }
 
 .operational-health__run-link {
@@ -2041,6 +2252,17 @@
 }
 
 @media (max-width: 700px) {
+  .operational-health__kpis,
+  .operational-health__delta-grid,
+  .operational-health__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .operational-health__insights,
+  .operational-health__meta-grid {
+    grid-template-columns: 1fr;
+  }
+
   .operational-health__branch-row,
   .operational-health__run-link {
     grid-template-columns: 1fr;
