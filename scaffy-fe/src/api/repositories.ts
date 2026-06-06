@@ -103,6 +103,14 @@ export type RepositoryAnalysis = {
   analyzerModelVersion: string
   analysis: AnalysisResponse
   workflowMetrics?: WorkflowMetricsResult | null
+  workflowAnalyses?: RepositoryWorkflowAnalysisItem[]
+}
+
+export type RepositoryWorkflowAnalysisItem = {
+  workflowPath: string
+  analysis?: AnalysisResponse | null
+  workflowMetrics?: WorkflowMetricsResult | null
+  errorMessage?: string | null
 }
 
 export type RepositoryAnalysisRunSummary = RepositoryAnalysisSummary
