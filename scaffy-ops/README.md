@@ -102,7 +102,7 @@ curl -fsS https://$SCAFFY_DOMAIN/api/health
 
 The workflow at `.github/workflows/deploy-vps.yml` deploys the backend API stack automatically on pushes to `main` when backend or ops files change.
 
-It does not sync the repository source to the VPS. The workflow builds the backend Docker image in GitHub Actions, pushes it to GitHub Container Registry, copies only `compose.api.yml` and the generated `.env` file to the VPS, then runs `docker compose pull` and restarts `traefik` plus `scaffy-be`.
+It does not sync the repository source to the VPS. The workflow builds the backend Docker image in GitHub Actions, pushes it to GitHub Container Registry, copies only `compose.api.yml` and the generated `.env` file to the VPS, then runs `docker compose pull` and restarts `traefik`, `scaffy-be`, and `scaffy-analysis-worker`.
 
 Add these repository secrets in GitHub under `Settings -> Secrets and variables -> Actions -> Secrets`:
 
@@ -150,8 +150,8 @@ If an image has already been built and pushed, SSH into the VPS and pull/restart
 
 ```sh
 cd /opt/scaffy/scaffy-ops
-docker compose pull scaffy-be
-docker compose up -d --remove-orphans traefik postgres redis minio minio-bucket scaffy-be scaffy-generator scaffy-publisher
+docker compose pull scaffy-be scaffy-analysis-worker
+docker compose up -d --remove-orphans traefik postgres redis minio minio-bucket scaffy-be scaffy-analysis-worker scaffy-generator scaffy-publisher
 docker compose ps
 ```
 
@@ -163,7 +163,7 @@ git pull
 ./scaffy-ops/deploy-local-api.sh
 ```
 
-By default `deploy-local-api.sh` builds and restarts only `scaffy-be`. To build another API worker locally on the VPS, pass the service name:
+By default `deploy-local-api.sh` builds `scaffy-be` and restarts both `scaffy-be` and `scaffy-analysis-worker`. To build another API worker locally on the VPS, pass the service name:
 
 ```sh
 ./scaffy-ops/deploy-local-api.sh scaffy-generator
