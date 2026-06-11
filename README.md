@@ -21,6 +21,7 @@ This repository is the monorepo: frontend, backend, two background workers, the 
 | [docs/USER_DOCUMENTATION.md](docs/USER_DOCUMENTATION.md) | End-user manual — how to use every screen, step by step. |
 | [docs/USE_CASES.md](docs/USE_CASES.md) | Use-case specifications — main flows and alternative/exception flows. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | What each service and module is responsible for. |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture and project decisions with rationale and tradeoffs. |
 | [docs/architecture-diagram.drawio](docs/architecture-diagram.drawio) | Components and how they connect. |
 | [docs/network-diagram.drawio](docs/network-diagram.drawio) | Network boundaries, ports, and data flow. |
 | [docs/use-case-diagram.drawio](docs/use-case-diagram.drawio) | Actors and use cases (UML). |
@@ -128,4 +129,3 @@ STACK=angular bash scaffy-be/scripts/regenerate-artifacts.sh     # one stack onl
 | Member | Jernej Jerot |
 | Member | Georgi Dimov |
 | Member | Andrej Delimanchev |
-
