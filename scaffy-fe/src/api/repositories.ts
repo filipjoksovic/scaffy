@@ -211,12 +211,29 @@ export type FindingChange = {
 }
 
 export type RepositoryPublicationStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+export type RepositoryAnalysisJobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 
 export type RepositoryPublicationLogLine = {
   id: number
   stream: 'system' | 'stdout' | 'stderr'
   message: string
   createdAt: string
+}
+
+export type RepositoryAnalysisJobLogLine = RepositoryPublicationLogLine
+
+export type RepositoryAnalysisJob = {
+  jobId: string
+  repositoryId: string
+  analysisRunId?: string | null
+  status: RepositoryAnalysisJobStatus
+  progress?: string | null
+  progressPercent: number
+  errorMessage?: string | null
+  logs: RepositoryAnalysisJobLogLine[]
+  createdAt: string
+  startedAt?: string | null
+  completedAt?: string | null
 }
 
 export type RepositoryPublication = {
@@ -319,14 +336,30 @@ export async function disconnectRepository(id: string): Promise<void> {
   }
 }
 
-export async function analyzeRepository(id: string): Promise<RepositoryAnalysis> {
+export async function analyzeRepository(id: string): Promise<RepositoryAnalysisJob> {
   const response = await apiFetch(`/api/repositories/${id}/analyze`, {
     method: 'POST',
   })
   if (!response.ok) {
     await throwApiError(response)
   }
-  return (await response.json()) as RepositoryAnalysis
+  return (await response.json()) as RepositoryAnalysisJob
+}
+
+export async function getRepositoryAnalysisJob(id: string): Promise<RepositoryAnalysisJob> {
+  const response = await apiFetch(`/api/repositories/analysis-jobs/${id}`)
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return (await response.json()) as RepositoryAnalysisJob
+}
+
+export async function listActiveRepositoryAnalysisJobs(): Promise<RepositoryAnalysisJob[]> {
+  const response = await apiFetch('/api/repositories/analysis-jobs/active')
+  if (!response.ok) {
+    await throwApiError(response)
+  }
+  return (await response.json()) as RepositoryAnalysisJob[]
 }
 
 export async function getRepositoryAnalysis(id: string): Promise<RepositoryAnalysis> {

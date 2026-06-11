@@ -60,6 +60,8 @@ services:
       SCAFFY_INIT_QUEUE_NAME: ${SCAFFY_INIT_QUEUE_NAME:-scaffy:init-jobs}
       SCAFFY_REPOSITORY_PUBLICATION_QUEUE_ENABLED: "true"
       SCAFFY_REPOSITORY_PUBLICATION_QUEUE_NAME: ${SCAFFY_REPOSITORY_PUBLICATION_QUEUE_NAME:-scaffy:repo-publication-jobs}
+      SCAFFY_REPOSITORY_ANALYSIS_QUEUE_ENABLED: "true"
+      SCAFFY_REPOSITORY_ANALYSIS_QUEUE_NAME: ${SCAFFY_REPOSITORY_ANALYSIS_QUEUE_NAME:-scaffy:repository-analysis-jobs}
       SCAFFY_INIT_STORAGE_ENABLED: "true"
       SCAFFY_INIT_STORAGE_ENDPOINT: http://minio:9000
       SCAFFY_INIT_STORAGE_BUCKET: ${SCAFFY_INIT_STORAGE_BUCKET:-scaffy-initializer}
@@ -82,6 +84,35 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    networks:
+      - scaffy
+
+  scaffy-analysis-worker:
+    build:
+      context: ../scaffy-be
+      dockerfile: ../scaffy-ops/docker/scaffy-be.Dockerfile
+    image: scaffy/scaffy-be:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      scaffy-be:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_MAIN_WEB_APPLICATION_TYPE: none
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-scaffy}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-scaffy}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-scaffy}
+      SCAFFY_JWT_SECRET: ${SCAFFY_JWT_SECRET:?Set SCAFFY_JWT_SECRET}
+      SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET: ${SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET:-${SCAFFY_JWT_SECRET}}
+      SCAFFY_REDIS_HOST: redis
+      SCAFFY_REDIS_PORT: 6379
+      SCAFFY_REPOSITORY_ANALYSIS_QUEUE_ENABLED: "true"
+      SCAFFY_REPOSITORY_ANALYSIS_QUEUE_NAME: ${SCAFFY_REPOSITORY_ANALYSIS_QUEUE_NAME:-scaffy:repository-analysis-jobs}
+      SCAFFY_REPOSITORY_ANALYSIS_WORKER_ENABLED: "true"
     networks:
       - scaffy
 

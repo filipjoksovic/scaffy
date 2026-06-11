@@ -1,6 +1,6 @@
 package com.scaffy.backend.auth;
 
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
-@EnableConfigurationProperties({ AuthProperties.class, AppProperties.class, OAuthClientProperties.class })
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class SecurityConfig {
 
 	@Bean
@@ -38,6 +38,7 @@ public class SecurityConfig {
 								"/api/auth/connect/**",
 								"/api/auth/connections/**",
 								"/api/repositories/**",
+								"/api/notifications/**",
 								"/api/workspaces/**",
 								"/api/init/favourites/**",
 								"/api/init/history",

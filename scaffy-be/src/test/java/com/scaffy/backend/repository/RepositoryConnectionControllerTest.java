@@ -148,8 +148,9 @@ class RepositoryConnectionControllerTest {
 		String id = body.get("id").asString();
 
 		mockMvc().perform(post("/api/repositories/" + id + "/analyze").cookie(cookie))
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.message").value("Connect GitHub in this workspace before analyzing repositories."));
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.repositoryId").value(id))
+				.andExpect(jsonPath("$.status").value("queued"));
 	}
 
 	private Cookie authCookie(String userId) {

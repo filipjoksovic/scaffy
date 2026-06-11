@@ -479,6 +479,21 @@
   font-size: 11.5px;
 }
 
+.project-card__progress {
+  overflow: hidden;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-strong);
+}
+
+.project-card__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width 180ms ease;
+}
+
 .projects-empty {
   display: grid;
   justify-items: start;

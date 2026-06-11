@@ -51,6 +51,9 @@ class RepositoryAnalysisPersistenceControllerTest {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	@Autowired
+	private RepositoryAnalysisJobService analysisJobService;
+
 	private MockMvc mockMvc() {
 		return MockMvcBuilders.webAppContextSetup(context)
 				.apply(springSecurity())
@@ -67,7 +70,23 @@ class RepositoryAnalysisPersistenceControllerTest {
 		Cookie cookie = authCookie("b1ec1bfe-40b7-4fc3-9425-ad111b423200");
 		String repositoryId = connectRepository(cookie);
 
+		MvcResult createdJob = mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.jobId").exists())
+				.andExpect(jsonPath("$.repositoryId").value(repositoryId))
+				.andExpect(jsonPath("$.status").value("queued"))
+				.andReturn();
+		JsonNode createdJobBody = objectMapper.readTree(createdJob.getResponse().getContentAsByteArray());
+		String firstJobId = createdJobBody.get("jobId").asString();
+
 		mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.jobId").value(firstJobId))
+				.andExpect(jsonPath("$.repositoryId").value(repositoryId));
+
+		analysisJobService.execute(UUID.fromString(firstJobId));
+
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis").cookie(cookie))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.runId").exists())
 				.andExpect(jsonPath("$.repositoryId").value(repositoryId))
@@ -81,11 +100,16 @@ class RepositoryAnalysisPersistenceControllerTest {
 				.andExpect(jsonPath("$.analysis.provider").value("github-actions"))
 				.andExpect(jsonPath("$.analysis.dimensions[*].capabilityScores[*].findings[*].source").exists());
 
-		mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
-				.andExpect(status().isOk())
+		MvcResult secondJob = mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(cookie))
+				.andExpect(status().isAccepted())
 				.andExpect(jsonPath("$.repositoryId").value(repositoryId))
-				.andExpect(jsonPath("$.runNumber").value(2))
-				.andExpect(jsonPath("$.analyzedAt").exists());
+				.andReturn();
+		String secondJobId = objectMapper.readTree(secondJob.getResponse().getContentAsByteArray()).get("jobId").asString();
+		analysisJobService.execute(UUID.fromString(secondJobId));
+
+		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis").cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.runNumber").value(2));
 
 		org.assertj.core.api.Assertions.assertThat(WORKFLOW_FETCHES).hasValue(2);
 
@@ -135,8 +159,11 @@ class RepositoryAnalysisPersistenceControllerTest {
 		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis").cookie(ownerCookie))
 				.andExpect(status().isNotFound());
 
-		mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(ownerCookie))
-				.andExpect(status().isOk());
+		MvcResult job = mockMvc().perform(post("/api/repositories/" + repositoryId + "/analyze").cookie(ownerCookie))
+				.andExpect(status().isAccepted())
+				.andReturn();
+		String jobId = objectMapper.readTree(job.getResponse().getContentAsByteArray()).get("jobId").asString();
+		analysisJobService.execute(UUID.fromString(jobId));
 
 		mockMvc().perform(get("/api/repositories/" + repositoryId + "/analysis").cookie(ownerCookie))
 				.andExpect(status().isOk())

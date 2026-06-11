@@ -27,7 +27,6 @@ import com.scaffy.backend.analyze.CapabilityScore;
 import com.scaffy.backend.analyze.DomainScore;
 import com.scaffy.backend.analyze.FindingType;
 import com.scaffy.backend.analyze.PipelineAnalyzer;
-import com.scaffy.backend.analyze.PipelineProvider;
 
 @Service
 public class RepositoryAnalysisService {
@@ -42,7 +41,7 @@ public class RepositoryAnalysisService {
 	private final RepositoryConnectionRepository repository;
 	private final RepositoryAnalysisRepository analysisRepository;
 	private final Map<String, WorkflowMetricsProvider> metricsProviders;
-	private final com.scaffy.backend.analyze.ScoringEngine scoringEngine;
+	private final RepositoryAnalysisAggregator analysisAggregator;
 
 	public RepositoryAnalysisService(
 			GitHubWorkflowClient gitHubWorkflowClient,
@@ -51,21 +50,35 @@ public class RepositoryAnalysisService {
 			RepositoryConnectionRepository repository,
 			RepositoryAnalysisRepository analysisRepository,
 			@Qualifier("cachedMetricsProvidersByName") Map<String, WorkflowMetricsProvider> metricsProviders,
-			com.scaffy.backend.analyze.ScoringEngine scoringEngine) {
+			RepositoryAnalysisAggregator analysisAggregator) {
 		this.gitHubWorkflowClient = gitHubWorkflowClient;
 		this.gitLabWorkflowClient = gitLabWorkflowClient;
 		this.pipelineAnalyzer = pipelineAnalyzer;
 		this.repository = repository;
 		this.analysisRepository = analysisRepository;
 		this.metricsProviders = metricsProviders;
-		this.scoringEngine = scoringEngine;
+		this.analysisAggregator = analysisAggregator;
 	}
 
 	public RepositoryAnalysisResponse analyze(UUID workspaceId, UUID repositoryId) {
 		RepositoryConnection connection = repository.findByIdForWorkspace(workspaceId, repositoryId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, CONNECTION_NOT_FOUND));
 		try {
-			return runAndPersist(connection);
+			return RepositoryAnalysisResponse.from(connection, runAndPersist(connection, ProgressSink.noop()));
+		}
+		catch (ResponseStatusException ex) {
+			analysisRepository.insertFailure(connection.id(), failureReason(ex.getReason(), ex));
+			throw ex;
+		}
+		catch (RuntimeException ex) {
+			analysisRepository.insertFailure(connection.id(), failureReason(ex.getMessage(), ex));
+			throw ex;
+		}
+	}
+
+	public PersistedRepositoryAnalysis runAndPersistForJob(RepositoryConnection connection, ProgressSink progress) {
+		try {
+			return runAndPersist(connection, progress);
 		}
 		catch (ResponseStatusException ex) {
 			analysisRepository.insertFailure(connection.id(), failureReason(ex.getReason(), ex));
@@ -120,13 +133,16 @@ public class RepositoryAnalysisService {
 		return compare(base, current);
 	}
 
-	private RepositoryAnalysisResponse runAndPersist(RepositoryConnection connection) {
+	private PersistedRepositoryAnalysis runAndPersist(RepositoryConnection connection, ProgressSink progress) {
+		progress.update(15, "Fetching workflow files");
 		List<WorkflowSource> workflows = fetchWorkflows(connection);
 		List<WorkflowSource> successfulWorkflows = new ArrayList<>();
 		List<WorkflowAnalysisItem> workflowAnalyses = new ArrayList<>();
 		for (WorkflowSource workflow : workflows) {
 			try {
+				progress.update(35, "Analyzing " + workflow.path());
 				AnalysisResponse analysis = pipelineAnalyzer.analyze(workflow.path(), workflow.content());
+				progress.update(65, "Fetching workflow metrics for " + workflow.path());
 				WorkflowMetricsResult metricsResult = fetchMetricsSafely(connection, workflow.path());
 				workflowAnalyses.add(WorkflowAnalysisItem.success(workflow.path(), analysis, metricsResult));
 				successfulWorkflows.add(workflow);
@@ -147,43 +163,23 @@ public class RepositoryAnalysisService {
 					"Workflow files were found, but none could be analyzed successfully.");
 		}
 
-		AnalysisResponse aggregatedAnalysis = aggregateAnalysis(successfulAnalyses);
+		progress.update(82, "Aggregating results");
+		AnalysisResponse aggregatedAnalysis = analysisAggregator.aggregate(successfulAnalyses);
 		WorkflowSource primaryWorkflow = successfulWorkflows.get(0);
 		WorkflowMetricsResult primaryMetrics = successfulAnalyses.get(0).workflowMetrics();
 		PersistedAnalysisBlob blob = PersistedAnalysisBlob.of(aggregatedAnalysis, primaryMetrics, workflowAnalyses);
-		PersistedRepositoryAnalysis persisted = analysisRepository.insert(
+		progress.update(92, "Saving analysis");
+		return analysisRepository.insert(
 				connection.id(), primaryWorkflow.path(), primaryWorkflow.content(), blob);
-		return RepositoryAnalysisResponse.from(connection, persisted);
 	}
 
-	private AnalysisResponse aggregateAnalysis(List<WorkflowAnalysisItem> successfulAnalyses) {
-		PipelineProvider provider = successfulAnalyses.get(0).analysis().provider();
+	public interface ProgressSink {
+		void update(int percent, String message);
 
-		Map<String, List<CapabilityFinding>> findingsByDimension = new LinkedHashMap<>();
-		for (WorkflowAnalysisItem workflow : successfulAnalyses) {
-			for (DomainScore dimension : workflow.analysis().dimensions()) {
-				List<CapabilityFinding> findings = dimension.capabilityScores().stream()
-						.flatMap(capability -> capability.findings().stream())
-						.toList();
-				findingsByDimension.computeIfAbsent(dimension.dimension(), ignored -> new ArrayList<>())
-						.addAll(findings);
-			}
+		static ProgressSink noop() {
+			return (percent, message) -> {
+			};
 		}
-
-		List<DomainScore> domainScores = findingsByDimension.entrySet().stream()
-				.map(entry -> scoringEngine.score(entry.getKey(), entry.getValue()))
-				.toList();
-		List<CapabilityFinding> allFindings = findingsByDimension.values().stream()
-				.flatMap(List::stream)
-				.toList();
-		double overallScore = scoringEngine.overallScore(domainScores);
-		int overallLevel = scoringEngine.maturityLevel(overallScore, domainScores, allFindings);
-		return new AnalysisResponse(
-				provider,
-				overallScore,
-				overallLevel,
-				scoringEngine.overallStatus(overallScore, domainScores),
-				domainScores);
 	}
 
 	private WorkflowMetricsResult fetchMetricsSafely(RepositoryConnection connection, String workflowFile) {

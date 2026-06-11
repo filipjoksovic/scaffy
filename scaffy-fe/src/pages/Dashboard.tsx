@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
   ArrowLeft,
@@ -26,13 +26,16 @@ import {
   analyzeRepository,
   createRepositoryPublication,
   disconnectRepository,
+  getRepositoryAnalysisJob,
   getRepositoryPublication,
   getRepositoryAnalysis,
   getRepositoryAnalysisDelta,
+  listActiveRepositoryAnalysisJobs,
   listRepositoryConnections,
   type RepositoryPublication,
   type RepositoryAnalysis,
   type RepositoryAnalysisDelta,
+  type RepositoryAnalysisJob,
   type RepositoryAnalysisSummary,
   type RepositoryConnection,
 } from "../api/repositories";
@@ -91,12 +94,54 @@ monacoGlobal.MonacoEnvironment ??= {
   getWorker: () => new EditorWorker(),
 };
 
+type DashboardRoute =
+  | { view: "list" }
+  | { view: "new" }
+  | { view: "project"; projectId: string; tab: string | null };
+
+// Routing lives entirely in the URL path (no query params): the whole dashboard
+// is mounted on /dashboard/* so this component never remounts (and never drops
+// its in-memory analysis caches) as the user moves between list, detail and tabs.
+function parseDashboardPath(pathname: string): DashboardRoute {
+  const segments = pathname
+    .replace(/^\/dashboard\/?/, "")
+    .split("/")
+    .filter(Boolean);
+  if (segments[0] === "new") {
+    return { view: "new" };
+  }
+  if (segments[0] === "projects" && segments[1]) {
+    return { view: "project", projectId: segments[1], tab: segments[2] ?? null };
+  }
+  return { view: "list" };
+}
+
+function projectPath(projectId: string, tab?: string | null): string {
+  return tab
+    ? `/dashboard/projects/${projectId}/${tab}`
+    : `/dashboard/projects/${projectId}`;
+}
+
+function resolveDetailTab(
+  tab: string | null,
+  allowHealth: boolean,
+): AnalysisDetailTab {
+  if (tab === "findings" || tab === "quality" || tab === "delta") {
+    return tab;
+  }
+  if (tab === "health" && allowHealth) {
+    return "health";
+  }
+  return "quality";
+}
+
 export function Dashboard() {
   const { user } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const activeWorkspaceId = activeWorkspace?.id ?? null;
   const [connections, setConnections] = useState<RepositoryConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
@@ -106,17 +151,21 @@ export function Dashboard() {
   const [hasProviderConnections, setHasProviderConnections] = useState<
     boolean | null
   >(null);
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [selectedRepositoryId, setSelectedRepositoryId] = useState<
-    string | null
-  >(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const route = parseDashboardPath(location.pathname);
+  const creatingProject = route.view === "new";
+  const selectedRepositoryId =
+    route.view === "project" ? route.projectId : null;
   const [analysisByRepository, setAnalysisByRepository] = useState<
     Record<string, RepositoryAnalysis>
+  >({});
+  const [analysisJobsByRepository, setAnalysisJobsByRepository] = useState<
+    Record<string, RepositoryAnalysisJob>
   >({});
   const [deltaByRepository, setDeltaByRepository] = useState<
     Record<string, RepositoryAnalysisDelta>
   >({});
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [loadingAnalysisId, setLoadingAnalysisId] = useState<string | null>(
     null,
   );
@@ -132,10 +181,10 @@ export function Dashboard() {
   useEffect(() => {
     if (!user) {
       setConnections([]);
-      setSelectedRepositoryId(null);
+      setConnectionsLoaded(false);
       setConnectDialogOpen(false);
-      setCreatingProject(false);
       setAnalysisByRepository({});
+      setAnalysisJobsByRepository({});
       setDeltaByRepository({});
       setLoadingAnalysisId(null);
       setAnalysisErrorByRepository({});
@@ -147,9 +196,10 @@ export function Dashboard() {
 
     let mounted = true;
     setConnectionsLoading(true);
+    setConnectionsLoaded(false);
     setError(null);
-    setSelectedRepositoryId(null);
     setAnalysisByRepository({});
+    setAnalysisJobsByRepository({});
     setDeltaByRepository({});
     setAnalysisErrorByRepository({});
     listConnections()
@@ -181,6 +231,21 @@ export function Dashboard() {
       .finally(() => {
         if (mounted) {
           setConnectionsLoading(false);
+          setConnectionsLoaded(true);
+        }
+      });
+
+    listActiveRepositoryAnalysisJobs()
+      .then((jobs) => {
+        if (mounted) {
+          setAnalysisJobsByRepository(
+            Object.fromEntries(jobs.map((job) => [job.repositoryId, job])),
+          );
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setAnalysisJobsByRepository({});
         }
       });
 
@@ -223,14 +288,19 @@ export function Dashboard() {
     };
   }, [user, activeWorkspaceId, creatingProject]);
 
+  // If the URL points at a project that does not exist in the loaded set
+  // (deleted, wrong workspace, bad link) fall back to the list. Guarded on
+  // connectionsLoaded so a refresh onto a project URL is not bounced before
+  // the connection list has actually been fetched.
   useEffect(() => {
     if (
+      connectionsLoaded &&
       selectedRepositoryId &&
       !connections.some((connection) => connection.id === selectedRepositoryId)
     ) {
-      setSelectedRepositoryId(null);
+      navigate("/dashboard", { replace: true });
     }
-  }, [connections, selectedRepositoryId]);
+  }, [connections, connectionsLoaded, selectedRepositoryId, navigate]);
 
   const filteredConnections = useMemo(() => {
     if (!filter.trim()) return connections;
@@ -250,6 +320,9 @@ export function Dashboard() {
   const selectedAnalysis = selectedConnection
     ? (analysisByRepository[selectedConnection.id] ?? null)
     : null;
+  const selectedAnalysisJob = selectedConnection
+    ? (analysisJobsByRepository[selectedConnection.id] ?? null)
+    : null;
   const selectedDelta = selectedConnection
     ? (deltaByRepository[selectedConnection.id] ?? null)
     : null;
@@ -268,6 +341,53 @@ export function Dashboard() {
   const hasSelectedDelta = selectedConnectionId
     ? Boolean(deltaByRepository[selectedConnectionId])
     : false;
+
+  useEffect(() => {
+    const runningJobs = Object.values(analysisJobsByRepository).filter(
+      (job) => job.status === "queued" || job.status === "running",
+    );
+    if (!user || runningJobs.length === 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function poll() {
+      for (const job of runningJobs) {
+        try {
+          const nextJob = await getRepositoryAnalysisJob(job.jobId);
+          if (cancelled) return;
+          setAnalysisJobsByRepository((current) => ({
+            ...current,
+            [nextJob.repositoryId]: nextJob,
+          }));
+          if (nextJob.status === "succeeded") {
+            await hydrateRepositoryAnalysis(nextJob.repositoryId);
+          }
+          if (nextJob.status === "failed") {
+            setAnalysisErrorByRepository((current) => ({
+              ...current,
+              [nextJob.repositoryId]:
+                nextJob.errorMessage || "Repository analysis failed.",
+            }));
+          }
+        } catch (err) {
+          if (cancelled) return;
+          setAnalysisErrorByRepository((current) => ({
+            ...current,
+            [job.repositoryId]:
+              err instanceof Error ? err.message : "Could not poll analysis.",
+          }));
+        }
+      }
+    }
+
+    const id = window.setInterval(() => void poll(), 1400);
+    void poll();
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [analysisJobsByRepository, user]);
 
   useEffect(() => {
     if (!selectedConnectionId || !selectedSummaryRunId || hasSelectedAnalysis) {
@@ -375,6 +495,22 @@ export function Dashboard() {
     globalThis.history.replaceState({}, "", url.toString());
   }, [user]);
 
+  // Backwards-compatible deep link: ?repository=<id> is rewritten to the
+  // canonical /dashboard/projects/<id> path once connections are available.
+  useEffect(() => {
+    if (!user || connections.length === 0) {
+      return;
+    }
+    const params = new URLSearchParams(globalThis.location.search);
+    const repositoryId = params.get("repository");
+    if (!repositoryId) {
+      return;
+    }
+    if (connections.some((connection) => connection.id === repositoryId)) {
+      navigate(projectPath(repositoryId), { replace: true });
+    }
+  }, [connections, user, navigate]);
+
   function handleConnected(connection: RepositoryConnection) {
     setConnections((current) => [
       connection,
@@ -394,6 +530,11 @@ export function Dashboard() {
       delete next[id];
       return next;
     });
+    setAnalysisJobsByRepository((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
     setDeltaByRepository((current) => {
       const next = { ...current };
       delete next[id];
@@ -402,7 +543,9 @@ export function Dashboard() {
     try {
       await disconnectRepository(id);
       setConnections((current) => current.filter((item) => item.id !== id));
-      setSelectedRepositoryId((current) => (current === id ? null : current));
+      if (selectedRepositoryId === id) {
+        navigate("/dashboard");
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Could not remove repository.",
@@ -411,54 +554,64 @@ export function Dashboard() {
   }
 
   async function handleAnalyzeRepository(connection: RepositoryConnection) {
-    setAnalyzingId(connection.id);
     setAnalysisErrorByRepository((current) => {
       const next = { ...current };
       delete next[connection.id];
       return next;
     });
     try {
-      const nextAnalysis = await analyzeRepository(connection.id);
-      setAnalysisByRepository((current) => ({
+      const job = await analyzeRepository(connection.id);
+      setAnalysisJobsByRepository((current) => ({
         ...current,
-        [connection.id]: nextAnalysis,
+        [connection.id]: job,
       }));
-      setConnections((current) =>
-        current.map((item) =>
-          item.id === connection.id
-            ? {
-                ...item,
-                analysisRunCount: Math.max(
-                  (item.analysisRunCount ?? 0) + 1,
-                  nextAnalysis.runNumber,
-                ),
-                analysisSummary: summaryFromAnalysis(nextAnalysis),
-              }
-            : item,
-        ),
-      );
-      try {
-        const nextDelta = await getRepositoryAnalysisDelta(connection.id);
-        setDeltaByRepository((current) => ({
-          ...current,
-          [connection.id]: nextDelta,
-        }));
-      } catch {
-        setDeltaByRepository((current) => {
-          const next = { ...current };
-          delete next[connection.id];
-          return next;
-        });
-      }
     } catch (err) {
       setAnalysisErrorByRepository((current) => ({
         ...current,
         [connection.id]:
           err instanceof Error ? err.message : "Could not analyze repository.",
       }));
-    } finally {
-      setAnalyzingId(null);
     }
+  }
+
+  async function hydrateRepositoryAnalysis(repositoryId: string) {
+    const nextAnalysis = await getRepositoryAnalysis(repositoryId);
+    setAnalysisByRepository((current) => ({
+      ...current,
+      [repositoryId]: nextAnalysis,
+    }));
+    setConnections((current) =>
+      current.map((item) =>
+        item.id === repositoryId
+          ? {
+              ...item,
+              analysisRunCount: Math.max(
+                (item.analysisRunCount ?? 0) + 1,
+                nextAnalysis.runNumber,
+              ),
+              analysisSummary: summaryFromAnalysis(nextAnalysis),
+            }
+          : item,
+      ),
+    );
+    try {
+      const nextDelta = await getRepositoryAnalysisDelta(repositoryId);
+      setDeltaByRepository((current) => ({
+        ...current,
+        [repositoryId]: nextDelta,
+      }));
+    } catch {
+      setDeltaByRepository((current) => {
+        const next = { ...current };
+        delete next[repositoryId];
+        return next;
+      });
+    }
+    setAnalysisJobsByRepository((current) => {
+      const next = { ...current };
+      delete next[repositoryId];
+      return next;
+    });
   }
 
   function handleCreated(
@@ -489,15 +642,14 @@ export function Dashboard() {
         ),
       );
     }
-    setCreatingProject(false);
-    setSelectedRepositoryId(connection.id);
+    navigate(projectPath(connection.id));
   }
 
   let body: React.ReactNode;
   if (creatingProject) {
     body = (
       <CreateProjectPanel
-        onCancel={() => setCreatingProject(false)}
+        onCancel={() => navigate("/dashboard")}
         onCreated={handleCreated}
       />
     );
@@ -506,7 +658,7 @@ export function Dashboard() {
       <section className="ws-page project-detail-page">
         <button
           className="ws-back"
-          onClick={() => setSelectedRepositoryId(null)}
+          onClick={() => navigate("/dashboard")}
           type="button"
         >
           <IconBack />
@@ -514,15 +666,39 @@ export function Dashboard() {
         </button>
         <ProjectDetail
           analysis={selectedAnalysis}
+          analysisJob={selectedAnalysisJob}
           connection={selectedConnection}
           delta={selectedDelta}
           error={selectedAnalysisError}
-          loading={analyzingId === selectedConnection.id}
+          loading={
+            selectedAnalysisJob?.status === "queued" ||
+            selectedAnalysisJob?.status === "running"
+          }
           loadingStored={loadingAnalysisId === selectedConnection.id}
           onAnalyze={handleAnalyzeRepository}
           onConnect={() => setConnectDialogOpen(true)}
-          onCreate={() => setCreatingProject(true)}
+          onCreate={() => navigate("/dashboard/new")}
           onDisconnect={handleDisconnect}
+        />
+      </section>
+    );
+  } else if (selectedRepositoryId && !connectionsLoaded) {
+    // Refreshed directly onto a project URL: hold a loading state until the
+    // connection list resolves rather than flashing the projects list.
+    body = (
+      <section className="ws-page project-detail-page">
+        <button
+          className="ws-back"
+          onClick={() => navigate("/dashboard")}
+          type="button"
+        >
+          <IconBack />
+          Back to projects
+        </button>
+        <StateRow
+          detail="Loading this project from your workspace."
+          label="Loading project"
+          tone="loading"
         />
       </section>
     );
@@ -581,7 +757,7 @@ export function Dashboard() {
               Add repository
             </Button>
             <Button
-              onClick={() => setCreatingProject(true)}
+              onClick={() => navigate("/dashboard/new")}
               variant="secondary"
             >
               Create project
@@ -602,12 +778,12 @@ export function Dashboard() {
           {filteredConnections.map((connection) => (
             <ProjectCard
               analysisError={analysisErrorByRepository[connection.id] ?? null}
-              analyzing={analyzingId === connection.id}
+              analysisJob={analysisJobsByRepository[connection.id] ?? null}
               connection={connection}
               key={connection.id}
               onAnalyze={() => void handleAnalyzeRepository(connection)}
               onDelete={() => void handleDisconnect(connection.id)}
-              onOpen={() => setSelectedRepositoryId(connection.id)}
+              onOpen={() => navigate(projectPath(connection.id))}
             />
           ))}
         </div>
@@ -638,7 +814,7 @@ export function Dashboard() {
             >
               Connect repository
             </Button>
-            <Button onClick={() => setCreatingProject(true)}>
+            <Button onClick={() => navigate("/dashboard/new")}>
               Create project
             </Button>
           </div>
@@ -704,7 +880,7 @@ export function Dashboard() {
 
 type ProjectCardProps = Readonly<{
   connection: RepositoryConnection;
-  analyzing: boolean;
+  analysisJob: RepositoryAnalysisJob | null;
   analysisError: string | null;
   onOpen: () => void;
   onAnalyze: () => void;
@@ -713,16 +889,21 @@ type ProjectCardProps = Readonly<{
 
 function ProjectCard({
   connection,
-  analyzing,
+  analysisJob,
   analysisError,
   onOpen,
   onAnalyze,
   onDelete,
 }: ProjectCardProps) {
   const summary = connection.analysisSummary;
+  const analyzing =
+    analysisJob?.status === "queued" || analysisJob?.status === "running";
   const succeeded = summary && summary.status !== "failed";
   const failed =
-    !analyzing && (Boolean(analysisError) || summary?.status === "failed");
+    !analyzing &&
+    (Boolean(analysisError) ||
+      summary?.status === "failed" ||
+      analysisJob?.status === "failed");
   const scoreBadge = (() => {
     if (succeeded) {
       return (
@@ -749,7 +930,11 @@ function ProjectCard({
   })();
   const footerContent = (() => {
     if (analyzing) {
-      return <span className="project-card__runs">Analyzing…</span>;
+      return (
+        <span className="project-card__runs">
+          {analysisJob?.progress ?? "Analyzing…"}
+        </span>
+      );
     }
     if (failed) {
       return (
@@ -795,6 +980,14 @@ function ProjectCard({
           </span>
         </div>
         <div className="project-card__footer">{footerContent}</div>
+        {analyzing && (
+          <div
+            aria-label="Analysis progress"
+            className="project-card__progress"
+          >
+            <span style={{ width: `${analysisJob?.progressPercent ?? 8}%` }} />
+          </div>
+        )}
       </button>
       <div className="project-card__quick">
         <button
@@ -823,6 +1016,7 @@ function ProjectCard({
 
 type ProjectDetailProps = Readonly<{
   analysis: RepositoryAnalysis | null;
+  analysisJob: RepositoryAnalysisJob | null;
   connection: RepositoryConnection | null;
   delta: RepositoryAnalysisDelta | null;
   error: string | null;
@@ -836,6 +1030,7 @@ type ProjectDetailProps = Readonly<{
 
 function ProjectDetail({
   analysis,
+  analysisJob,
   connection,
   delta,
   error,
@@ -890,13 +1085,15 @@ function ProjectDetail({
           detail={
             loadingStored
               ? "Loading the saved repository analysis from Scaffy."
-              : "Finding .github/workflows files and running the Scaffy capability analyzer."
+              : analysisJob?.progress ||
+                "Finding workflow files and running the Scaffy capability analyzer."
           }
           label={
             loadingStored ? "Loading saved analysis" : "Analyzing repository"
           }
           tone="loading"
         />
+        {analysisJob && <AnalysisJobPanel job={analysisJob} />}
       </Card>
     );
   }
@@ -947,6 +1144,7 @@ function ProjectDetail({
               </Link>
             )}
           </div>
+          {analysisJob && <AnalysisJobPanel job={analysisJob} />}
         </div>
       ) : analysis ? (
         <AnalysisBreakdown
@@ -976,6 +1174,42 @@ function ProjectDetail({
         </div>
       )}
     </Card>
+  );
+}
+
+function AnalysisJobPanel({ job }: { job: RepositoryAnalysisJob }) {
+  return (
+    <div className="analysis-job" aria-label="Repository analysis job">
+      <div className="analysis-job__head">
+        <span>{job.status === "queued" ? "Queued" : "Live progress"}</span>
+        <span>{job.progressPercent}%</span>
+      </div>
+      <div className="analysis-job__progress">
+        <span style={{ width: `${job.progressPercent}%` }} />
+      </div>
+      {job.logs.length > 0 && (
+        <div className="analysis-job__log" aria-label="Repository analysis log">
+          <div className="analysis-job__log-bar">
+            <span>Analyzer log</span>
+            <span>{job.logs.length} lines</span>
+          </div>
+          <pre>
+            {job.logs.slice(-40).map((line) => (
+              <span
+                className={`analysis-job__log-line analysis-job__log-line--${line.stream}`}
+                key={`${line.stream}-${line.id}`}
+              >
+                <span className="analysis-job__log-stream">
+                  {line.stream}
+                </span>
+                {line.message}
+                {"\n"}
+              </span>
+            ))}
+          </pre>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1082,7 +1316,7 @@ type AnalysisBreakdownProps = Readonly<{
   repositoryOwner: string;
 }>;
 
-type AnalysisDetailTab = "findings" | "quality" | "delta";
+type AnalysisDetailTab = "findings" | "quality" | "delta" | "health";
 
 function AnalysisBreakdown({
   analysis,
@@ -1092,7 +1326,8 @@ function AnalysisBreakdown({
   repositoryName,
   repositoryOwner,
 }: AnalysisBreakdownProps) {
-  const [activeTab, setActiveTab] = useState<AnalysisDetailTab>("quality");
+  const navigate = useNavigate();
+  const location = useLocation();
   const [findingFilter, setFindingFilter] = useState<FindingFilter>("missing");
   const [findingDimension, setFindingDimension] = useState<string | null>(null);
   const findings = useMemo(
@@ -1109,6 +1344,24 @@ function AnalysisBreakdown({
   const missing = findings.filter(
     (finding) => finding.finding.type === "MISSING",
   );
+  const hasOperationalHealth = Boolean(
+    analysis.workflowMetrics &&
+      analysis.workflowMetrics.status !== "UNSUPPORTED",
+  );
+
+  // The active tab is the last URL segment, so a refresh or shared link lands
+  // on the same tab. Health collapses to Quality when no metrics are present.
+  const route = parseDashboardPath(location.pathname);
+  const projectId = route.view === "project" ? route.projectId : null;
+  const activeTab = resolveDetailTab(
+    route.view === "project" ? route.tab : null,
+    hasOperationalHealth,
+  );
+  const setActiveTab = (next: AnalysisDetailTab) => {
+    if (projectId) {
+      navigate(projectPath(projectId, next));
+    }
+  };
 
   return (
     <div className="analysis-breakdown">
@@ -1131,6 +1384,17 @@ function AnalysisBreakdown({
         >
           Quality areas
         </button>
+        {hasOperationalHealth && (
+          <button
+            className={
+              activeTab === "health" ? "analysis-tabs__item--active" : ""
+            }
+            onClick={() => setActiveTab("health")}
+            type="button"
+          >
+            Health
+          </button>
+        )}
         <button
           className={activeTab === "delta" ? "analysis-tabs__item--active" : ""}
           onClick={() => setActiveTab("delta")}
@@ -1200,11 +1464,13 @@ function AnalysisBreakdown({
 
       {activeTab === "delta" && <AnalysisDeltaPanel delta={delta} />}
 
-      <OperationalHealthCard
-        owner={repositoryOwner}
-        repo={repositoryName}
-        result={analysis.workflowMetrics}
-      />
+      {activeTab === "health" && hasOperationalHealth && (
+        <OperationalHealthCard
+          owner={repositoryOwner}
+          repo={repositoryName}
+          result={analysis.workflowMetrics}
+        />
+      )}
     </div>
   );
 }
@@ -2488,7 +2754,12 @@ type CreateProjectStatus =
       initJob: InitJob;
       publication?: RepositoryPublication;
     }
-  | { kind: "analyzing"; initJob: InitJob; publication: RepositoryPublication }
+  | {
+      kind: "analyzing";
+      initJob: InitJob;
+      publication: RepositoryPublication;
+      analysisJob?: RepositoryAnalysisJob;
+    }
   | {
       kind: "success";
       initJob: InitJob;
@@ -2674,7 +2945,23 @@ function CreateProjectPanel({ onCancel, onCreated }: CreateProjectPanelProps) {
       setStatus({ kind: "analyzing", initJob, publication });
       let analysis: RepositoryAnalysis | null = null;
       try {
-        analysis = await analyzeRepository(publication.repositoryConnection.id);
+        let analysisJob = await analyzeRepository(
+          publication.repositoryConnection.id,
+        );
+        setStatus({ kind: "analyzing", initJob, publication, analysisJob });
+        while (
+          analysisJob.status === "queued" ||
+          analysisJob.status === "running"
+        ) {
+          await delay(1400);
+          analysisJob = await getRepositoryAnalysisJob(analysisJob.jobId);
+          setStatus({ kind: "analyzing", initJob, publication, analysisJob });
+        }
+        if (analysisJob.status === "succeeded") {
+          analysis = await getRepositoryAnalysis(
+            publication.repositoryConnection.id,
+          );
+        }
       } catch {
         analysis = null;
       }
@@ -3090,10 +3377,12 @@ function CreateProjectStatusPanel({ status }: { status: CreateProjectStatus }) {
     }
     if (
       status.kind === "publishing" ||
-      status.kind === "analyzing" ||
       status.kind === "success"
     ) {
       return status.publication?.logs;
+    }
+    if (status.kind === "analyzing") {
+      return status.analysisJob?.logs || status.publication?.logs;
     }
     if (status.kind === "error") {
       return status.publication?.logs || status.job?.logs;
@@ -3218,7 +3507,10 @@ function createProjectStatusCopy(status: CreateProjectStatus): string {
     );
   }
   if (status.kind === "analyzing") {
-    return "The repository is connected. Running Scaffy on the new workflow.";
+    return (
+      status.analysisJob?.progress ||
+      "The repository is connected. Running Scaffy on the new workflow."
+    );
   }
   if (status.kind === "success") {
     return status.analysis
@@ -3238,7 +3530,9 @@ function createProjectPercent(status: CreateProjectStatus): number {
   }
   if (status.kind === "generated") return 55;
   if (status.kind === "publishing") return 72;
-  if (status.kind === "analyzing") return 90;
+  if (status.kind === "analyzing") {
+    return Math.max(82, Math.min(98, status.analysisJob?.progressPercent ?? 90));
+  }
   if (status.kind === "success") return 100;
   if (status.kind === "error") return 100;
   return 0;
@@ -3453,4 +3747,3 @@ function IconClose() {
 function IconTrash() {
   return <Trash2 aria-hidden="true" size={16} />;
 }
-

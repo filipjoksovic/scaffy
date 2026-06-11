@@ -33,6 +33,7 @@ public class RepositoryConnectionController {
 
 	private final RepositoryConnectionRepository repository;
 	private final RepositoryAnalysisService repositoryAnalysisService;
+	private final RepositoryAnalysisJobService repositoryAnalysisJobService;
 	private final RepositoryAnalysisRepository repositoryAnalysisRepository;
 	private final GitHubRepositoryClient gitHubRepositoryClient;
 	private final GitLabRepositoryClient gitLabRepositoryClient;
@@ -42,6 +43,7 @@ public class RepositoryConnectionController {
 	public RepositoryConnectionController(
 			RepositoryConnectionRepository repository,
 			RepositoryAnalysisService repositoryAnalysisService,
+			RepositoryAnalysisJobService repositoryAnalysisJobService,
 			RepositoryAnalysisRepository repositoryAnalysisRepository,
 			GitHubRepositoryClient gitHubRepositoryClient,
 			GitLabRepositoryClient gitLabRepositoryClient,
@@ -49,6 +51,7 @@ public class RepositoryConnectionController {
 			WorkspaceService workspaceService) {
 		this.repository = repository;
 		this.repositoryAnalysisService = repositoryAnalysisService;
+		this.repositoryAnalysisJobService = repositoryAnalysisJobService;
 		this.repositoryAnalysisRepository = repositoryAnalysisRepository;
 		this.gitHubRepositoryClient = gitHubRepositoryClient;
 		this.gitLabRepositoryClient = gitLabRepositoryClient;
@@ -149,12 +152,28 @@ public class RepositoryConnectionController {
 	}
 
 	@PostMapping(path = "/{id}/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
-	public RepositoryAnalysisResponse analyzeRepository(
+	@ResponseStatus(HttpStatus.ACCEPTED)
+	public RepositoryAnalysisJobResponse analyzeRepository(
 			@AuthenticationPrincipal ScaffyPrincipal principal,
 			@RequestHeader(value = WORKSPACE_HEADER, required = false) UUID workspaceId,
 			@PathVariable UUID id) {
-		return repositoryAnalysisService.analyze(
-				workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId), id);
+		return repositoryAnalysisJobService.createOrGetActive(
+				workspaceService.resolveActiveWorkspace(principal.userId(), workspaceId),
+				principal.userId(),
+				id);
+	}
+
+	@GetMapping(path = "/analysis-jobs/active", produces = MediaType.APPLICATION_JSON_VALUE)
+	public List<RepositoryAnalysisJobResponse> activeAnalysisJobs(
+			@AuthenticationPrincipal ScaffyPrincipal principal) {
+		return repositoryAnalysisJobService.active(principal.userId());
+	}
+
+	@GetMapping(path = "/analysis-jobs/{jobId}", produces = MediaType.APPLICATION_JSON_VALUE)
+	public RepositoryAnalysisJobResponse getAnalysisJob(
+			@AuthenticationPrincipal ScaffyPrincipal principal,
+			@PathVariable UUID jobId) {
+		return repositoryAnalysisJobService.get(principal.userId(), jobId);
 	}
 
 	@GetMapping(path = "/{id}/analysis", produces = MediaType.APPLICATION_JSON_VALUE)

@@ -6,6 +6,11 @@ import {
   listMyInvitations,
   type WorkspaceInvitation,
 } from '../api/workspaces'
+import {
+  listNotifications,
+  markNotificationRead,
+  type AppNotification,
+} from '../api/notifications'
 import { useWorkspace } from '../lib/workspace'
 
 const POLL_INTERVAL_MS = 60_000
@@ -13,14 +18,21 @@ const POLL_INTERVAL_MS = 60_000
 export function NotificationBell() {
   const { refresh: refreshWorkspaces } = useWorkspace()
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [acceptingToken, setAcceptingToken] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      setInvitations(await listMyInvitations())
+      const [nextInvitations, nextNotifications] = await Promise.all([
+        listMyInvitations(),
+        listNotifications(),
+      ])
+      setInvitations(nextInvitations)
+      setNotifications(nextNotifications)
     } catch {
       setInvitations([])
+      setNotifications([])
     }
   }, [])
 
@@ -48,7 +60,18 @@ export function NotificationBell() {
     [load, refreshWorkspaces],
   )
 
-  const count = invitations.length
+  const handleNotificationClick = useCallback(
+    async (notification: AppNotification) => {
+      await markNotificationRead(notification.id).catch(() => undefined)
+      await load()
+      if (notification.targetUrl) {
+        globalThis.location.href = notification.targetUrl
+      }
+    },
+    [load],
+  )
+
+  const count = invitations.length + notifications.length
 
   return (
     <Popover.Root>
@@ -83,6 +106,21 @@ export function NotificationBell() {
             <p className="notif-menu__empty">You're all caught up.</p>
           ) : (
             <ul className="notif-list">
+              {notifications.map((notification) => (
+                <li className="notif-list__row" key={notification.id}>
+                  <div className="notif-list__text">
+                    <strong>{notification.title}</strong>
+                    <span>{notification.message}</span>
+                  </div>
+                  <button
+                    className="notif-list__accept"
+                    onClick={() => void handleNotificationClick(notification)}
+                    type="button"
+                  >
+                    Open
+                  </button>
+                </li>
+              ))}
               {invitations.map((invitation) => (
                 <li className="notif-list__row" key={invitation.id}>
                   <div className="notif-list__text">

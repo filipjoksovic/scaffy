@@ -97,6 +97,30 @@ services:
       SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET: ${SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET:-${SCAFFY_JWT_SECRET:-dev-provider-token-secret-change-me}}
       GITHUB_API_URL: ${GITHUB_API_URL:-https://api.github.com}
 
+  scaffy-analysis-worker:
+    build:
+      context: ../scaffy-be
+      dockerfile: ../scaffy-ops/docker/scaffy-be.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_MAIN_WEB_APPLICATION_TYPE: none
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-scaffy}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-scaffy}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-scaffy}
+      SCAFFY_JWT_SECRET: ${SCAFFY_JWT_SECRET:-local-development-secret-change-before-sharing}
+      SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET: ${SCAFFY_PROVIDER_TOKEN_ENCRYPTION_SECRET:-${SCAFFY_JWT_SECRET:-local-development-secret-change-before-sharing}}
+      SCAFFY_REDIS_HOST: redis
+      SCAFFY_REDIS_PORT: 6379
+      SCAFFY_REPOSITORY_ANALYSIS_QUEUE_ENABLED: "true"
+      SCAFFY_REPOSITORY_ANALYSIS_QUEUE_NAME: ${SCAFFY_REPOSITORY_ANALYSIS_QUEUE_NAME:-scaffy:repository-analysis-jobs}
+      SCAFFY_REPOSITORY_ANALYSIS_WORKER_ENABLED: "true"
+
 volumes:
   scaffy-postgres-local:
   scaffy-redis-local:
