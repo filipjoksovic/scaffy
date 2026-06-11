@@ -11,6 +11,7 @@ import {
 import {
   analyzeRepository,
   createRepositoryPublication,
+  listActiveRepositoryAnalysisJobs,
   listRepositoryConnections,
 } from "../../src/api/repositories";
 import { listConnections } from "../../src/api/auth";
@@ -90,6 +91,7 @@ vi.mock("../../src/api/repositories", () => ({
   getRepositoryAnalysisDelta: vi.fn(),
   getRepositoryPublication: vi.fn(),
   listGitHubRepositories: vi.fn(),
+  listActiveRepositoryAnalysisJobs: vi.fn(),
   listRepositoryConnections: vi.fn(),
 }));
 
@@ -117,6 +119,7 @@ beforeEach(() => {
       connectedAt: "2026-01-01T00:00:00Z",
     },
   ]);
+  vi.mocked(listActiveRepositoryAnalysisJobs).mockResolvedValue([]);
   vi.mocked(listRepositoryConnections).mockResolvedValue([]);
   vi.mocked(getInitHistory).mockResolvedValue([
     {
@@ -259,6 +262,7 @@ beforeEach(() => {
     repositoryConnection: {
       id: "repo-1",
       provider: "github",
+      instance: "github.com",
       owner: "dev",
       name: "created-app",
       url: "https://github.com/dev/created-app",
