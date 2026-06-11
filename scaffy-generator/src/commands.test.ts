@@ -158,7 +158,10 @@ test('l2 GitHub fixture emits scanner-recognized test and artifact signals', asy
   await writeFixtureProject(root, request, selection)
 
   const workflow = await readFile(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+  assert.match(workflow, /backend-build:/)
+  assert.match(workflow, /npm run build/)
   assert.match(workflow, /backend-test:/)
+  assert.match(workflow, /needs: backend-build/)
   assert.match(workflow, /npm run test/)
   assert.match(workflow, /actions\/upload-artifact@v4/)
   assert.match(workflow, /timeout-minutes:/)
@@ -280,7 +283,10 @@ test('l2 and l3 GitLab fixtures emit scanner-recognized progression signals', as
   const l2Request = { ...base, pipelineMaturity: 'l2' }
   await writeFixtureProject(l2Root, l2Request, validateSelection(l2Request))
   const l2Pipeline = await readFile(path.join(l2Root, '.gitlab-ci.yml'), 'utf8')
+  assert.match(l2Pipeline, /backend_build:/)
+  assert.match(l2Pipeline, /dotnet build --no-restore/)
   assert.match(l2Pipeline, /backend_test:/)
+  assert.match(l2Pipeline, /- backend_build/)
   assert.match(l2Pipeline, /dotnet test --no-restore/)
   assert.match(l2Pipeline, /package_artifacts:/)
   assert.match(l2Pipeline, /artifacts:/)

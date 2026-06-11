@@ -442,7 +442,8 @@ function githubActions(request: InitJobRequest, selection: InitSelection): strin
   const level = selection.pipelineMaturity.level
   const jobs = [
     githubFrontendJob(selection),
-    level >= 2 ? githubBackendTestJob(selection) : githubBackendBuildJob(selection),
+    githubBackendBuildJob(selection),
+    level >= 2 ? githubBackendTestJob(selection) : '',
     level >= 3 ? githubDockerJob(request, selection) : '',
     level >= 3 ? githubStackValidationJob() : '',
     level >= 4 ? githubSecurityJob() : '',
@@ -482,7 +483,7 @@ variables:
 ${gitlabBackendVariables(selection)}
 
 ${gitlabFrontendBuild(selection)}
-${level === 1 ? `\n${gitlabBackendBuild(selection)}` : ''}
+${gitlabBackendBuild(selection)}
 ${level >= 2 ? `\n${gitlabBackendTest(selection)}\n${gitlabPackageArtifacts(selection)}` : ''}
 ${level >= 3 ? `\n${gitlabDockerBuild(request, selection)}\n${gitlabStackValidation()}` : ''}
 ${level >= 4 ? `\n${gitlabSecurityScan()}\n${gitlabDeployPlaceholder()}` : ''}
@@ -528,19 +529,28 @@ ${level >= 3 ? '          cache: npm\n          cache-dependency-path: frontend/
 }
 
 function githubBackendBuildJob(selection: InitSelection): string {
+  const level = selection.pipelineMaturity.level
   return `  backend-build:
     name: Backend build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    needs: frontend-build
     permissions:
       contents: read
     concurrency:
-      group: backend-${gh('github.ref')}
+      group: backend-build-${gh('github.ref')}
       cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-${githubBackendSetupSteps(selection, false)}`
+${githubBackendSetupSteps(selection, false)}${level >= 2 ? `
+      - name: Upload backend artifact
+        if: ${gh("github.event_name != 'pull_request' || github.repository_owner == github.event.pull_request.head.repo.owner.login")}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-artifact-${gh('github.sha')}
+          path: ${backendArtifactPath(selection)}
+          if-no-files-found: ignore` : ''}`
 }
 
 function githubBackendTestJob(selection: InitSelection): string {
@@ -548,23 +558,16 @@ function githubBackendTestJob(selection: InitSelection): string {
     name: Backend test
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    needs: frontend-build
+    needs: backend-build
     permissions:
       contents: read
     concurrency:
-      group: backend-${gh('github.ref')}
+      group: backend-test-${gh('github.ref')}
       cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-${githubBackendSetupSteps(selection, true)}
-      - name: Upload backend artifact
-        if: ${gh("github.event_name != 'pull_request' || github.repository_owner == github.event.pull_request.head.repo.owner.login")}
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-artifact-${gh('github.sha')}
-          path: ${backendArtifactPath(selection)}
-          if-no-files-found: ignore`
+${githubBackendSetupSteps(selection, true)}`
 }
 
 function githubBackendSetupSteps(selection: InitSelection, test: boolean): string {
@@ -604,7 +607,7 @@ function githubDockerJob(request: InitJobRequest, selection: InitSelection): str
     name: Docker image validation
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    needs: backend-test
+    needs: [frontend-build, backend-build, backend-test]
     permissions:
       contents: read
     concurrency:
@@ -750,6 +753,7 @@ ${selection.pipelineMaturity.level >= 2 ? `  artifacts:
 }
 
 function gitlabBackendBuild(selection: InitSelection): string {
+  const level = selection.pipelineMaturity.level
   const image = selection.backend.runtime === 'node'
     ? `node:${selection.backend.runtimeVersion}`
     : selection.backend.runtime === 'java'
@@ -761,7 +765,14 @@ function gitlabBackendBuild(selection: InitSelection): string {
   timeout: 15m
 ${gitlabRules(selection)}
   script:
-${gitlabBackendCommands(selection, false)}`
+${gitlabBackendCommands(selection, false)}
+${level >= 2 ? `  artifacts:
+    name: "backend-artifact-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - ${backendArtifactPath(selection)}
+    when: always
+    expire_in: 7 days
+` : ''}`
 }
 
 function gitlabBackendTest(selection: InitSelection): string {
@@ -777,12 +788,6 @@ function gitlabBackendTest(selection: InitSelection): string {
 ${gitlabRules(selection)}
   script:
 ${gitlabBackendCommands(selection, true)}
-  artifacts:
-    name: "backend-artifact-$CI_COMMIT_SHORT_SHA"
-    paths:
-      - ${backendArtifactPath(selection)}
-    when: always
-    expire_in: 7 days
 `
 }
 
@@ -793,6 +798,7 @@ function gitlabPackageArtifacts(selection: InitSelection): string {
   timeout: 10m
   needs:
     - frontend_build
+    - backend_build
     - backend_test
   script:
     - tar -czf scaffy-artifacts-$CI_COMMIT_SHORT_SHA.tar.gz frontend backend
