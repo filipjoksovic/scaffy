@@ -17,10 +17,47 @@ export type MetricsStatus =
 export type RecentRunSummary = {
   id: number
   displayName: string
+  workflowName: string | null
+  event: string | null
   branch: string | null
   conclusion: string | null
   durationSec: number
   startedAt: string
+}
+
+export type OperationalRiskSummary = {
+  level: 'critical' | 'warning' | 'stable'
+  label: string
+  reason: string
+}
+
+export type NextBestAction = {
+  title: string
+  detail: string
+  severity: 'high' | 'medium' | 'low'
+  target: string
+}
+
+export type WorkflowPeriodDelta = {
+  previousSuccessRate: number
+  currentSuccessRate: number
+  successRateDelta: number
+  previousFailureCount: number
+  currentFailureCount: number
+  failureCountDelta: number
+  previousMedianDurationSec: number
+  currentMedianDurationSec: number
+  medianDurationDeltaSec: number
+  previousP95DurationSec: number
+  currentP95DurationSec: number
+  p95DurationDeltaSec: number
+  trend: 'improving' | 'stable' | 'degrading' | 'insufficient_data'
+}
+
+export type FailureReasonInsight = {
+  reason: string
+  count: number
+  share: number
 }
 
 export type BranchHealth = {
@@ -47,6 +84,12 @@ export type WorkflowMetrics = {
   recentRuns: RecentRunSummary[]
   triggerDistribution: Record<string, number>
   branchBreakdown: Record<string, BranchHealth>
+  riskSummary?: OperationalRiskSummary | null
+  nextBestAction?: NextBestAction | null
+  periodDelta?: WorkflowPeriodDelta | null
+  topFailureReasons?: FailureReasonInsight[]
+  regressionSignals?: string[]
+  flakyWorkflows?: string[]
 }
 
 export type WorkflowMetricsResult = {
@@ -103,6 +146,14 @@ export type RepositoryAnalysis = {
   analyzerModelVersion: string
   analysis: AnalysisResponse
   workflowMetrics?: WorkflowMetricsResult | null
+  workflowAnalyses?: RepositoryWorkflowAnalysisItem[]
+}
+
+export type RepositoryWorkflowAnalysisItem = {
+  workflowPath: string
+  analysis?: AnalysisResponse | null
+  workflowMetrics?: WorkflowMetricsResult | null
+  errorMessage?: string | null
 }
 
 export type RepositoryAnalysisRunSummary = RepositoryAnalysisSummary

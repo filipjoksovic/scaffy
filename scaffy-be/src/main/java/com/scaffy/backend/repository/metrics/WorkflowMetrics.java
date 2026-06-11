@@ -28,7 +28,13 @@ public record WorkflowMetrics(
         String source,
         List<RecentRunSummary> recentRuns,
         Map<String, Integer> triggerDistribution,
-        Map<String, BranchHealth> branchBreakdown) {
+        Map<String, BranchHealth> branchBreakdown,
+        OperationalRiskSummary riskSummary,
+        NextBestAction nextBestAction,
+        WorkflowPeriodDelta periodDelta,
+        List<FailureReasonInsight> topFailureReasons,
+        List<String> regressionSignals,
+        List<String> flakyWorkflows) {
 
     /**
      * Returns an empty metrics instance for the {@link MetricsStatus#NO_RUNS_IN_WINDOW} case.
@@ -45,7 +51,13 @@ public record WorkflowMetrics(
                 windowDays, source,
                 List.of(),
                 Map.of(),
-                Map.of());
+                Map.of(),
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                List.of());
     }
 
 }

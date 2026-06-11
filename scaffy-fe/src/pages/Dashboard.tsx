@@ -1022,6 +1022,9 @@ function ProjectDetailHeader({
             <span>Run {analysis.runNumber}</span>
             <span>Analyzed {formatRelativeTime(analysis.analyzedAt)}</span>
             <code>{analysis.workflowPath}</code>
+            {analysis.workflowAnalyses && analysis.workflowAnalyses.length > 1 && (
+              <span>Workflows analyzed: {analysis.workflowAnalyses.length}</span>
+            )}
           </div>
         )}
       </div>
@@ -1161,6 +1164,7 @@ function AnalysisBreakdown({
 
       {activeTab === "quality" && (
         <>
+          <WorkflowResultsTable items={analysis.workflowAnalyses} />
           <div
             className="scanner-summary"
             aria-label="Analysis finding summary"
@@ -1202,6 +1206,65 @@ function AnalysisBreakdown({
         result={analysis.workflowMetrics}
       />
     </div>
+  );
+}
+
+type WorkflowResultsTableProps = Readonly<{
+  items: RepositoryAnalysis["workflowAnalyses"];
+}>;
+
+function WorkflowResultsTable({ items }: WorkflowResultsTableProps) {
+  if (!items || items.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="workflow-results" aria-label="Per-workflow analysis results">
+      <header className="workflow-results__header">
+        <div>
+          <Eyebrow>Workflow files</Eyebrow>
+          <h4>Per-workflow results</h4>
+        </div>
+        <span>{items.length} files</span>
+      </header>
+
+      <div className="workflow-results__table-wrap">
+        <table className="workflow-results__table">
+          <thead>
+            <tr>
+              <th>Workflow</th>
+              <th>Score</th>
+              <th>Status</th>
+              <th>Fail reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const analysis = item.analysis ?? null;
+              const score = analysis ? formatScore(analysis.overallScore) : "-";
+              const statusLabel = analysis
+                ? statusMeta(analysis.overallStatus).label
+                : "Failed";
+              const statusClass = analysis
+                ? statusBadgeClassName(analysis.overallStatus)
+                : "status-badge--missing";
+              return (
+                <tr key={item.workflowPath}>
+                  <td>
+                    <code>{item.workflowPath}</code>
+                  </td>
+                  <td>{score}</td>
+                  <td>
+                    <Badge className={statusClass}>{statusLabel}</Badge>
+                  </td>
+                  <td>{item.errorMessage ?? "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

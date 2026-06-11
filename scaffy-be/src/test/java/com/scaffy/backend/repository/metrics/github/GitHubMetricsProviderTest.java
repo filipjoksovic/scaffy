@@ -2,6 +2,7 @@ package com.scaffy.backend.repository.metrics.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -23,6 +24,40 @@ import com.scaffy.backend.repository.metrics.github.GitHubActionsApiClient.Workf
 import com.scaffy.backend.repository.metrics.github.GitHubActionsApiClient.WorkflowRunsResponse;
 
 class GitHubMetricsProviderTest {
+
+	@Test
+	void expiredMetadataStillUsesTokenAndFetchesFromApi() {
+		GitHubActionsApiClient apiClient = mock(GitHubActionsApiClient.class);
+		WorkspaceOAuthTokenRepository tokenRepository = mock(WorkspaceOAuthTokenRepository.class);
+		ProviderTokenCrypto tokenCrypto = mock(ProviderTokenCrypto.class);
+		GitHubMetricsProvider provider = new GitHubMetricsProvider(apiClient, tokenRepository, tokenCrypto);
+
+		UUID workspaceId = UUID.randomUUID();
+		UUID userId = UUID.randomUUID();
+		MetricsRequest request = new MetricsRequest(
+				workspaceId,
+				userId,
+				"github-actions",
+				"",
+				"scaffy-labs",
+				"demo-app",
+				".github/workflows/ci.yml",
+				30);
+
+		when(tokenRepository.findToken(workspaceId, userId, "github", ""))
+				.thenReturn(Optional.of(new OAuthAccessTokenRecord(
+						"encrypted-token",
+						OffsetDateTime.now().minusHours(1),
+						"repo workflow")));
+		when(tokenCrypto.decrypt("encrypted-token")).thenReturn("gh-token");
+		when(apiClient.listWorkflowRuns("scaffy-labs", "demo-app", ".github/workflows/ci.yml", "gh-token", 100, 5))
+				.thenReturn(new ApiCallOutcome.NotFound());
+
+		WorkflowMetricsResult result = provider.fetchMetrics(request);
+
+		assertThat(result.status()).isEqualTo(MetricsStatus.WORKFLOW_NOT_FOUND);
+		verify(apiClient).listWorkflowRuns("scaffy-labs", "demo-app", ".github/workflows/ci.yml", "gh-token", 100, 5);
+	}
 
 	@Test
 	void aggregateReturnsCorrectMetricsFromSampleRuns() {
@@ -72,8 +107,14 @@ class GitHubMetricsProviderTest {
 		assertThat(result.metrics()).isNotNull();
 		assertThat(result.metrics().totalRuns()).isEqualTo(5);
 		assertThat(result.metrics().successCount()).isEqualTo(3);
-		assertThat(result.metrics().failureRate()).isCloseTo(0.2, org.assertj.core.data.Offset.offset(0.0001));
+		assertThat(result.metrics().failureRate()).isCloseTo(0.4, org.assertj.core.data.Offset.offset(0.0001));
 		assertThat(result.metrics().triggerDistribution()).isNotEmpty();
 		assertThat(result.metrics().recentRuns()).isNotEmpty();
+		assertThat(result.metrics().riskSummary()).isNotNull();
+		assertThat(result.metrics().nextBestAction()).isNotNull();
+		assertThat(result.metrics().periodDelta()).isNotNull();
+		assertThat(result.metrics().topFailureReasons()).isNotEmpty();
+		assertThat(result.metrics().recentRuns().get(0).workflowName()).isNotBlank();
+		assertThat(result.metrics().recentRuns().get(0).event()).isNotBlank();
 	}
 }

@@ -8,6 +8,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 public record RecentRunSummary(
         long id,
         String displayName,
+        String workflowName,
+        String event,
         String branch,
         String conclusion,
         long durationSec,

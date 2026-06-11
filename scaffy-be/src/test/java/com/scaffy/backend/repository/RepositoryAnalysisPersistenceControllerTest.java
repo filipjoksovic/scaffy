@@ -205,10 +205,13 @@ class RepositoryAnalysisPersistenceControllerTest {
 		GitHubWorkflowClient gitHubWorkflowClient() {
 			return new GitHubWorkflowClient((ObjectMapper) null, null, null) {
 				@Override
-				public GitHubWorkflowFile findWorkflow(UUID workspaceId, UUID userId, RepositoryConnection repository) {
+				public java.util.List<GitHubWorkflowFile> findWorkflows(
+						UUID workspaceId,
+						UUID userId,
+						RepositoryConnection repository) {
 					int fetchCount = WORKFLOW_FETCHES.incrementAndGet();
 					if (fetchCount == 1) {
-						return new GitHubWorkflowFile(".github/workflows/ci.yml", """
+						return java.util.List.of(new GitHubWorkflowFile(".github/workflows/ci.yml", """
 							name: CI
 							on:
 							  push:
@@ -221,9 +224,9 @@ class RepositoryAnalysisPersistenceControllerTest {
 							    steps:
 							      - name: Build
 							        run: ./mvnw --batch-mode clean package
-							""");
+							"""));
 					}
-					return new GitHubWorkflowFile(".github/workflows/ci.yml", """
+					return java.util.List.of(new GitHubWorkflowFile(".github/workflows/ci.yml", """
 							name: CI
 							on:
 							  push:
@@ -238,7 +241,7 @@ class RepositoryAnalysisPersistenceControllerTest {
 							        run: ./mvnw --batch-mode clean package
 							      - name: Test
 							        run: ./mvnw --batch-mode test jacoco:report
-							""");
+							"""));
 				}
 			};
 		}
