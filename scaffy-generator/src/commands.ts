@@ -83,15 +83,32 @@ export async function writeFixtureProject(
 ): Promise<void> {
   await mkdirp(path.join(workspace, 'frontend', 'src'))
   await mkdirp(path.join(workspace, 'backend'))
-  await writeFile(path.join(workspace, 'frontend', 'package.json'), JSON.stringify({
+  const frontendPackage = {
+    name: request.projectName,
     scripts: { dev: 'vite', build: 'vite build' },
     dependencies: frontendDependencies(selection),
     devDependencies: {},
     engines: { node: `>=${selection.frontend.runtimeVersion}` },
-  }, null, 2))
+  }
+  await writeFile(path.join(workspace, 'frontend', 'package.json'), JSON.stringify(frontendPackage, null, 2))
+  await writeFile(
+    path.join(workspace, 'frontend', 'package-lock.json'),
+    JSON.stringify(fixturePackageLock(request.projectName, frontendPackage.dependencies, frontendPackage.devDependencies), null, 2),
+  )
   await writeFile(path.join(workspace, 'frontend', 'src', 'main.ts'), 'console.log("Scaffy frontend");\n')
   await writeFile(path.join(workspace, 'backend', backendManifestName(selection)), backendManifest(selection))
   await postProcessProject(workspace, request, selection)
+}
+
+export function frontendLockfileCommand(workspace: string): CommandSpec {
+  return {
+    ...npmCommand(workspace, {
+      executable: 'npm',
+      args: ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'],
+      label: 'Generate frontend lockfile',
+    }),
+    cwd: path.join(workspace, 'frontend'),
+  }
 }
 
 function frontendCommands(workspace: string, frontend: InitSelection['frontend']): CommandSpec[] {
@@ -262,6 +279,27 @@ function frontendDependencies(selection: InitSelection): Record<string, string> 
     return { vue: '^3.5.0' }
   }
   return {}
+}
+
+function fixturePackageLock(
+  projectName: string,
+  dependencies: Record<string, string>,
+  devDependencies: Record<string, string>,
+): Record<string, unknown> {
+  return {
+    name: projectName,
+    version: '0.0.0',
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      '': {
+        name: projectName,
+        version: '0.0.0',
+        ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
+        ...(Object.keys(devDependencies).length > 0 ? { devDependencies } : {}),
+      },
+    },
+  }
 }
 
 async function writeGitignore(workspace: string, selection: InitSelection): Promise<void> {

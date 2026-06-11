@@ -5,8 +5,7 @@
 # the output builds, then post-processing the tree to replace the placeholder
 # names with __SCAFFY_*__ tokens that the Java composer expands per request.
 #
-# Requires: bash, GNU sed (Git Bash on Windows ships it; macOS users should
-# run via Linux/WSL or install gnu-sed and alias it), node + npx, curl,
+# Requires: bash, perl, node + npx, curl,
 # python3, and a working Java toolchain on PATH for the validation pass.
 #
 # Usage:
@@ -41,16 +40,22 @@ GROUP_ID="com.example"
 PACKAGE_LEAF="scaffytemplate"
 PACKAGE_NAME="$GROUP_ID.$PACKAGE_LEAF"
 PACKAGE_PATH="${PACKAGE_NAME//.//}"
+export PROJECT_KEBAB PROJECT_PASCAL PROJECT_CAMEL PACKAGE_NAME PACKAGE_PATH
 
 mkdir -p "$ARTIFACTS_DIR"
 WORKSPACE="$(mktemp -d -t scaffy-artifacts.XXXXXXXX)"
 trap 'rm -rf "$WORKSPACE"' EXIT
+PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || command -v python || true)}"
+if [[ -z "$PYTHON_BIN" ]]; then
+	echo "python3 or python is required to write artifact ZIP files" >&2
+	exit 1
+fi
 
 # Cross-platform zip via python (Git Bash on Windows has no `zip`).
 zip_dir() {
 	local src_dir="$1"
 	local dest_zip="$2"
-	python -c "
+	"$PYTHON_BIN" -c "
 import os, sys, zipfile
 src = sys.argv[1]
 dst = sys.argv[2]
@@ -79,13 +84,13 @@ tokenize_text_files() {
 		-name "*.cs" -o -name "*.csproj" -o -name "*.http" -o \
 		-name "*.yml" -o -name "*.yaml" -o -name "*.md" -o \
 		-name ".gitignore" -o -name ".editorconfig" \
-	\) -exec sed -i \
-		-e "s|$PROJECT_PASCAL|__SCAFFY_PROJECT_PASCAL__|g" \
-		-e "s|$PROJECT_CAMEL|__SCAFFY_PROJECT_CAMEL__|g" \
-		-e "s|$PACKAGE_PATH|__SCAFFY_PACKAGE_DIR__|g" \
-		-e "s|$PACKAGE_NAME|__SCAFFY_PACKAGE__|g" \
-		-e "s|$PROJECT_KEBAB|__SCAFFY_PROJECT_NAME__|g" \
-		{} +
+	\) -exec perl -0pi -e '
+		s/\Q$ENV{PROJECT_PASCAL}\E/__SCAFFY_PROJECT_PASCAL__/g;
+		s/\Q$ENV{PROJECT_CAMEL}\E/__SCAFFY_PROJECT_CAMEL__/g;
+		s/\Q$ENV{PACKAGE_PATH}\E/__SCAFFY_PACKAGE_DIR__/g;
+		s/\Q$ENV{PACKAGE_NAME}\E/__SCAFFY_PACKAGE__/g;
+		s/\Q$ENV{PROJECT_KEBAB}\E/__SCAFFY_PROJECT_NAME__/g;
+	' {} +
 }
 
 # ---------------------------------------------------------------------------

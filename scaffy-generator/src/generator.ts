@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { validateSelection } from './catalog.js'
 import * as cache from './cache.js'
-import { buildCommandPlan, postProcessProject, runCommand, writeFixtureProject } from './commands.js'
+import {
+  buildCommandPlan,
+  frontendLockfileCommand,
+  postProcessProject,
+  runCommand,
+  writeFixtureProject,
+} from './commands.js'
 import { zipDirectory } from './zip.js'
 import type { CommandLogLine, GeneratorConfig, InitGenerationJob } from './types.js'
 
@@ -52,6 +58,9 @@ export async function generateZip(
       await report('Applying Scaffy overlays')
       await postProcessProject(workspace, job.request, selection)
       await report('Scaffy overlays applied')
+      await report('Generating frontend lockfile')
+      await runCommand(frontendLockfileCommand(workspace), reportLog)
+      await report('Frontend lockfile generated')
     }
 
     await remove(path.join(workspace, '.scaffy'))

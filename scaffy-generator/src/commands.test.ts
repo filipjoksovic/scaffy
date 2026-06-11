@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { validateSelection } from './catalog.js'
-import { buildCommandPlan, writeFixtureProject } from './commands.js'
+import { buildCommandPlan, frontendLockfileCommand, writeFixtureProject } from './commands.js'
 
 test('builds allowlisted command specs for a supported stack', () => {
   const request = {
@@ -105,6 +105,38 @@ test('l1 GitLab fixture stays minimal without forced Docker', async () => {
   assert.match(pipeline, /npm run build/)
   assert.doesNotMatch(pipeline, /docker_build:/)
   assert.equal(selection.includeDocker, false)
+})
+
+test('fixture frontend includes npm lockfile because generated CI uses npm ci', async () => {
+  const request = {
+    projectName: 'demo-app',
+    frontend: 'vue',
+    frontendVersion: '3',
+    frontendRuntime: 'node-22',
+    backend: 'spring-boot',
+    backendVersion: '4.0',
+    backendRuntime: 'java-21',
+    pipeline: 'github-actions',
+    pipelineMaturity: 'l2',
+    includeDocker: false,
+  }
+  const root = await mkdtemp(path.join(tmpdir(), 'scaffy-generator-test-'))
+
+  await writeFixtureProject(root, request, validateSelection(request))
+
+  const packageLock = JSON.parse(await readFile(path.join(root, 'frontend', 'package-lock.json'), 'utf8'))
+  assert.equal(packageLock.lockfileVersion, 3)
+  assert.equal(packageLock.packages[''].name, 'demo-app')
+  assert.deepEqual(packageLock.packages[''].dependencies, { vue: '^3.5.0' })
+})
+
+test('runtime generation has a frontend lockfile command after package patching', () => {
+  const command = frontendLockfileCommand('/tmp/work')
+
+  assert.equal(command.executable, 'npm')
+  assert.deepEqual(command.args, ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'])
+  assert.equal(command.cwd, '/tmp/work/frontend')
+  assert.equal(command.env?.CI, 'true')
 })
 
 test('l2 GitHub fixture emits scanner-recognized test and artifact signals', async () => {

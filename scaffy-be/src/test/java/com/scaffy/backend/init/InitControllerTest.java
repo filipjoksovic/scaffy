@@ -73,6 +73,7 @@ class InitControllerTest {
 		// Angular artifact, unpacked under frontend/.
 		assertThat(entries).containsKeys(
 				"demo-app/frontend/package.json",
+				"demo-app/frontend/package-lock.json",
 				"demo-app/frontend/angular.json",
 				"demo-app/frontend/src/main.ts",
 				"demo-app/frontend/src/app/app.component.ts",
@@ -197,6 +198,7 @@ class InitControllerTest {
 		// Vue artifact files present under frontend/.
 		assertThat(entries).containsKeys(
 				"vue-app/frontend/package.json",
+				"vue-app/frontend/package-lock.json",
 				"vue-app/frontend/vite.config.ts",
 				"vue-app/frontend/src/main.ts",
 				"vue-app/frontend/src/App.vue");
@@ -257,6 +259,7 @@ class InitControllerTest {
 		// React artifact files under frontend/.
 		assertThat(entries).containsKeys(
 				"react-app/frontend/package.json",
+				"react-app/frontend/package-lock.json",
 				"react-app/frontend/vite.config.ts",
 				"react-app/frontend/src/main.tsx",
 				"react-app/frontend/src/App.tsx");
@@ -334,7 +337,9 @@ class InitControllerTest {
 				"dotnet-app/.github/workflows/ci.yml");
 
 		// .NET artifact: .csproj file name uses PascalCase of project name.
-		assertThat(entries).containsKey("dotnet-app/backend/DotnetApp.csproj");
+		assertThat(entries).containsKeys(
+				"dotnet-app/backend/DotnetApp.csproj",
+				"dotnet-app/frontend/package-lock.json");
 
 		// Token expansion: no raw placeholder names remain in the csproj.
 		String csproj = new String(
