@@ -44,3 +44,5 @@ jobs:
           path: scaffy-be/target/*.jar
           if-no-files-found: error
           retention-days: 7
+      - name: Check code formatting
+        run: ./mvnw spotless:check
